@@ -5,6 +5,13 @@ export interface Order {
 
 const orders: Order[] = [];
 
+function normalizeOrder(input: Partial<Order>) {
+  return {
+    id: input.id,
+    total: input.total
+  };
+}
+
 export function listOrders() {
   return orders;
 }

@@ -5,6 +5,7 @@ export type Language =
   | "go"
   | "java"
   | "rust"
+  | "swift"
   | "sql"
   | "yaml"
   | "markdown"
@@ -77,11 +78,65 @@ export interface ArchitectureSummary {
     bytes: number;
   };
   languages: Array<{ language: Language; files: number; lines: number; symbols: number }>;
+  nodeLabels: Array<{ kind: string; count: number }>;
+  edgeTypes: Array<{ type: string; count: number }>;
   topFiles: Array<{ path: string; language: Language; lines: number; symbols: number }>;
+  topSymbols: Array<{
+    name: string;
+    qualifiedName: string;
+    kind: string;
+    filePath: string;
+    degree: number;
+    inbound: number;
+    outbound: number;
+  }>;
   hotspots: Array<{ path: string; score: number; reasons: string[] }>;
+  boundaries: Array<{ source: string; target: string; edges: number; sampleTypes: string[] }>;
+  clusters: Array<{ name: string; files: number; symbols: number; edges: number }>;
   entrypoints: Array<{ path: string; reason: string }>;
   packages: string[];
+  deadCode: { candidates: number; samples: DeadCodeCandidate[] };
   risks: string[];
+}
+
+export interface GraphSchema {
+  totals: { files: number; symbols: number; edges: number };
+  languages: Array<{ language: Language; files: number; symbols: number }>;
+  nodeLabels: Array<{ kind: string; count: number }>;
+  edgeTypes: Array<{ type: string; count: number }>;
+}
+
+export interface GraphSearchOptions {
+  query?: string;
+  kind?: string;
+  namePattern?: string;
+  filePattern?: string;
+  relationship?: string;
+  minDegree?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface GraphSearchMatch {
+  symbol: SymbolNode;
+  degree: number;
+  inbound: number;
+  outbound: number;
+}
+
+export interface DeadCodeCandidate {
+  symbol: SymbolNode;
+  inbound: number;
+  outbound: number;
+  reason: string;
+}
+
+export interface ChangeImpactResult {
+  root: string;
+  changedFiles: string[];
+  impacted: Array<{ item: string; reason: string; score: number }>;
+  risk: "none" | "low" | "medium" | "high";
+  signals: string[];
 }
 
 export interface DecisionRecord {

@@ -21,7 +21,7 @@ Result:
 
 - TypeScript build passed.
 - Node test suite passed: 2 tests, 0 failures.
-- Covered decision persistence, repository indexing, symbol search, code search, architecture summary, and trace behavior on a fixture repository.
+- Covered decision persistence, repository indexing, Swift extraction, symbol search, code search, graph schema, structural graph search, dead-code candidates, architecture summary, and trace behavior on a fixture repository.
 
 ## Self Index
 
@@ -34,14 +34,14 @@ node --experimental-sqlite dist/src/cli.js architecture --db .repolens/self.db
 
 Result:
 
-- Files discovered: 30
-- Files indexed: 30
+- Files discovered: 31
+- Files indexed: 31
 - Files skipped: 0
-- Symbols: 157
-- Edges: 338
-- Elapsed: 42 ms
-- Language mix: TypeScript, Markdown, JSON, YAML, unknown text files.
-- Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`.
+- Symbols: 179
+- Edges: 417
+- Elapsed: 60 ms
+- Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
+- Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 
 ## Big Repo Validation
 
@@ -56,36 +56,63 @@ node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
 
 node --experimental-sqlite dist/src/cli.js architecture \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+
+node --experimental-sqlite dist/src/cli.js schema \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+
+node --experimental-sqlite dist/src/cli.js export-graph \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 1000 \
+  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html
 ```
 
 Result:
 
-- Files discovered: 854
-- Files indexed: 604
-- Files skipped: 250
-- Symbols: 2,653
-- Edges: 31,023
-- Lines indexed: 54,301
-- Elapsed: 1,720 ms
+- Files discovered: 852
+- Files indexed: 816
+- Files skipped: 36
+- Symbols: 5,234
+- Edges: 29,013
+- Lines indexed: 96,330
+- Elapsed: 10,531 ms
+- Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html`
+- Graph JSON: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`
+- Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
 
 Top language coverage:
 
 | Language | Files | Lines | Symbols |
 | --- | ---: | ---: | ---: |
-| TypeScript | 404 | 40,663 | 1,515 |
+| Swift | 212 | 42,029 | 2,627 |
+| TypeScript | 404 | 40,663 | 1,472 |
 | Markdown | 104 | 6,828 | 868 |
-| Shell | 28 | 3,569 | 28 |
 | SQL | 49 | 2,188 | 167 |
-| JavaScript | 3 | 491 | 11 |
 | JSON | 12 | 410 | 60 |
+| Shell | 28 | 3,569 | 28 |
+| JavaScript | 3 | 491 | 8 |
+
+Graph schema:
+
+| Kind / edge | Count |
+| --- | ---: |
+| Function nodes | 2,451 |
+| File nodes | 816 |
+| Heading nodes | 764 |
+| Struct nodes | 348 |
+| Class nodes | 205 |
+| `CALLS` edges | 20,111 |
+| `DEFINES` edges | 4,252 |
+| `CALLS_LOCAL` edges | 3,163 |
+| `IMPORTS` edges | 1,321 |
 
 Representative hotspots:
 
+- `apps/ios/NewAppiOS/Views/DesignSystem.swift`
 - `packages/backend-contracts/src/index.ts`
+- `apps/ios/NewAppiOS/Views/ConsumerExploreReelsView.swift`
+- `apps/ios/NewAppiOS/Views/ConsumerHomeView.swift`
+- `apps/ios/NewAppiOS/Views/RestaurantProfileView.swift`
 - `apps/web-admin/src/lib/server/repositories/live-session-repository.ts`
-- `apps/web-admin/src/lib/server/repositories/order-repository.ts`
-- `apps/web-admin/src/lib/server/repositories/courier-repository.ts`
-- `apps/web-admin/src/lib/server/mux/live-streams.ts`
 
 Representative entrypoints:
 
@@ -97,9 +124,10 @@ Representative entrypoints:
 
 Review signals:
 
-- 81 task markers.
-- 337 sensitive-key-like text matches to review.
-- 250 files skipped by size, binary, or ignore policy.
+- 83 task markers.
+- 436 sensitive-key-like text matches to review.
+- 36 files skipped by size, binary, or ignore policy.
+- 5 dead-code candidates sampled.
 
 The review-signal counts are intentionally conservative; they are meant to route a human to candidate files rather than claim confirmed issues.
 
@@ -125,6 +153,48 @@ node --experimental-sqlite dist/src/cli.js symbols repository \
 
 Confirmed repository interfaces and exported domain types under `apps/web-admin/src/lib/server/repositories`.
 
+Graph schema:
+
+```bash
+node --experimental-sqlite dist/src/cli.js schema \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+```
+
+Confirmed Swift, TypeScript, Markdown, SQL, JSON, shell, JavaScript, YAML, and unknown text coverage with node-label and edge-type counts.
+
+Structural graph search:
+
+```bash
+node --experimental-sqlite dist/src/cli.js search-graph live-session \
+  --relationship CALLS \
+  --min-degree 1 \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 5
+```
+
+Confirmed live-session repository files and test helpers with graph degree metrics.
+
+Dead-code candidates:
+
+```bash
+node --experimental-sqlite dist/src/cli.js dead-code \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 8
+```
+
+Confirmed non-exported Swift candidates with zero inbound call edges.
+
+Graph export:
+
+```bash
+node --experimental-sqlite dist/src/cli.js export-graph \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 1000 \
+  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html
+```
+
+Confirmed 1,000 nodes and 1,000 edges in the exported HTML graph. A matching JSON artifact was written to `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`.
+
 Trace:
 
 ```bash
@@ -136,6 +206,16 @@ node --experimental-sqlite dist/src/cli.js trace listOrders \
 
 Confirmed inbound links from the fixture server file to the `listOrders` symbol.
 
+Git-change impact:
+
+```bash
+node --experimental-sqlite dist/src/cli.js changes /Users/sameer/Desktop/projects/repolens-mcp \
+  --db .repolens/self.db \
+  --limit 10
+```
+
+Confirmed modified files map back to indexed symbols and produced a medium risk classification for the current local change set.
+
 ## Conclusion
 
-The project builds, tests, indexes itself, and indexes a larger local application workspace. The implementation is intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, and exposes graph schema, structural search, dead-code candidates, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.

@@ -25,8 +25,9 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 
 - Node 24 plus native SQLite for a dependency-light local graph store.
 - Stable MCP SDK v1 package rather than the pre-alpha v2 branch.
-- Clear CLI commands and MCP tools for indexing, search, architecture summaries, tracing, impact analysis, and architecture decisions.
+- Clear CLI commands and MCP tools for indexing, search, graph schema, structural graph search, architecture summaries, tracing, impact analysis, dead-code candidates, git-change impact, and architecture decisions.
 - Browser dashboard without a bundler so the project is easy to build and inspect.
+- Self-contained graph export for sharing an HTML or JSON snapshot without running a server.
 - CI that runs type-check, tests, self-indexing, and architecture output.
 
 ## Improvements To Highlight
@@ -34,4 +35,6 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 - A small, inspectable TypeScript codebase with tests that a reviewer can understand quickly.
 - Built-in ADR memory, not just structural graph search.
 - Dashboard API and HTML are included in the same binary entrypoint, avoiding a separate frontend build.
-- Project is intentionally honest about scope: local-first repository intelligence for TypeScript-heavy portfolios, with extensible extractors for Python, Go, Java, Rust, SQL, YAML, Markdown, and JSON.
+- Swift extraction and big-repo validation now cover a mixed mobile/web monorepo, not only TypeScript services.
+- Structural graph search, graph schema summaries, dead-code candidates, git-diff impact mapping, and portable graph exports are first-class CLI/MCP workflows.
+- Project is intentionally honest about scope: it is not a 158-language static C engine, but it is local-first, readable, easy to modify, and validated against a large real workspace.

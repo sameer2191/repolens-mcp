@@ -1,11 +1,17 @@
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type {
   ArchitectureSummary,
+  ChangeImpactResult,
   CodeMatch,
+  DeadCodeCandidate,
   DecisionRecord,
   Edge,
+  GraphSchema,
+  GraphSearchMatch,
+  GraphSearchOptions,
   IndexedFile,
   Language,
   SymbolNode
@@ -290,6 +296,160 @@ export class MemoryStore {
     return [...output.values()].sort((a, b) => b.score - a.score).slice(0, limit);
   }
 
+  graphSchema(): GraphSchema {
+    const languages = this.db
+      .prepare(
+        `SELECT files.language AS language, count(*) AS files,
+          (SELECT count(*) FROM symbols WHERE symbols.language = files.language) AS symbols
+         FROM files
+         WHERE skipped = 0
+         GROUP BY files.language
+         ORDER BY symbols DESC, files DESC`
+      )
+      .all() as Array<{ language: Language; files: number; symbols: number }>;
+
+    return {
+      totals: {
+        files: getCount(this.db, "SELECT count(*) AS count FROM files WHERE skipped = 0"),
+        symbols: getCount(this.db, "SELECT count(*) AS count FROM symbols"),
+        edges: getCount(this.db, "SELECT count(*) AS count FROM edges")
+      },
+      languages,
+      nodeLabels: this.nodeLabels(),
+      edgeTypes: this.edgeTypes()
+    };
+  }
+
+  searchGraph(options: GraphSearchOptions = {}): GraphSearchMatch[] {
+    const limit = clampPositive(options.limit ?? 20, 1, 200);
+    const offset = Math.max(0, options.offset ?? 0);
+    const where: string[] = [];
+    const params: Array<string | number> = [];
+
+    if (options.query?.trim()) {
+      const query = `%${options.query.trim().toLowerCase()}%`;
+      where.push("(lower(s.name) LIKE ? OR lower(s.qualified_name) LIKE ? OR lower(s.file_path) LIKE ? OR lower(coalesce(s.signature, '')) LIKE ?)");
+      params.push(query, query, query, query);
+    }
+    if (options.kind?.trim()) {
+      where.push("lower(s.kind) = lower(?)");
+      params.push(options.kind.trim());
+    }
+    if (options.filePattern?.trim()) {
+      where.push("lower(s.file_path) LIKE ?");
+      params.push(`%${options.filePattern.trim().toLowerCase()}%`);
+    }
+    if (options.relationship?.trim()) {
+      where.push("EXISTS (SELECT 1 FROM edges rel WHERE rel.type = ? AND (rel.source = s.qualified_name OR rel.target = s.qualified_name))");
+      params.push(options.relationship.trim());
+    }
+    if ((options.minDegree ?? 0) > 0) {
+      where.push("coalesce(i.inbound, 0) + coalesce(o.outbound, 0) >= ?");
+      params.push(options.minDegree ?? 0);
+    }
+
+    const regex = options.namePattern?.trim() ? new RegExp(options.namePattern.trim(), "i") : null;
+    const sqlLimit = regex ? Math.min(1000, Math.max(limit + offset, (limit + offset) * 12)) : limit;
+    const sqlOffset = regex ? 0 : offset;
+    const rows = this.db
+      .prepare(
+        `WITH inbound AS (
+           SELECT target, count(*) AS inbound FROM edges GROUP BY target
+         ),
+         outbound AS (
+           SELECT source, count(*) AS outbound FROM edges GROUP BY source
+         )
+         SELECT s.*, coalesce(i.inbound, 0) AS inbound, coalesce(o.outbound, 0) AS outbound,
+           coalesce(i.inbound, 0) + coalesce(o.outbound, 0) AS degree
+         FROM symbols s
+         LEFT JOIN inbound i ON i.target = s.qualified_name
+         LEFT JOIN outbound o ON o.source = s.qualified_name
+         ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
+         ORDER BY degree DESC, s.exported DESC, s.name ASC
+         LIMIT ? OFFSET ?`
+      )
+      .all(...params, sqlLimit, sqlOffset) as unknown as Array<SymbolRow & { inbound: number; outbound: number; degree: number }>;
+
+    const matches = regex ? rows.filter((row) => regex.test(row.name) || regex.test(row.qualified_name)).slice(offset, offset + limit) : rows;
+    return matches.map((row) => ({
+      symbol: rowToSymbol(row),
+      inbound: row.inbound,
+      outbound: row.outbound,
+      degree: row.degree
+    }));
+  }
+
+  findDeadCode(limit = 50): DeadCodeCandidate[] {
+    const rows = this.db
+      .prepare(
+        `WITH inbound AS (
+           SELECT target, count(*) AS inbound
+           FROM edges
+           WHERE type IN ('CALLS', 'CALLS_LOCAL')
+           GROUP BY target
+         ),
+         outbound AS (
+           SELECT source, count(*) AS outbound
+           FROM edges
+           WHERE type IN ('CALLS', 'CALLS_LOCAL')
+           GROUP BY source
+         )
+         SELECT s.*, coalesce(i.inbound, 0) AS inbound, coalesce(o.outbound, 0) AS outbound
+         FROM symbols s
+         LEFT JOIN inbound i ON i.target = s.qualified_name
+         LEFT JOIN outbound o ON o.source = s.qualified_name
+         WHERE s.kind IN ('function', 'method')
+           AND s.exported = 0
+           AND coalesce(i.inbound, 0) = 0
+           AND lower(s.name) NOT IN ('main', 'handler', 'setup', 'init')
+           AND lower(s.file_path) NOT LIKE '%test%'
+           AND lower(s.file_path) NOT LIKE '%spec%'
+         ORDER BY s.file_path ASC, s.start_line ASC
+         LIMIT ?`
+      )
+      .all(clampPositive(limit, 1, 500)) as unknown as Array<SymbolRow & { inbound: number; outbound: number }>;
+
+    return rows.map((row) => ({
+      symbol: rowToSymbol(row),
+      inbound: row.inbound,
+      outbound: row.outbound,
+      reason: "no inbound call edges and not exported"
+    }));
+  }
+
+  detectChanges(root = this.latestRoot(), limit = 100): ChangeImpactResult {
+    const repoRoot = path.resolve(root);
+    const changed = new Set<string>();
+    const signals: string[] = [];
+    for (const args of [
+      ["diff", "--name-only"],
+      ["diff", "--cached", "--name-only"],
+      ["ls-files", "--others", "--exclude-standard"]
+    ]) {
+      const result = spawnSync("git", ["-C", repoRoot, ...args], { encoding: "utf8" });
+      if (result.status !== 0) {
+        const message = String(result.stderr || result.stdout || "git command failed").trim();
+        signals.push(`${args.join(" ")} failed: ${message}`);
+        continue;
+      }
+      for (const line of result.stdout.split(/\r?\n/)) {
+        if (line.trim()) changed.add(line.trim());
+      }
+    }
+
+    const changedFiles = [...changed].sort();
+    const impacted = changedFiles.length > 0 ? this.impactedBy(changedFiles, limit) : [];
+    const risk = impacted.length > 40 || changedFiles.length > 12 ? "high" : impacted.length > 12 || changedFiles.length > 4 ? "medium" : changedFiles.length > 0 ? "low" : "none";
+    if (changedFiles.length === 0) {
+      signals.push("no uncommitted git changes detected");
+    }
+    if (impacted.length === 0 && changedFiles.length > 0) {
+      signals.push("changed files did not map to indexed symbols; re-index may be needed");
+    }
+
+    return { root: repoRoot, changedFiles, impacted, risk, signals };
+  }
+
   latestRoot(): string {
     return (
       (
@@ -328,6 +488,12 @@ export class MemoryStore {
          ORDER BY lines DESC`
       )
       .all() as Array<{ language: Language; files: number; lines: number; symbols: number }>;
+
+    const nodeLabels = this.nodeLabels();
+    const edgeTypes = this.edgeTypes();
+    const topSymbols = this.topSymbols();
+    const boundaryData = this.boundariesAndClusters();
+    const deadCode = this.findDeadCode(5);
 
     const topFiles = this.db
       .prepare(
@@ -393,6 +559,7 @@ export class MemoryStore {
     if (taskCount > 0) risks.push(`${taskCount} task markers`);
     if (secretHints > 0) risks.push(`${secretHints} sensitive-key-like text matches to review`);
     if (skippedFiles > 0) risks.push(`${skippedFiles} files skipped by size, binary, or ignore policy`);
+    if (deadCode.length > 0) risks.push(`${deadCode.length} dead-code candidates sampled`);
 
     return {
       root,
@@ -407,10 +574,16 @@ export class MemoryStore {
         bytes: totals.bytes
       },
       languages,
+      nodeLabels,
+      edgeTypes,
       topFiles,
+      topSymbols,
       hotspots,
+      boundaries: boundaryData.boundaries,
+      clusters: boundaryData.clusters,
       entrypoints,
       packages,
+      deadCode: { candidates: deadCode.length, samples: deadCode },
       risks
     };
   }
@@ -463,6 +636,131 @@ export class MemoryStore {
         weight: row.weight,
         metadata: parseMetadata(row.metadata)
       }))
+    };
+  }
+
+  private nodeLabels(): Array<{ kind: string; count: number }> {
+    return this.db
+      .prepare("SELECT kind, count(*) AS count FROM symbols GROUP BY kind ORDER BY count DESC, kind ASC")
+      .all() as Array<{ kind: string; count: number }>;
+  }
+
+  private edgeTypes(): Array<{ type: string; count: number }> {
+    return this.db
+      .prepare("SELECT type, count(*) AS count FROM edges GROUP BY type ORDER BY count DESC, type ASC")
+      .all() as Array<{ type: string; count: number }>;
+  }
+
+  private topSymbols(): Array<{
+    name: string;
+    qualifiedName: string;
+    kind: string;
+    filePath: string;
+    degree: number;
+    inbound: number;
+    outbound: number;
+  }> {
+    return (
+      this.db
+        .prepare(
+          `WITH inbound AS (
+             SELECT target, count(*) AS inbound FROM edges GROUP BY target
+           ),
+           outbound AS (
+             SELECT source, count(*) AS outbound FROM edges GROUP BY source
+           )
+           SELECT s.name, s.qualified_name, s.kind, s.file_path,
+             coalesce(i.inbound, 0) AS inbound,
+             coalesce(o.outbound, 0) AS outbound,
+             coalesce(i.inbound, 0) + coalesce(o.outbound, 0) AS degree
+           FROM symbols s
+           LEFT JOIN inbound i ON i.target = s.qualified_name
+           LEFT JOIN outbound o ON o.source = s.qualified_name
+           WHERE s.kind <> 'file'
+           ORDER BY degree DESC, s.exported DESC, s.name ASC
+           LIMIT 20`
+        )
+        .all() as Array<{
+        name: string;
+        qualified_name: string;
+        kind: string;
+        file_path: string;
+        degree: number;
+        inbound: number;
+        outbound: number;
+      }>
+    ).map((row) => ({
+      name: row.name,
+      qualifiedName: row.qualified_name,
+      kind: row.kind,
+      filePath: row.file_path,
+      degree: row.degree,
+      inbound: row.inbound,
+      outbound: row.outbound
+    }));
+  }
+
+  private boundariesAndClusters(): {
+    boundaries: Array<{ source: string; target: string; edges: number; sampleTypes: string[] }>;
+    clusters: Array<{ name: string; files: number; symbols: number; edges: number }>;
+  } {
+    const fileRows = this.db
+      .prepare(
+        `SELECT files.path, count(symbols.qualified_name) AS symbols
+         FROM files
+         LEFT JOIN symbols ON symbols.file_path = files.path
+         WHERE files.skipped = 0
+         GROUP BY files.path`
+      )
+      .all() as Array<{ path: string; symbols: number }>;
+
+    const clusters = new Map<string, { name: string; files: Set<string>; symbols: number; edges: number }>();
+    for (const row of fileRows) {
+      const name = clusterName(row.path);
+      const cluster = clusters.get(name) ?? { name, files: new Set<string>(), symbols: 0, edges: 0 };
+      cluster.files.add(row.path);
+      cluster.symbols += row.symbols;
+      clusters.set(name, cluster);
+    }
+
+    const boundaryRows = this.db
+      .prepare(
+        `SELECT source_symbol.file_path AS source_file, target_symbol.file_path AS target_file, edges.type
+         FROM edges
+         JOIN symbols source_symbol ON source_symbol.qualified_name = edges.source
+         JOIN symbols target_symbol ON target_symbol.qualified_name = edges.target
+         WHERE source_symbol.file_path <> target_symbol.file_path
+         LIMIT 10000`
+      )
+      .all() as Array<{ source_file: string; target_file: string; type: string }>;
+
+    const boundaries = new Map<string, { source: string; target: string; edges: number; sampleTypes: Set<string> }>();
+    for (const row of boundaryRows) {
+      const source = clusterName(row.source_file);
+      const target = clusterName(row.target_file);
+      const sourceCluster = clusters.get(source);
+      const targetCluster = clusters.get(target);
+      if (sourceCluster) sourceCluster.edges += 1;
+      if (targetCluster && target !== source) targetCluster.edges += 1;
+      if (source === target) {
+        continue;
+      }
+      const key = `${source}->${target}`;
+      const boundary = boundaries.get(key) ?? { source, target, edges: 0, sampleTypes: new Set<string>() };
+      boundary.edges += 1;
+      boundary.sampleTypes.add(row.type);
+      boundaries.set(key, boundary);
+    }
+
+    return {
+      boundaries: [...boundaries.values()]
+        .sort((a, b) => b.edges - a.edges)
+        .slice(0, 20)
+        .map((item) => ({ source: item.source, target: item.target, edges: item.edges, sampleTypes: [...item.sampleTypes].sort().slice(0, 5) })),
+      clusters: [...clusters.values()]
+        .sort((a, b) => b.symbols - a.symbols)
+        .slice(0, 20)
+        .map((item) => ({ name: item.name, files: item.files.size, symbols: item.symbols, edges: item.edges }))
     };
   }
 
@@ -572,4 +870,25 @@ function parseStringArray(value: string): string[] {
 
 function getCount(db: DatabaseSync, sql: string): number {
   return Number((db.prepare(sql).get() as unknown as CountRow).count);
+}
+
+function clampPositive(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+  return Math.min(max, Math.max(min, Math.floor(value)));
+}
+
+function clusterName(filePath: string): string {
+  const parts = filePath.split("/").filter(Boolean);
+  if (parts.length === 0) {
+    return ".";
+  }
+  if ((parts[0] === "apps" || parts[0] === "packages" || parts[0] === "services") && parts[1]) {
+    return `${parts[0]}/${parts[1]}`;
+  }
+  if (parts[0] === "src" && parts[1]) {
+    return `src/${parts[1]}`;
+  }
+  return parts[0];
 }

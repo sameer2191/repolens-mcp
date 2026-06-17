@@ -14,18 +14,36 @@ interface Pattern {
   exported?: (match: RegExpExecArray) => boolean;
 }
 
+const ignoredCallableNames = new Set([
+  "get",
+  "post",
+  "put",
+  "patch",
+  "delete",
+  "options",
+  "head",
+  "json",
+  "data",
+  "body",
+  "map",
+  "filter",
+  "reduce",
+  "foreach",
+  "render"
+]);
+
 const patterns: Partial<Record<Language, Pattern[]>> = {
   typescript: [
     { kind: "class", regex: /^\s*(export\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/gm, nameGroup: 2, exported: (m) => Boolean(m[1]) },
     { kind: "interface", regex: /^\s*(export\s+)?interface\s+([A-Za-z_$][\w$]*)/gm, nameGroup: 2, exported: (m) => Boolean(m[1]) },
     { kind: "type", regex: /^\s*(export\s+)?type\s+([A-Za-z_$][\w$]*)/gm, nameGroup: 2, exported: (m) => Boolean(m[1]) },
     { kind: "function", regex: /^\s*(export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gm, nameGroup: 2, exported: (m) => Boolean(m[1]) },
-    { kind: "function", regex: /^\s*(export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/gm, nameGroup: 2, exported: (m) => Boolean(m[1]) }
+    { kind: "function", regex: /^\s*(export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/gm, nameGroup: 2, exported: (m) => Boolean(m[1]) }
   ],
   javascript: [
     { kind: "class", regex: /^\s*(export\s+)?class\s+([A-Za-z_$][\w$]*)/gm, nameGroup: 2, exported: (m) => Boolean(m[1]) },
     { kind: "function", regex: /^\s*(export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gm, nameGroup: 2, exported: (m) => Boolean(m[1]) },
-    { kind: "function", regex: /^\s*(export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/gm, nameGroup: 2, exported: (m) => Boolean(m[1]) }
+    { kind: "function", regex: /^\s*(export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/gm, nameGroup: 2, exported: (m) => Boolean(m[1]) }
   ],
   python: [
     { kind: "class", regex: /^\s*class\s+([A-Za-z_]\w*)/gm },
@@ -45,6 +63,14 @@ const patterns: Partial<Record<Language, Pattern[]>> = {
     { kind: "struct", regex: /^\s*(?:pub\s+)?struct\s+([A-Za-z_]\w*)/gm },
     { kind: "enum", regex: /^\s*(?:pub\s+)?enum\s+([A-Za-z_]\w*)/gm },
     { kind: "trait", regex: /^\s*(?:pub\s+)?trait\s+([A-Za-z_]\w*)/gm }
+  ],
+  swift: [
+    { kind: "class", regex: /^\s*(?:public|open|internal|private|fileprivate|final|\s)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "struct", regex: /^\s*(?:public|internal|private|fileprivate|\s)*struct\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:public|internal|private|fileprivate|\s)*enum\s+([A-Za-z_]\w*)/gm },
+    { kind: "protocol", regex: /^\s*(?:public|internal|private|fileprivate|\s)*protocol\s+([A-Za-z_]\w*)/gm },
+    { kind: "actor", regex: /^\s*(?:public|open|internal|private|fileprivate|final|\s)*actor\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:public|open|internal|private|fileprivate|static|class|mutating|nonisolated|override|async|\s)*func\s+([A-Za-z_]\w*)/gm }
   ]
 };
 
@@ -118,14 +144,14 @@ export function extractFromFile(filePath: string, language: Language, content: s
 }
 
 export function addCallEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
-  const named = symbols.filter((symbol) => ["function", "method", "class"].includes(symbol.kind) && symbol.name.length > 2);
+  const named = symbols.filter((symbol) => ["function", "method", "class"].includes(symbol.kind) && isCallableName(symbol.name));
   const files = symbols.filter((symbol) => symbol.kind === "file");
   const edges: Edge[] = [];
   for (const file of files) {
     const content = fileContents.get(file.filePath);
     if (!content) continue;
     for (const target of named) {
-      if (file.filePath !== target.filePath && (content.includes(`${target.name}(`) || content.includes(`.${target.name}(`))) {
+      if (file.filePath !== target.filePath && callsName(content, target.name)) {
         edges.push({
           source: file.qualifiedName,
           target: target.qualifiedName,
@@ -149,7 +175,7 @@ export function addCallEdges(symbols: SymbolNode[], fileContents: Map<string, st
       if (source.qualifiedName === target.qualifiedName) {
         continue;
       }
-      if (local.includes(`${target.name}(`) || local.includes(`.${target.name}(`)) {
+      if (callsName(local, target.name)) {
         edges.push({
           source: source.qualifiedName,
           target: target.qualifiedName,
@@ -199,7 +225,8 @@ function extractImports(language: Language, content: string): string[] {
     python: [/^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))/gm],
     go: [/^\s*import\s+(?:"([^"]+)"|`([^`]+)`)/gm],
     java: [/^\s*import\s+([\w.*]+);/gm],
-    rust: [/^\s*use\s+([^;]+);/gm]
+    rust: [/^\s*use\s+([^;]+);/gm],
+    swift: [/^\s*import\s+([A-Za-z_][\w.]*)/gm]
   };
   for (const regex of patternsByLanguage[language] ?? []) {
     for (const match of content.matchAll(regex)) {
@@ -330,4 +357,17 @@ function dedupeSymbols(symbols: SymbolNode[]): SymbolNode[] {
     seen.add(symbol.qualifiedName);
     return true;
   });
+}
+
+function isCallableName(name: string): boolean {
+  if (name.length <= 2) {
+    return false;
+  }
+  const lowered = name.toLowerCase();
+  return !ignoredCallableNames.has(lowered);
+}
+
+function callsName(content: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^A-Za-z0-9_$])(?:\\.|)${escaped}\\s*\\(`).test(content);
 }

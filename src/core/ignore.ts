@@ -12,6 +12,8 @@ const ignoredDirectories = new Set([
   ".turbo",
   ".cache",
   ".repolens",
+  ".codebase-memory",
+  ".pnpm-store",
   "__pycache__",
   ".pytest_cache",
   ".venv",
@@ -21,6 +23,9 @@ const ignoredDirectories = new Set([
   "vendored",
   "artifacts",
   "DerivedData",
+  "xcuserdata",
+  ".swiftpm",
+  ".gradle",
   ".build"
 ]);
 

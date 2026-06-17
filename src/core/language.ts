@@ -14,6 +14,7 @@ const byExtension = new Map<string, Language>([
   [".go", "go"],
   [".java", "java"],
   [".rs", "rust"],
+  [".swift", "swift"],
   [".sql", "sql"],
   [".yml", "yaml"],
   [".yaml", "yaml"],
