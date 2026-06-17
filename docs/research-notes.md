@@ -1,6 +1,6 @@
-# Upstream Review Notes
+# Research Notes
 
-Source reviewed: `DeusData/codebase-memory-mcp` at `e599df1d563c1e9b0b2fc8c6b12ee85934ade1c5`.
+Reference project reviewed: `DeusData/codebase-memory-mcp` at `e599df1d563c1e9b0b2fc8c6b12ee85934ade1c5`.
 
 ## Inventory
 
@@ -9,7 +9,7 @@ Source reviewed: `DeusData/codebase-memory-mcp` at `e599df1d563c1e9b0b2fc8c6b12e
 - Largest line-count buckets are vendored/generated assets, especially SQLite, Nomic vectors, tree-sitter grammars, and parser outputs.
 - Hand-authored product logic is concentrated in `src/`, `internal/cbm/`, `scripts/`, `pkg/`, `tests/`, and `graph-ui/`.
 
-## What The Upstream Optimizes For
+## What The Reference Optimizes For
 
 - Single static C binary with vendored parsers.
 - Broad language coverage through tree-sitter grammar generation.
@@ -19,9 +19,9 @@ Source reviewed: `DeusData/codebase-memory-mcp` at `e599df1d563c1e9b0b2fc8c6b12e
 - Optional graph UI served locally.
 - Serious release hygiene: install scripts, package-manager wrappers, CI, security scans, CodeQL, Scorecard, and release workflows.
 
-## Design Choices In This Rebuild
+## RepoLens Design Choices
 
-This project does not pretend to be a drop-in static C replacement. It is a recruiter-facing TypeScript implementation that keeps the product idea but optimizes for readability, maintainability, MCP integration, and fast local verification:
+RepoLens MCP is not a fork or a drop-in static C replacement. It is an original TypeScript implementation that keeps the broader local repository-intelligence idea while optimizing for readability, maintainability, MCP integration, and fast local verification:
 
 - Node 24 plus native SQLite for a dependency-light local graph store.
 - Stable MCP SDK v1 package rather than the pre-alpha v2 branch.
@@ -34,4 +34,4 @@ This project does not pretend to be a drop-in static C replacement. It is a recr
 - A small, inspectable TypeScript codebase with tests that a reviewer can understand quickly.
 - Built-in ADR memory, not just structural graph search.
 - Dashboard API and HTML are included in the same binary entrypoint, avoiding a separate frontend build.
-- Project is intentionally honest about scope: local-first repo memory for TypeScript-heavy portfolios, with extensible extractors for Python, Go, Java, Rust, SQL, YAML, Markdown, and JSON.
+- Project is intentionally honest about scope: local-first repository intelligence for TypeScript-heavy portfolios, with extensible extractors for Python, Go, Java, Rust, SQL, YAML, Markdown, and JSON.

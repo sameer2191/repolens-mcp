@@ -1,10 +1,10 @@
 {
-  "name": "codebase-memory-mcp",
+  "name": "repolens-mcp",
   "version": "1.0.0",
-  "description": "Local-first codebase memory MCP server with repo indexing, architecture search, impact analysis, ADR memory, and a dashboard.",
+  "description": "Local-first repository intelligence MCP server with repo indexing, architecture search, impact analysis, ADR memory, and a dashboard.",
   "type": "module",
   "bin": {
-    "codebase-memory-mcp": "./dist/src/cli.js"
+    "repolens-mcp": "./dist/src/cli.js"
   },
   "files": [
     "dist",

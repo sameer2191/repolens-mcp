@@ -28,18 +28,18 @@ Result:
 Command:
 
 ```bash
-node --experimental-sqlite dist/src/cli.js index . --db .codebase-memory/self.db --max-file-bytes 750000
-node --experimental-sqlite dist/src/cli.js architecture --db .codebase-memory/self.db
+node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000
+node --experimental-sqlite dist/src/cli.js architecture --db .repolens/self.db
 ```
 
 Result:
 
-- Files discovered: 29
-- Files indexed: 29
+- Files discovered: 30
+- Files indexed: 30
 - Files skipped: 0
-- Symbols: 149
-- Edges: 331
-- Elapsed: 38 ms
+- Symbols: 157
+- Edges: 338
+- Elapsed: 42 ms
 - Language mix: TypeScript, Markdown, JSON, YAML, unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`.
 
@@ -51,11 +51,11 @@ Command:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
-  --db /Users/sameer/Desktop/testing/.codebase-memory/codebase-memory-mcp-validation.db \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
   --max-file-bytes 750000
 
 node --experimental-sqlite dist/src/cli.js architecture \
-  --db /Users/sameer/Desktop/testing/.codebase-memory/codebase-memory-mcp-validation.db
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
 ```
 
 Result:
@@ -66,7 +66,7 @@ Result:
 - Symbols: 2,653
 - Edges: 31,023
 - Lines indexed: 54,301
-- Elapsed: 2,324 ms
+- Elapsed: 1,720 ms
 
 Top language coverage:
 
@@ -109,7 +109,7 @@ Search:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js search live-session \
-  --db /Users/sameer/Desktop/testing/.codebase-memory/codebase-memory-mcp-validation.db \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
   --limit 5
 ```
 
@@ -119,7 +119,7 @@ Symbol lookup:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js symbols repository \
-  --db /Users/sameer/Desktop/testing/.codebase-memory/codebase-memory-mcp-validation.db \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
   --limit 5
 ```
 
@@ -130,7 +130,7 @@ Trace:
 ```bash
 node --experimental-sqlite dist/src/cli.js trace listOrders \
   --direction inbound \
-  --db .codebase-memory/self.db \
+  --db .repolens/self.db \
   --depth 2
 ```
 

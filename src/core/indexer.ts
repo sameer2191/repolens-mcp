@@ -19,7 +19,7 @@ interface WalkedFile {
 export async function indexRepository(options: IndexOptions): Promise<IndexResult> {
   const started = performance.now();
   const root = path.resolve(options.root);
-  const dbPath = path.resolve(options.dbPath ?? process.env.CODEBASE_MEMORY_DB ?? defaultDbPath(root));
+  const dbPath = path.resolve(options.dbPath ?? process.env.REPOLENS_DB ?? defaultDbPath(root));
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
   const indexedAt = new Date().toISOString();
   const store = new MemoryStore(dbPath);

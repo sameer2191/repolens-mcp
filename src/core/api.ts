@@ -9,7 +9,7 @@ export async function runIndex(options: IndexOptions) {
 
 export function withStore<T>(rootOrDbPath: string | undefined, fn: (store: MemoryStore) => T): T {
   const root = path.resolve(process.cwd());
-  const dbPath = path.resolve(rootOrDbPath ?? process.env.CODEBASE_MEMORY_DB ?? defaultDbPath(root));
+  const dbPath = path.resolve(rootOrDbPath ?? process.env.REPOLENS_DB ?? defaultDbPath(root));
   const store = new MemoryStore(dbPath);
   try {
     return fn(store);

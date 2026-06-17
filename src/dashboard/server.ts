@@ -55,7 +55,7 @@ function dashboardHtml(): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Codebase Memory MCP</title>
+  <title>RepoLens MCP</title>
   <style>
     :root { color-scheme: light; --ink:#18212f; --muted:#657184; --line:#d7dde7; --bg:#f5f7fb; --panel:#ffffff; --accent:#0f766e; --accent2:#7c3aed; --warn:#b45309; }
     * { box-sizing: border-box; }
@@ -87,7 +87,7 @@ function dashboardHtml(): string {
 <body>
   <header>
     <div>
-      <h1>Codebase Memory MCP</h1>
+      <h1>RepoLens MCP</h1>
       <div class="sub">Local SQLite memory for architecture search, symbol tracing, impact analysis, and ADRs.</div>
     </div>
     <div class="pill" id="indexed">loading</div>

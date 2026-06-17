@@ -532,7 +532,7 @@ export class MemoryStore {
 }
 
 export function defaultDbPath(root: string): string {
-  return path.join(root, ".codebase-memory", "memory.db");
+  return path.join(root, ".repolens", "memory.db");
 }
 
 function rowToSymbol(row: SymbolRow): SymbolNode {

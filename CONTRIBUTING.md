@@ -22,4 +22,4 @@ node --experimental-sqlite dist/src/cli.js architecture
 - Add or update tests for extractor behavior.
 - Keep MCP tools deterministic and local-first.
 - Do not add network calls to indexing.
-- Do not commit `.codebase-memory/` databases.
+- Do not commit `.repolens/` databases.

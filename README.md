@@ -1,13 +1,13 @@
-# Codebase Memory MCP
+# RepoLens MCP
 
-Local-first repository memory for AI coding agents. Index a codebase into SQLite, expose it through MCP tools, and inspect the architecture in a browser dashboard.
+Local-first repository intelligence for AI coding agents. Index a repo into SQLite, expose architecture-aware MCP tools, and inspect code relationships in a browser dashboard.
 
-This project is inspired by `DeusData/codebase-memory-mcp`, but it is a clean TypeScript implementation focused on being easy to audit, extend, test, and demo.
+RepoLens MCP is an original TypeScript implementation built around fast local verification, readable internals, and recruiter-friendly proof. It focuses on the workflows engineers actually need during AI-assisted development: finding code, tracing symbols, checking impact, and preserving architecture decisions.
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes tools for indexing, code search, symbol search, architecture summaries, tracing, impact analysis, ADR memory, and graph snapshots.
-- **Local-first SQLite memory**: all indexed data stays in `.codebase-memory/memory.db`.
+- **MCP-native**: exposes tools for indexing, code search, symbol search, architecture summaries, tracing, impact analysis, ADRs, and graph snapshots.
+- **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Recruiter-friendly proof**: tests, CI, CodeQL, docs, local dashboard, and a big-repo validation workflow.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
 - **No frontend build required**: the dashboard is served by the CLI.
@@ -27,15 +27,15 @@ Then open `http://127.0.0.1:9749`.
 ## CLI
 
 ```bash
-codebase-memory-mcp index [repo] [--db path] [--max-file-bytes n]
-codebase-memory-mcp architecture [--db path]
-codebase-memory-mcp search <query> [--db path]
-codebase-memory-mcp symbols <query> [--kind function]
-codebase-memory-mcp trace <symbol> [--direction inbound|outbound]
-codebase-memory-mcp impact <path-or-symbol...>
-codebase-memory-mcp decision --title "Use SQLite" --body "Keep memory local."
-codebase-memory-mcp serve [--port 9749]
-codebase-memory-mcp mcp
+repolens-mcp index [repo] [--db path] [--max-file-bytes n]
+repolens-mcp architecture [--db path]
+repolens-mcp search <query> [--db path]
+repolens-mcp symbols <query> [--kind function]
+repolens-mcp trace <symbol> [--direction inbound|outbound]
+repolens-mcp impact <path-or-symbol...>
+repolens-mcp decision --title "Use SQLite" --body "Keep memory local."
+repolens-mcp serve [--port 9749]
+repolens-mcp mcp
 ```
 
 ## MCP Tools
@@ -72,7 +72,7 @@ node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/mem
 node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 ```
 
-The repo includes `docs/upstream-review.md` with the upstream inventory and the design decisions for this rebuild.
+The repo includes `docs/research-notes.md` with source-research notes and the design decisions behind this implementation.
 It also includes `docs/validation-report.md` with the local self-index and `/Users/sameer/Desktop/testing` big-repo validation results.
 
 ## MCP Client Config
@@ -80,11 +80,11 @@ It also includes `docs/validation-report.md` with the local self-index and `/Use
 ```json
 {
   "mcpServers": {
-    "codebase-memory-mcp": {
+    "repolens-mcp": {
       "command": "npx",
-      "args": ["-y", "codebase-memory-mcp", "mcp"],
+      "args": ["-y", "repolens-mcp", "mcp"],
       "env": {
-        "CODEBASE_MEMORY_DB": ".codebase-memory/memory.db"
+        "REPOLENS_DB": ".repolens/memory.db"
       }
     }
   }

@@ -11,7 +11,7 @@ const ignoredDirectories = new Set([
   ".nuxt",
   ".turbo",
   ".cache",
-  ".codebase-memory",
+  ".repolens",
   "__pycache__",
   ".pytest_cache",
   ".venv",

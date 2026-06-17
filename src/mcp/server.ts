@@ -16,14 +16,14 @@ import {
 
 export async function startMcpServer(): Promise<void> {
   const server = new McpServer({
-    name: "codebase-memory-mcp",
+    name: "repolens-mcp",
     version: "1.0.0"
   });
 
   server.registerTool(
     "index_repository",
     {
-      description: "Index a repository into the local SQLite codebase memory.",
+      description: "Index a repository into the local SQLite RepoLens graph.",
       inputSchema: {
         root: z.string().optional().describe("Repository root. Defaults to current working directory."),
         dbPath: z.string().optional().describe("Optional SQLite database path."),

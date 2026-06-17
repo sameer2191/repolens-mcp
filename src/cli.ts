@@ -88,7 +88,7 @@ async function main(): Promise<void> {
       const root = await createDemoRepo();
       const dbPath = defaultDbPath(root);
       const result = await runIndex({ root, dbPath });
-      print({ ...result, try: [`codebase-memory-mcp architecture --db ${dbPath}`, `codebase-memory-mcp serve --db ${dbPath}`] });
+      print({ ...result, try: [`repolens-mcp architecture --db ${dbPath}`, `repolens-mcp serve --db ${dbPath}`] });
       break;
     }
     case "help":
@@ -98,7 +98,7 @@ async function main(): Promise<void> {
       process.stdout.write(help());
       break;
     default:
-      throw new Error(`Unknown command '${args.command}'. Run codebase-memory-mcp help.`);
+      throw new Error(`Unknown command '${args.command}'. Run repolens-mcp help.`);
   }
 }
 
@@ -147,7 +147,7 @@ function print(value: unknown): void {
 }
 
 async function createDemoRepo(): Promise<string> {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "codebase-memory-demo-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-demo-"));
   await fs.mkdir(path.join(root, "src"), { recursive: true });
   await fs.writeFile(
     path.join(root, "package.json"),
@@ -166,21 +166,21 @@ app.get("/health", (_req, res) => res.json(health()));
 }
 
 function help(): string {
-  return `codebase-memory-mcp
+  return `repolens-mcp
 
 Usage:
-  codebase-memory-mcp index [repo] [--db path] [--max-file-bytes n]
-  codebase-memory-mcp architecture [--db path]
-  codebase-memory-mcp search <query> [--db path] [--limit n]
-  codebase-memory-mcp symbols <query> [--kind function] [--db path]
-  codebase-memory-mcp trace <symbol> [--direction inbound|outbound] [--depth n] [--db path]
-  codebase-memory-mcp impact <path-or-symbol...> [--db path]
-  codebase-memory-mcp decision --title "ADR title" --body "Decision body" [--tags a,b]
-  codebase-memory-mcp decisions [--db path]
-  codebase-memory-mcp graph [--db path]
-  codebase-memory-mcp serve [--db path] [--port 9749]
-  codebase-memory-mcp mcp
-  codebase-memory-mcp demo
+  repolens-mcp index [repo] [--db path] [--max-file-bytes n]
+  repolens-mcp architecture [--db path]
+  repolens-mcp search <query> [--db path] [--limit n]
+  repolens-mcp symbols <query> [--kind function] [--db path]
+  repolens-mcp trace <symbol> [--direction inbound|outbound] [--depth n] [--db path]
+  repolens-mcp impact <path-or-symbol...> [--db path]
+  repolens-mcp decision --title "ADR title" --body "Decision body" [--tags a,b]
+  repolens-mcp decisions [--db path]
+  repolens-mcp graph [--db path]
+  repolens-mcp serve [--db path] [--port 9749]
+  repolens-mcp mcp
+  repolens-mcp demo
 `;
 }
 

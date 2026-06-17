@@ -2,16 +2,16 @@
 
 ## Local-First Data Model
 
-Codebase Memory MCP reads source files from repositories you explicitly index and stores derived metadata in a local SQLite database. It does not send repository content to a hosted service.
+RepoLens MCP reads source files from repositories you explicitly index and stores derived metadata in a local SQLite database. It does not send repository content to a hosted service.
 
 ## Sensitive Files
 
-The default walker ignores common generated, binary, dependency, cache, and `.codebase-memory` directories. You should still review results from:
+The default walker ignores common generated, binary, dependency, cache, and `.repolens` directories. You should still review results from:
 
 ```bash
-codebase-memory-mcp architecture
-codebase-memory-mcp search secret
-codebase-memory-mcp search api_key
+repolens-mcp architecture
+repolens-mcp search secret
+repolens-mcp search api_key
 ```
 
 before committing any generated memory artifacts.
