@@ -2,13 +2,13 @@
 
 Local-first repository intelligence for AI coding agents. Index a repo into SQLite, expose architecture-aware MCP tools, and inspect code relationships in a browser dashboard.
 
-RepoLens MCP is an original TypeScript implementation built around fast local verification, readable internals, and recruiter-friendly proof. It focuses on the workflows engineers actually need during AI-assisted development: finding code, tracing symbols, checking impact, and preserving architecture decisions.
+RepoLens MCP is an original TypeScript implementation built around fast local verification, readable internals, and reviewable engineering evidence. It focuses on the workflows engineers actually need during AI-assisted development: finding code, tracing symbols, checking impact, and preserving architecture decisions.
 
 ## Why It Stands Out
 
 - **MCP-native**: exposes tools for indexing, code search, symbol search, architecture summaries, tracing, impact analysis, ADRs, and graph snapshots.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
-- **Recruiter-friendly proof**: tests, CI, CodeQL, docs, local dashboard, and a big-repo validation workflow.
+- **Operational proof**: tests, CI, CodeQL, docs, local dashboard, and a big-repo validation workflow.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
 - **No frontend build required**: the dashboard is served by the CLI.
 
