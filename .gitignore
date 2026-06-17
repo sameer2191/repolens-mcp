@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .codebase-memory/
+.repolens/
 coverage/
 .DS_Store
 *.log
