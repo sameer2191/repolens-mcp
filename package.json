@@ -1,0 +1,46 @@
+{
+  "name": "codebase-memory-mcp",
+  "version": "1.0.0",
+  "description": "Local-first codebase memory MCP server with repo indexing, architecture search, impact analysis, ADR memory, and a dashboard.",
+  "type": "module",
+  "bin": {
+    "codebase-memory-mcp": "./dist/src/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "server.json"
+  ],
+  "scripts": {
+    "build": "tsc && chmod 755 dist/src/cli.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-sqlite dist/tests/*.test.js",
+    "test:src": "npm run build && npm test",
+    "lint": "tsc --noEmit",
+    "verify": "npm run build && npm test",
+    "demo": "npm run build && node --experimental-sqlite dist/src/cli.js demo"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "code-intelligence",
+    "knowledge-graph",
+    "sqlite",
+    "developer-tools",
+    "ai-agents"
+  ],
+  "author": "Sameer Mir",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "typescript": "^5.9.3"
+  }
+}

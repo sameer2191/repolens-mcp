@@ -1,0 +1,7 @@
+{
+  "name": "sample-memory-target",
+  "type": "module",
+  "dependencies": {
+    "express": "^5.0.0"
+  }
+}

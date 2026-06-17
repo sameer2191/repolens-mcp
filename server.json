@@ -1,0 +1,9 @@
+{
+  "name": "codebase-memory-mcp",
+  "description": "Local-first MCP server that indexes repositories into SQLite and exposes architecture, search, impact, and ADR memory tools.",
+  "command": "npx",
+  "args": ["-y", "codebase-memory-mcp", "mcp"],
+  "env": {
+    "CODEBASE_MEMORY_DB": ".codebase-memory/memory.db"
+  }
+}
