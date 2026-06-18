@@ -5,7 +5,7 @@ import { importGraphPackage } from "./artifact.js";
 import { addCallEdges, addDataFlowEdges, addHttpEdges, addTypeRelationEdges, extractFromFile } from "./extractor.js";
 import { sha256 } from "./hash.js";
 import { buildResolvedImportEdges } from "./import-resolver.js";
-import { shouldIgnoreDirectory, shouldIgnoreFile } from "./ignore.js";
+import { loadRepoIgnoreMatcher, shouldIgnoreDirectory, shouldIgnoreFile, type RepoIgnoreMatcher } from "./ignore.js";
 import { detectLanguage, isTextCandidate, normalizeSlashes } from "./language.js";
 import { buildSemanticEdges } from "./semantic.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
@@ -35,7 +35,8 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
   try {
     store.acquireLock("index");
     lockAcquired = true;
-    const walked = await walk(root, root, options.includeHidden ?? false);
+    const repoIgnore = await loadRepoIgnoreMatcher(root);
+    const walked = await walk(root, root, options.includeHidden ?? false, repoIgnore);
     const walkedPaths = new Set(walked.map((file) => file.relativePath));
     const previousFiles = incremental ? new Map(store.listFiles().map((file) => [file.path, file])) : new Map<string, IndexedFile>();
     let filesRemoved = 0;
@@ -227,25 +228,26 @@ function isSameSkippedFile(previous: IndexedFile | undefined, next: IndexedFile)
   );
 }
 
-async function walk(root: string, current: string, includeHidden: boolean): Promise<WalkedFile[]> {
+async function walk(root: string, current: string, includeHidden: boolean, repoIgnore: RepoIgnoreMatcher): Promise<WalkedFile[]> {
   const entries = await fs.readdir(current, { withFileTypes: true });
   const files: WalkedFile[] = [];
   for (const entry of entries) {
+    const absolutePath = path.join(current, entry.name);
+    const relativePath = normalizeSlashes(path.relative(root, absolutePath));
     if (entry.isDirectory()) {
-      if (shouldIgnoreDirectory(entry.name, includeHidden)) {
+      if (shouldIgnoreDirectory(entry.name, includeHidden) || repoIgnore.shouldIgnore(relativePath, true)) {
         continue;
       }
-      files.push(...(await walk(root, path.join(current, entry.name), includeHidden)));
+      files.push(...(await walk(root, absolutePath, includeHidden, repoIgnore)));
       continue;
     }
-    if (!entry.isFile() || shouldIgnoreFile(entry.name)) {
+    if (!entry.isFile() || shouldIgnoreFile(entry.name) || repoIgnore.shouldIgnore(relativePath)) {
       continue;
     }
-    const absolutePath = path.join(current, entry.name);
     const stats = await fs.stat(absolutePath);
     files.push({
       absolutePath,
-      relativePath: normalizeSlashes(path.relative(root, absolutePath)),
+      relativePath,
       bytes: stats.size
     });
   }

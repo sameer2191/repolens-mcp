@@ -351,11 +351,11 @@ Manifest dependency graph checks:
 ```bash
 node --experimental-sqlite dist/src/cli.js search-graph orders --kind package --db /tmp/repolens-manifest-smoke.db --limit 30
 node --experimental-sqlite dist/src/cli.js search-graph fastapi --kind dependency --db /tmp/repolens-manifest-smoke.db --limit 5
-node --experimental-sqlite dist/src/cli.js search-graph spring --kind dependency --db /tmp/repolens-manifest-smoke.db --limit 5
+node --experimental-sqlite dist/src/cli.js search-graph commons-lang3 --kind dependency --db /tmp/repolens-manifest-smoke.db --limit 5
 node --experimental-sqlite dist/src/cli.js search-graph tokio --kind dependency --db /tmp/repolens-manifest-smoke.db --limit 5
 ```
 
-Confirmed npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures produce `package` and `dependency` nodes, including `fastapi`, `github.com/gin-gonic/gin`, `tokio`, `laravel/framework`, `org.springframework.boot:spring-boot-starter-web`, `com.squareup.okhttp3:okhttp`, `json_annotation`, `phoenix`, and `rack`.
+Confirmed npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures produce `package` and `dependency` nodes, including `fastapi`, `github.com/gin-gonic/gin`, `tokio`, `laravel/framework`, `org.apache.commons:commons-lang3`, `com.squareup.okhttp3:okhttp`, `json_annotation`, `phoenix`, and `rack`.
 
 Channel/event graph checks:
 

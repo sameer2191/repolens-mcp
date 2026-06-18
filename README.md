@@ -168,6 +168,10 @@ The extractor is intentionally compact and extensible:
 - Manifest files: `package.json`, `composer.json`, `pyproject.toml`, `requirements.txt`, `go.mod`, `Cargo.toml`, `pom.xml`, `build.gradle`, `pubspec.yaml`, `mix.exs`, and `*.gemspec` package/dependency nodes.
 - Lockfiles: `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock`, `composer.lock`, `Cargo.lock`, `poetry.lock`, `go.sum`, and `Gemfile.lock` become `lockfile` and `locked_dependency` nodes connected by `LOCKS` edges.
 
+### Repository Ignore Rules
+
+Add `.repolensignore` at the repository root to exclude generated code, local scratch folders, vendored samples, or sensitive paths from indexing. Rules are path-relative globs with `!` negation, similar to `.gitignore`; RepoLens still applies its built-in skips for dependency folders, build outputs, binaries, and `.repolens` artifacts.
+
 ## Query Graph Subset
 
 `query-graph` and `query_graph` are read-only. Supported patterns:
