@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { agentConfigSnippet, installAgentSetup } from "../src/core/agents.js";
+import { agentConfigSnippet, installAgentSetup, uninstallAgentSetup } from "../src/core/agents.js";
 
 test("renders multi-agent MCP config snippets", () => {
   const base = {
@@ -71,4 +71,30 @@ test("agent setup writes and replaces managed instruction blocks", async () => {
   assert.ok(guide.includes("/repo/two.js"));
   assert.match(gemini, /RepoLens MCP/);
   assert.match(gemini, /two\.db/);
+});
+
+test("agent setup uninstall removes managed blocks only", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agents-"));
+  const guidePath = path.join(tmp, "docs", "repolens-agent-setup.md");
+  await fs.mkdir(path.dirname(guidePath), { recursive: true });
+  await fs.writeFile(guidePath, "# Existing guide\n\nKeep this section.\n");
+
+  await installAgentSetup({
+    targetDir: tmp,
+    agents: ["codex"],
+    command: "node",
+    cliPath: "/repo/cli.js",
+    dbPath: "memory.db"
+  });
+  const result = await uninstallAgentSetup({
+    targetDir: tmp,
+    agents: ["codex"]
+  });
+
+  const guide = await fs.readFile(guidePath, "utf8");
+  await assert.rejects(() => fs.readFile(path.join(tmp, ".codex", "AGENTS.md"), "utf8"));
+
+  assert.ok(result.files.some((file) => file.path.endsWith(".codex/AGENTS.md") && file.removed));
+  assert.match(guide, /Keep this section/);
+  assert.ok(!guide.includes("repolens-mcp managed"));
 });

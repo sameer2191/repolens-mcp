@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DB_PATH="${REPOLENS_DB:-.repolens/memory.db}"
 INSTALL_CODEX=0
 INSTALL_AGENTS=0
+UNINSTALL_CODEX=0
+UNINSTALL_AGENTS=0
 AGENTS="all"
 TARGET_DIR="$ROOT_DIR"
 DRY_RUN=0
@@ -16,11 +18,15 @@ usage() {
 RepoLens MCP local installer
 
 Usage:
-  ./install.sh [--install-codex] [--install-agents] [--dry-run] [--force] [--db path] [--agents list] [--target dir] [--skip-npm]
+  ./install.sh [--install-codex] [--install-agents] [--uninstall-codex] [--uninstall-agents] [--dry-run] [--force] [--db path] [--agents list] [--target dir] [--skip-npm]
 
 Options:
   --install-codex  Add or update the managed Codex MCP config block after build.
   --install-agents Generate project-local RepoLens guidance for supported coding agents.
+  --uninstall-codex
+                   Remove only the managed RepoLens Codex MCP config block.
+  --uninstall-agents
+                   Remove managed RepoLens blocks from generated agent guidance.
   --dry-run        Show setup changes without writing them where supported.
   --force          Replace an existing unmanaged Codex server entry.
   --db path        MCP database path to place in generated setup.
@@ -39,6 +45,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --install-agents)
       INSTALL_AGENTS=1
+      shift
+      ;;
+    --uninstall-codex)
+      UNINSTALL_CODEX=1
+      shift
+      ;;
+    --uninstall-agents)
+      UNINSTALL_AGENTS=1
       shift
       ;;
     --dry-run)
@@ -132,7 +146,23 @@ if [[ "$INSTALL_AGENTS" -eq 1 ]]; then
   node --experimental-sqlite "$CLI_PATH" install-agents "${args[@]}"
 fi
 
-if [[ "$INSTALL_CODEX" -eq 0 && "$INSTALL_AGENTS" -eq 0 ]]; then
+if [[ "$UNINSTALL_CODEX" -eq 1 ]]; then
+  args=()
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    args+=(--dry-run)
+  fi
+  node --experimental-sqlite "$CLI_PATH" uninstall-codex "${args[@]}"
+fi
+
+if [[ "$UNINSTALL_AGENTS" -eq 1 ]]; then
+  args=(--target "$TARGET_DIR" --agents "$AGENTS")
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    args+=(--dry-run)
+  fi
+  node --experimental-sqlite "$CLI_PATH" uninstall-agents "${args[@]}"
+fi
+
+if [[ "$INSTALL_CODEX" -eq 0 && "$INSTALL_AGENTS" -eq 0 && "$UNINSTALL_CODEX" -eq 0 && "$UNINSTALL_AGENTS" -eq 0 ]]; then
   cat <<EOF
 
 RepoLens MCP built successfully.
@@ -141,6 +171,7 @@ Next steps:
   ./install.sh --install-codex --dry-run
   ./install.sh --install-codex
   ./install.sh --install-agents --dry-run
+  ./install.sh --uninstall-agents --dry-run
   node --experimental-sqlite "$CLI_PATH" index .
   node --experimental-sqlite "$CLI_PATH" serve
 EOF

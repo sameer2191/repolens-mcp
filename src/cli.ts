@@ -33,9 +33,9 @@ import {
   traceSymbol,
   unpackGraph
 } from "./core/api.js";
-import { agentProfiles, installAgentSetup, type AgentId } from "./core/agents.js";
+import { agentProfiles, installAgentSetup, uninstallAgentSetup, type AgentId } from "./core/agents.js";
 import type { ReportFormat } from "./core/report.js";
-import { codexDoctor, installCodexConfig } from "./core/codex.js";
+import { codexDoctor, installCodexConfig, uninstallCodexConfig } from "./core/codex.js";
 import { defaultDbPath } from "./core/store.js";
 import { serveDashboard } from "./dashboard/server.js";
 import { startMcpServer } from "./mcp/server.js";
@@ -254,6 +254,15 @@ async function main(): Promise<void> {
         })
       );
       break;
+    case "uninstall-codex":
+      print(
+        await uninstallCodexConfig({
+          configPath: stringFlag(args, "config"),
+          serverName: stringFlag(args, "name") ?? "repolens",
+          dryRun: booleanFlag(args, "dry-run")
+        })
+      );
+      break;
     case "agent-setup":
       print(
         await installAgentSetup({
@@ -275,6 +284,16 @@ async function main(): Promise<void> {
           command: stringFlag(args, "command") ?? process.execPath,
           cliPath: stringFlag(args, "cli") ?? currentCliPath(),
           dbPath: stringFlag(args, "db"),
+          serverName: stringFlag(args, "name") ?? "repolens",
+          dryRun: booleanFlag(args, "dry-run")
+        })
+      );
+      break;
+    case "uninstall-agents":
+      print(
+        await uninstallAgentSetup({
+          targetDir: stringFlag(args, "target") ?? process.cwd(),
+          agents: agentList(stringFlag(args, "agents")),
           serverName: stringFlag(args, "name") ?? "repolens",
           dryRun: booleanFlag(args, "dry-run")
         })
@@ -434,8 +453,10 @@ Usage:
   repolens-mcp serve [--db path] [--port 9749]
   repolens-mcp doctor [--config ~/.codex/config.toml] [--name repolens]
   repolens-mcp install-codex [--db .repolens/memory.db] [--dry-run] [--force] [--config ~/.codex/config.toml]
+  repolens-mcp uninstall-codex [--dry-run] [--config ~/.codex/config.toml]
   repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini] [--db .repolens/memory.db]
   repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
+  repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
   repolens-mcp mcp
   repolens-mcp demo
 `;

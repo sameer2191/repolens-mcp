@@ -12,7 +12,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 ## Why It Stands Out
 
 - **MCP-native**: exposes 28 tools for indexing, project inventory/status, fleet summaries, multi-agent setup, BM25 code search, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
-- **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, and `agent-setup`/`install-agents` generate RepoLens guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
+- **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and fleet summaries**: `list-projects`, `project-status`, `fleet-summary`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and infer service links when one local project calls a route provided by another.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
@@ -55,6 +55,7 @@ From a local clone, the installer runs the same build and Codex checks:
 ./install.sh --install-codex --dry-run
 ./install.sh --install-codex
 ./install.sh --install-agents --dry-run
+./install.sh --uninstall-agents --dry-run
 ```
 
 ## CLI
@@ -88,8 +89,10 @@ repolens-mcp pack-graph --out graph.rlgz [--db path] [--label name]
 repolens-mcp unpack-graph graph.rlgz [--db path] [--overwrite]
 repolens-mcp doctor [--config ~/.codex/config.toml] [--name repolens]
 repolens-mcp install-codex [--db .repolens/memory.db] [--dry-run] [--force]
+repolens-mcp uninstall-codex [--dry-run]
 repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini] [--db .repolens/memory.db]
 repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
+repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
 repolens-mcp decision --title "Use SQLite" --body "Keep memory local."
 repolens-mcp serve [--db path] [--port 9749]
 repolens-mcp mcp
@@ -199,9 +202,10 @@ Codex users can inspect or install the MCP entry directly:
 repolens-mcp doctor
 repolens-mcp install-codex --db .repolens/memory.db --dry-run
 repolens-mcp install-codex --db .repolens/memory.db
+repolens-mcp uninstall-codex --dry-run
 ```
 
-`install-codex` refuses to replace an existing unmanaged `mcp_servers.repolens` entry unless `--force` is passed.
+`install-codex` refuses to replace an existing unmanaged `mcp_servers.repolens` entry unless `--force` is passed. `uninstall-codex` removes only the RepoLens managed block and leaves unmanaged MCP entries untouched.
 
 Project teams can generate agent guidance and config snippets for the broader agent set:
 
@@ -209,9 +213,10 @@ Project teams can generate agent guidance and config snippets for the broader ag
 repolens-mcp agent-setup --target . --agents all
 repolens-mcp install-agents --target . --agents codex,claude,gemini --dry-run
 repolens-mcp install-agents --target . --agents codex,claude,gemini
+repolens-mcp uninstall-agents --target . --agents codex,claude,gemini --dry-run
 ```
 
-`install-agents` writes managed markdown blocks into project-local instruction files and a `docs/repolens-agent-setup.md` guide. The guide includes MCP config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
+`install-agents` writes managed markdown blocks into project-local instruction files and a `docs/repolens-agent-setup.md` guide. `uninstall-agents` removes those managed markdown blocks while preserving hand-written content. The guide includes MCP config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 
 ```json
 {

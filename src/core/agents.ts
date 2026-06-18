@@ -35,6 +35,7 @@ export interface AgentSetupFile {
   path: string;
   changed: boolean;
   content: string;
+  removed?: boolean;
 }
 
 export interface AgentSetupResult {
@@ -108,6 +109,39 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
     dryRun: options.dryRun ?? false,
     agents: selected,
     files: written,
+    guidePath: path.join(targetDir, "docs", "repolens-agent-setup.md")
+  };
+}
+
+export async function uninstallAgentSetup(options: Omit<AgentSetupOptions, "command" | "cliPath" | "dbPath">): Promise<AgentSetupResult> {
+  const targetDir = path.resolve(options.targetDir ?? process.cwd());
+  const serverName = options.serverName ?? "repolens";
+  const selected = selectAgents(options.agents);
+  const relativePaths = ["docs/repolens-agent-setup.md", ...selected.map((profile) => profile.instructionPath)];
+  const files: AgentSetupFile[] = [];
+
+  for (const relativePath of relativePaths) {
+    const outPath = path.join(targetDir, relativePath);
+    const existing = await fs.readFile(outPath, "utf8").catch(() => "");
+    const content = removeMarkdownBlock(existing).trimEnd();
+    const removed = content.length === 0;
+    const changed = content !== existing.trimEnd();
+    files.push({ path: outPath, changed, content: removed ? "" : `${content}\n`, removed });
+    if (!options.dryRun && changed) {
+      if (removed) {
+        await fs.rm(outPath, { force: true });
+      } else {
+        await fs.writeFile(outPath, `${content}\n`);
+      }
+    }
+  }
+
+  return {
+    targetDir,
+    serverName,
+    dryRun: options.dryRun ?? false,
+    agents: selected,
+    files,
     guidePath: path.join(targetDir, "docs", "repolens-agent-setup.md")
   };
 }
@@ -243,6 +277,11 @@ ${MANAGED_END}
   }
   const trimmed = existing.trimEnd();
   return trimmed ? `${trimmed}\n\n${block}` : block;
+}
+
+function removeMarkdownBlock(existing: string): string {
+  const pattern = new RegExp(`${escapeRegExp(MANAGED_START)}[\\s\\S]*?${escapeRegExp(MANAGED_END)}\\n?`, "g");
+  return existing.replace(pattern, "");
 }
 
 function snippetLanguage(agent: AgentId): string {

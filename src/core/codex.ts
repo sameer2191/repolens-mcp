@@ -35,6 +35,21 @@ export interface CodexDoctorResult {
   recommendedCommand: string;
 }
 
+export interface CodexUninstallOptions {
+  configPath?: string;
+  serverName?: string;
+  dryRun?: boolean;
+}
+
+export interface CodexUninstallResult {
+  configPath: string;
+  serverName: string;
+  changed: boolean;
+  dryRun: boolean;
+  managedBlockPresent: boolean;
+  reason?: string;
+}
+
 export async function installCodexConfig(options: CodexInstallOptions): Promise<CodexInstallResult> {
   const configPath = path.resolve(options.configPath ?? defaultCodexConfigPath());
   const serverName = options.serverName ?? "repolens";
@@ -96,6 +111,34 @@ export async function codexDoctor(cliPath: string, command: string, configPath =
     repolensConfigured: hasMcpServer(existing, serverName),
     managedBlockPresent: hasManagedBlock(existing),
     recommendedCommand: `repolens-mcp install-codex --db .repolens/memory.db`
+  };
+}
+
+export async function uninstallCodexConfig(options: CodexUninstallOptions = {}): Promise<CodexUninstallResult> {
+  const configPath = path.resolve(options.configPath ?? defaultCodexConfigPath());
+  const serverName = options.serverName ?? "repolens";
+  const existing = await fs.readFile(configPath, "utf8").catch(() => "");
+  const managedBlockPresent = hasManagedBlock(existing);
+  if (!managedBlockPresent) {
+    return {
+      configPath,
+      serverName,
+      changed: false,
+      dryRun: options.dryRun ?? false,
+      managedBlockPresent: false,
+      reason: "No RepoLens managed block found; unmanaged MCP entries are left untouched"
+    };
+  }
+  const next = stripManagedBlock(existing).trimEnd();
+  if (!options.dryRun) {
+    await fs.writeFile(configPath, next ? `${next}\n` : "");
+  }
+  return {
+    configPath,
+    serverName,
+    changed: next !== existing.trimEnd(),
+    dryRun: options.dryRun ?? false,
+    managedBlockPresent: true
   };
 }
 

@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { codexManagedBlock, hasMcpServer, installCodexConfig, upsertManagedBlock } from "../src/core/codex.js";
+import { codexManagedBlock, hasMcpServer, installCodexConfig, uninstallCodexConfig, upsertManagedBlock } from "../src/core/codex.js";
 
 test("renders a Codex MCP config block for RepoLens", () => {
   const block = codexManagedBlock({
@@ -113,4 +113,23 @@ test("installCodexConfig force replaces unmanaged repolens sections", async () =
   assert.ok(!content.includes("old.db"));
   assert.match(content, /\[mcp_servers\.other\]/);
   assert.match(content, /REPOLENS_DB = "memory\.db"/);
+});
+
+test("uninstallCodexConfig removes only managed RepoLens block", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-codex-"));
+  const configPath = path.join(tmp, "config.toml");
+  await installCodexConfig({
+    configPath,
+    command: "node",
+    cliPath: "/repo/cli.js",
+    dbPath: "memory.db"
+  });
+  await fs.appendFile(configPath, '\n[mcp_servers.other]\ncommand = "other"\n');
+
+  const result = await uninstallCodexConfig({ configPath });
+  const content = await fs.readFile(configPath, "utf8");
+
+  assert.equal(result.changed, true);
+  assert.equal(hasMcpServer(content, "repolens"), false);
+  assert.match(content, /\[mcp_servers\.other\]/);
 });
