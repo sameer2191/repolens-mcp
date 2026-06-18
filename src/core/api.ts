@@ -180,6 +180,14 @@ export function rememberDecision(decision: DecisionRecord, dbPath?: string) {
   return withStore(dbPath, (store) => store.addDecision(decision));
 }
 
+export function updateDecision(id: number, patch: Partial<Pick<DecisionRecord, "title" | "status" | "body" | "tags">>, dbPath?: string) {
+  return withStore(dbPath, (store) => store.updateDecision(id, patch));
+}
+
+export function deleteDecision(id: number, dbPath?: string) {
+  return withStore(dbPath, (store) => store.deleteDecision(id));
+}
+
 export function listDecisions(limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.listDecisions(limit));
 }

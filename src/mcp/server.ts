@@ -9,6 +9,7 @@ import {
   configReset,
   configSet,
   contextPack,
+  deleteDecision,
   deleteProject,
   detectChanges,
   fleetGraph,
@@ -37,6 +38,7 @@ import {
   semanticSearch,
   searchSymbols,
   traceSymbol,
+  updateDecision,
   unpackGraph,
   vectorSearch
 } from "../core/api.js";
@@ -506,6 +508,40 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ limit, dbPath }) => text(listDecisions(limit, dbPath))
+  );
+
+  server.registerTool(
+    "update_decision",
+    {
+      description: "Update an existing architecture decision record without rewriting unspecified fields.",
+      inputSchema: {
+        id: z.number().int().positive(),
+        title: z.string().optional(),
+        status: z.enum(["proposed", "accepted", "superseded"]).optional(),
+        body: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ id, title, status, body, tags, dbPath }) => {
+      const patch = { title, status, body, tags };
+      if (title === undefined && status === undefined && body === undefined && tags === undefined) {
+        throw new Error("At least one of title, status, body, or tags is required.");
+      }
+      return text(updateDecision(id, patch, dbPath));
+    }
+  );
+
+  server.registerTool(
+    "delete_decision",
+    {
+      description: "Delete an architecture decision record by id.",
+      inputSchema: {
+        id: z.number().int().positive(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ id, dbPath }) => text(deleteDecision(id, dbPath))
   );
 
   server.registerTool(

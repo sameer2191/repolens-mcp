@@ -12,7 +12,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 34 tools for indexing, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 36 tools for indexing, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
@@ -106,6 +106,8 @@ repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini] [--db .
 repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
 repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
 repolens-mcp decision --title "Use SQLite" --body "Keep memory local."
+repolens-mcp decision-update 1 --status accepted --tags sqlite,privacy
+repolens-mcp decision-delete 1
 repolens-mcp serve [--db path] [--port 9749]
 repolens-mcp mcp
 ```
@@ -146,6 +148,8 @@ repolens-mcp mcp
 | `architecture_report` | Generate a markdown or HTML architecture report with graph, hotspot, history, risk, and recommendation sections. |
 | `remember_decision` | Persist an ADR-style architecture decision. |
 | `list_decisions` | Retrieve saved decisions. |
+| `update_decision` | Update an existing architecture decision without rewriting unspecified fields. |
+| `delete_decision` | Delete an architecture decision by id. |
 | `graph_snapshot` | Export compact graph data for dashboards or reviews. |
 
 ## Supported Extraction

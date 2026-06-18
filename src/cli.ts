@@ -9,6 +9,7 @@ import {
   configReset,
   configSet,
   contextPack,
+  deleteDecision,
   deleteProject,
   detectChanges,
   fleetGraph,
@@ -38,6 +39,7 @@ import {
   semanticSearch,
   searchSymbols,
   traceSymbol,
+  updateDecision,
   unpackGraph,
   vectorSearch
 } from "./core/api.js";
@@ -217,14 +219,22 @@ async function main(): Promise<void> {
           {
             title,
             body,
-            status: (stringFlag(args, "status") as "proposed" | "accepted" | "superseded" | undefined) ?? "accepted",
-            tags: (stringFlag(args, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean)
+            status: decisionStatusFlag(args) ?? "accepted",
+            tags: decisionTagsFlag(args) ?? []
           },
           stringFlag(args, "db")
         )
       );
       break;
     }
+    case "decision-update":
+    case "update-decision":
+      print(updateDecision(requiredNumber(args.positional[0] ?? stringFlag(args, "id"), "decision id"), decisionPatch(args), stringFlag(args, "db")));
+      break;
+    case "decision-delete":
+    case "delete-decision":
+      print(deleteDecision(requiredNumber(args.positional[0] ?? stringFlag(args, "id"), "decision id"), stringFlag(args, "db")));
+      break;
     case "decisions":
       print(listDecisions(numberFlag(args, "limit"), stringFlag(args, "db")));
       break;
@@ -411,6 +421,42 @@ function secretConfidenceFlag(args: ParsedArgs): "low" | "medium" | "high" | und
   throw new Error("Invalid --min-confidence. Use one of: low, medium, high.");
 }
 
+function decisionStatusFlag(args: ParsedArgs): "proposed" | "accepted" | "superseded" | undefined {
+  const value = stringFlag(args, "status");
+  if (!value) {
+    return undefined;
+  }
+  if (value === "proposed" || value === "accepted" || value === "superseded") {
+    return value;
+  }
+  throw new Error("Invalid --status. Use one of: proposed, accepted, superseded.");
+}
+
+function decisionTagsFlag(args: ParsedArgs): string[] | undefined {
+  if (!args.flags.has("tags")) {
+    return undefined;
+  }
+  return (stringFlag(args, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean);
+}
+
+function decisionPatch(args: ParsedArgs): {
+  title?: string;
+  status?: "proposed" | "accepted" | "superseded";
+  body?: string;
+  tags?: string[];
+} {
+  const patch = {
+    title: stringFlag(args, "title"),
+    status: decisionStatusFlag(args),
+    body: stringFlag(args, "body"),
+    tags: decisionTagsFlag(args)
+  };
+  if (patch.title === undefined && patch.status === undefined && patch.body === undefined && patch.tags === undefined) {
+    throw new Error("Missing decision update fields. Use --title, --status, --body, or --tags.");
+  }
+  return patch;
+}
+
 function agentList(value: string | undefined): AgentId[] | undefined {
   if (!value || value === "all") {
     return undefined;
@@ -451,6 +497,15 @@ function required(value: string | undefined, name: string): string {
     throw new Error(`Missing required ${name}`);
   }
   return value;
+}
+
+function requiredNumber(value: string | undefined, name: string): number {
+  const raw = required(value, name);
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Invalid ${name}: expected a positive integer`);
+  }
+  return parsed;
 }
 
 function print(value: unknown): void {
@@ -524,6 +579,8 @@ Usage:
   repolens-mcp ingest-traces traces.json [--db path]
   repolens-mcp changes [repo] [--db path] [--limit n]
   repolens-mcp decision --title "ADR title" --body "Decision body" [--tags a,b]
+  repolens-mcp decision-update <id> [--title "New title"] [--status proposed|accepted|superseded] [--body "Updated body"] [--tags a,b] [--db path]
+  repolens-mcp decision-delete <id> [--db path]
   repolens-mcp decisions [--db path]
   repolens-mcp graph [--db path]
   repolens-mcp report [--db path] [--format markdown|html] [--graph-limit n] [--out report.html]

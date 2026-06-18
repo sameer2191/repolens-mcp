@@ -1456,18 +1456,41 @@ export class MemoryStore {
     return { ...decision, id: Number(result.lastInsertRowid), createdAt };
   }
 
+  updateDecision(id: number, patch: Partial<Pick<DecisionRecord, "title" | "status" | "body" | "tags">>): DecisionRecord | null {
+    const existing = this.getDecision(id);
+    if (!existing) {
+      return null;
+    }
+    const next: DecisionRecord = {
+      ...existing,
+      title: patch.title ?? existing.title,
+      status: patch.status ?? existing.status,
+      body: patch.body ?? existing.body,
+      tags: patch.tags ?? existing.tags
+    };
+    this.db
+      .prepare("UPDATE decisions SET title = ?, status = ?, body = ?, tags = ? WHERE id = ?")
+      .run(next.title, next.status, next.body, JSON.stringify(next.tags), id);
+    return this.getDecision(id);
+  }
+
+  deleteDecision(id: number): { id: number; deleted: boolean } {
+    const result = this.db.prepare("DELETE FROM decisions WHERE id = ?").run(id);
+    return { id, deleted: result.changes > 0 };
+  }
+
   listDecisions(limit = 20): DecisionRecord[] {
     const rows = this.db
       .prepare("SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?")
       .all(limit) as Array<{ id: number; title: string; status: DecisionRecord["status"]; body: string; tags: string; created_at: string }>;
-    return rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      status: row.status,
-      body: row.body,
-      tags: parseStringArray(row.tags),
-      createdAt: row.created_at
-    }));
+    return rows.map(decisionFromRow);
+  }
+
+  getDecision(id: number): DecisionRecord | null {
+    const row = this.db
+      .prepare("SELECT * FROM decisions WHERE id = ?")
+      .get(id) as { id: number; title: string; status: DecisionRecord["status"]; body: string; tags: string; created_at: string } | undefined;
+    return row ? decisionFromRow(row) : null;
   }
 
   graph(limit = 500): { nodes: Array<{ id: string; label: string; group: string }>; edges: Edge[] } {
@@ -1979,6 +2002,17 @@ function parseMetadata(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function decisionFromRow(row: { id: number; title: string; status: DecisionRecord["status"]; body: string; tags: string; created_at: string }): DecisionRecord {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    body: row.body,
+    tags: parseStringArray(row.tags),
+    createdAt: row.created_at
+  };
 }
 
 function parseStringArray(value: string): string[] {

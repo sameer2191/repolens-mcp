@@ -23,3 +23,36 @@ test("persists architecture decisions", async () => {
     store.close();
   }
 });
+
+test("updates and deletes architecture decisions", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-decision-update-"));
+  const store = new MemoryStore(path.join(tmp, "memory.db"));
+  try {
+    const decision = store.addDecision({
+      title: "Use local SQLite",
+      status: "proposed",
+      body: "Evaluate local storage for repository memory.",
+      tags: ["sqlite"]
+    });
+
+    const updated = store.updateDecision(decision.id!, {
+      status: "accepted",
+      body: "Keep repository memory local and inspectable.",
+      tags: ["sqlite", "privacy"]
+    });
+
+    assert.ok(updated);
+    assert.equal(updated.title, "Use local SQLite");
+    assert.equal(updated.status, "accepted");
+    assert.equal(updated.body, "Keep repository memory local and inspectable.");
+    assert.deepEqual(updated.tags, ["sqlite", "privacy"]);
+    assert.equal(updated.createdAt, decision.createdAt);
+
+    assert.equal(store.updateDecision(9999, { status: "superseded" }), null);
+    assert.deepEqual(store.deleteDecision(9999), { id: 9999, deleted: false });
+    assert.deepEqual(store.deleteDecision(decision.id!), { id: decision.id!, deleted: true });
+    assert.equal(store.listDecisions().length, 0);
+  } finally {
+    store.close();
+  }
+});
