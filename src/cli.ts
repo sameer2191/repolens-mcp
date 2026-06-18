@@ -6,6 +6,7 @@ import {
   architectureReport,
   detectChanges,
   findDeadCode,
+  findDependencyCycles,
   getArchitecture,
   getGraphSchema,
   graphSnapshot,
@@ -91,6 +92,9 @@ async function main(): Promise<void> {
       break;
     case "dead-code":
       print(findDeadCode(numberFlag(args, "limit"), stringFlag(args, "db")));
+      break;
+    case "cycles":
+      print(findDependencyCycles(numberFlag(args, "limit"), stringFlag(args, "db")));
       break;
     case "changes":
       print(detectChanges(args.positional[0] ? path.resolve(args.positional[0]) : undefined, numberFlag(args, "limit"), stringFlag(args, "db")));
@@ -262,6 +266,7 @@ Usage:
   repolens-mcp schema [--db path]
   repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern regex] [--file-pattern src/] [--min-degree n] [--db path]
   repolens-mcp dead-code [--db path] [--limit n]
+  repolens-mcp cycles [--db path] [--limit n]
   repolens-mcp changes [repo] [--db path] [--limit n]
   repolens-mcp decision --title "ADR title" --body "Decision body" [--tags a,b]
   repolens-mcp decisions [--db path]

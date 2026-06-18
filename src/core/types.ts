@@ -94,6 +94,8 @@ export interface ArchitectureSummary {
   hotspots: Array<{ path: string; score: number; reasons: string[] }>;
   boundaries: Array<{ source: string; target: string; edges: number; sampleTypes: string[] }>;
   clusters: Array<{ name: string; files: number; symbols: number; edges: number }>;
+  dependencyCycles: DependencyCycle[];
+  recommendations: ArchitectureRecommendation[];
   entrypoints: Array<{ path: string; reason: string }>;
   packages: string[];
   deadCode: { candidates: number; samples: DeadCodeCandidate[] };
@@ -130,6 +132,20 @@ export interface DeadCodeCandidate {
   inbound: number;
   outbound: number;
   reason: string;
+}
+
+export interface DependencyCycle {
+  clusters: string[];
+  edges: number;
+  sampleEdges: Array<{ source: string; target: string; type: string }>;
+  recommendation: string;
+}
+
+export interface ArchitectureRecommendation {
+  priority: "high" | "medium" | "low";
+  title: string;
+  detail: string;
+  evidence: string[];
 }
 
 export interface ChangeImpactResult {

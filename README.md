@@ -6,11 +6,12 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 14 tools for indexing, code search, symbol search, graph schema, structural graph search, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, and graph snapshots.
+- **MCP-native**: exposes 15 tools for indexing, code search, symbol search, graph schema, structural graph search, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, and graph snapshots.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots and architecture reports from the CLI.
 - **Operational dashboard**: browse graph previews, structural filters, schema counts, dead-code candidates, review signals, and report links without a frontend build.
+- **Architecture recommendations**: turns hotspots, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
 - **Validation evidence**: tests, CI, CodeQL, docs, local dashboard, and a big-repo validation workflow.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
@@ -42,6 +43,7 @@ repolens-mcp impact <path-or-symbol...>
 repolens-mcp schema [--db path]
 repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--min-degree n]
 repolens-mcp dead-code [--db path]
+repolens-mcp cycles [--db path] [--limit n]
 repolens-mcp changes [repo] [--db path]
 repolens-mcp report [--db path] [--format markdown|html] [--graph-limit n] [--out report.html]
 repolens-mcp export-graph --out graph.html [--db path]
@@ -63,6 +65,7 @@ repolens-mcp mcp
 | `get_graph_schema` | Return node labels, edge types, language coverage, and totals. |
 | `search_graph` | Search structurally by query, kind, regex, relationship, file scope, or degree. |
 | `find_dead_code` | Find non-exported functions and methods with no inbound call edges. |
+| `find_dependency_cycles` | Find import-resolved dependency cycles between architecture clusters. |
 | `detect_changes` | Map uncommitted git changes to indexed graph impact. |
 | `architecture_report` | Generate a markdown or HTML architecture report from the indexed graph. |
 | `remember_decision` | Persist an ADR-style architecture decision. |
@@ -90,6 +93,7 @@ node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/mem
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js cycles --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js report --db /tmp/memory.db --format html --out report.html
 node --experimental-sqlite dist/src/cli.js export-graph --db /tmp/memory.db --out graph.html --limit 1000
 node --experimental-sqlite dist/src/cli.js serve --db /tmp/memory.db --port 9749

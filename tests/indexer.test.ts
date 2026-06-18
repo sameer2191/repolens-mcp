@@ -36,6 +36,8 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(arch.nodeLabels.some((label) => label.kind === "function"));
     assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "CALLS"));
     assert.ok(arch.topSymbols.some((symbol) => symbol.name === "createOrder"));
+    assert.ok(Array.isArray(arch.dependencyCycles));
+    assert.ok(Array.isArray(arch.recommendations));
 
     const trace = store.traceSymbol("createOrder", "inbound", 2);
     assert.ok(trace.some((edge) => edge.source.includes("server.ts")));
@@ -66,6 +68,88 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
   } finally {
     store.close();
   }
+});
+
+test("detects dependency cycles between architecture clusters", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-cycles-"));
+  const dbPath = path.join(tmp, "memory.db");
+  const store = new MemoryStore(dbPath);
+  try {
+    store.recordRun(tmp, null, new Date().toISOString());
+    store.insertFile({
+      path: "src/api/orders.ts",
+      language: "typescript",
+      bytes: 120,
+      lines: 8,
+      sha256: "api",
+      skipped: false
+    });
+    store.insertFile({
+      path: "src/domain/orders.ts",
+      language: "typescript",
+      bytes: 120,
+      lines: 8,
+      sha256: "domain",
+      skipped: false
+    });
+    store.insertSymbol({
+      filePath: "src/api/orders.ts",
+      language: "typescript",
+      kind: "file",
+      name: "orders.ts",
+      qualifiedName: "src/api/orders.ts:file",
+      startLine: 1,
+      endLine: 8,
+      metadata: { path: "src/api/orders.ts" }
+    });
+    store.insertSymbol({
+      filePath: "src/domain/orders.ts",
+      language: "typescript",
+      kind: "file",
+      name: "orders.ts",
+      qualifiedName: "src/domain/orders.ts:file",
+      startLine: 1,
+      endLine: 8,
+      metadata: { path: "src/domain/orders.ts" }
+    });
+    store.insertSymbol({
+      filePath: "src/api/orders.ts",
+      language: "typescript",
+      kind: "function",
+      name: "handleOrder",
+      qualifiedName: "src/api/orders.ts:function:handleOrder:1",
+      startLine: 1,
+      endLine: 4,
+      exported: true
+    });
+    store.insertSymbol({
+      filePath: "src/domain/orders.ts",
+      language: "typescript",
+      kind: "function",
+      name: "priceOrder",
+      qualifiedName: "src/domain/orders.ts:function:priceOrder:1",
+      startLine: 1,
+      endLine: 4,
+      exported: true
+    });
+    store.insertEdge({ source: "src/api/orders.ts:file", target: "external:../domain/orders.js", type: "IMPORTS", metadata: { import: "../domain/orders.js" } });
+    store.insertEdge({ source: "src/domain/orders.ts:file", target: "external:../api/orders.js", type: "IMPORTS", metadata: { import: "../api/orders.js" } });
+
+    const cycles = store.dependencyCycles();
+    assert.equal(cycles.length, 1);
+    assert.deepEqual(cycles[0].clusters, ["src/api", "src/domain"]);
+    assert.equal(cycles[0].edges, 2);
+
+    const arch = store.architecture(tmp);
+    assert.ok(arch.risks.some((risk) => risk.includes("dependency cycles")));
+    assert.ok(arch.recommendations.some((recommendation) => recommendation.title.includes("dependency cycles")));
+  } finally {
+    store.close();
+  }
+
+  const markdownReport = architectureReport({ graphLimit: 20 }, dbPath);
+  assert.match(markdownReport, /## Dependency Cycles/);
+  assert.match(markdownReport, /src\/api -> src\/domain/);
 });
 
 test("incremental indexing skips unchanged files and prunes removed files", async () => {

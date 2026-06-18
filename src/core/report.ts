@@ -80,6 +80,18 @@ function markdownReport(title: string, architecture: ArchitectureSummary, graph:
     "| --- | --- | ---: | --- |",
     ...architecture.boundaries.map((item) => `| ${item.source} | ${item.target} | ${item.edges} | ${item.sampleTypes.join(", ")} |`),
     "",
+    "## Dependency Cycles",
+    "",
+    ...(architecture.dependencyCycles.length > 0
+      ? architecture.dependencyCycles.map((item) => `- ${item.clusters.join(" -> ")} - ${formatNumber(item.edges)} edges. ${item.recommendation}`)
+      : ["- No cross-cluster dependency cycles found."]),
+    "",
+    "## Recommendations",
+    "",
+    ...(architecture.recommendations.length > 0
+      ? architecture.recommendations.map((item) => `- [${item.priority}] ${item.title}: ${item.detail}${item.evidence.length ? ` Evidence: ${item.evidence.join("; ")}` : ""}`)
+      : ["- No recommendations found."]),
+    "",
     "## Dead-Code Candidates",
     "",
     ...(architecture.deadCode.samples.length > 0
@@ -185,6 +197,14 @@ function htmlReport(title: string, architecture: ArchitectureSummary, graph: Gra
       <section>
         <h2>Boundaries</h2>
         ${table(["Source", "Target", "Edges"], architecture.boundaries.map((item) => [item.source, item.target, item.edges]))}
+      </section>
+      <section>
+        <h2>Dependency Cycles</h2>
+        ${list(architecture.dependencyCycles.map((item) => `${item.clusters.join(" -> ")} - ${formatNumber(item.edges)} edges - ${item.recommendation}`))}
+      </section>
+      <section>
+        <h2>Recommendations</h2>
+        ${list(architecture.recommendations.map((item) => `[${item.priority}] ${item.title}: ${item.detail}`))}
       </section>
       <section>
         <h2>Dead-Code Candidates</h2>

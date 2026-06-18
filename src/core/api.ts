@@ -52,6 +52,10 @@ export function findDeadCode(limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.findDeadCode(limit));
 }
 
+export function findDependencyCycles(limit?: number, dbPath?: string) {
+  return withStore(dbPath, (store) => store.dependencyCycles(limit));
+}
+
 export function detectChanges(root?: string, limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.detectChanges(root, limit));
 }

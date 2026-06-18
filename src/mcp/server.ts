@@ -5,6 +5,7 @@ import {
   architectureReport,
   detectChanges,
   findDeadCode,
+  findDependencyCycles,
   getArchitecture,
   getGraphSchema,
   graphSnapshot,
@@ -144,6 +145,18 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ limit, dbPath }) => text(findDeadCode(limit, dbPath))
+  );
+
+  server.registerTool(
+    "find_dependency_cycles",
+    {
+      description: "Find cross-cluster dependency cycles and sample edges to guide architecture refactors.",
+      inputSchema: {
+        limit: z.number().int().positive().max(100).optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ limit, dbPath }) => text(findDependencyCycles(limit, dbPath))
   );
 
   server.registerTool(

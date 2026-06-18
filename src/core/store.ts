@@ -4,9 +4,11 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type {
   ArchitectureSummary,
+  ArchitectureRecommendation,
   ChangeImpactResult,
   CodeMatch,
   DeadCodeCandidate,
+  DependencyCycle,
   DecisionRecord,
   Edge,
   GraphSchema,
@@ -464,6 +466,82 @@ export class MemoryStore {
     }));
   }
 
+  dependencyCycles(limit = 20): DependencyCycle[] {
+    const fileRows = this.db
+      .prepare("SELECT path FROM files WHERE skipped = 0")
+      .all() as Array<{ path: string }>;
+    const filePaths = new Set(fileRows.map((row) => row.path));
+    const rows = this.db
+      .prepare(
+        `SELECT source_symbol.file_path AS source_file,
+          edges.type,
+          edges.source,
+          edges.target,
+          edges.metadata
+         FROM edges
+         JOIN symbols source_symbol ON source_symbol.qualified_name = edges.source
+         WHERE edges.type = 'IMPORTS'
+         LIMIT 25000`
+      )
+      .all() as Array<{ source_file: string; type: string; source: string; target: string; metadata: string }>;
+
+    const graph = new Map<string, Set<string>>();
+    const edges = new Map<string, { source: string; target: string; count: number; sampleEdges: Array<{ source: string; target: string; type: string }> }>();
+    for (const row of rows) {
+      const imported = parseMetadata(row.metadata).import;
+      if (typeof imported !== "string") {
+        continue;
+      }
+      const targetFile = resolveImportFile(row.source_file, imported, filePaths);
+      if (!targetFile || targetFile === row.source_file) {
+        continue;
+      }
+      const source = clusterName(row.source_file);
+      const target = clusterName(targetFile);
+      if (source === target) {
+        continue;
+      }
+      const targets = graph.get(source) ?? new Set<string>();
+      targets.add(target);
+      graph.set(source, targets);
+      if (!graph.has(target)) graph.set(target, new Set<string>());
+
+      const key = `${source}->${target}`;
+      const edge = edges.get(key) ?? { source, target, count: 0, sampleEdges: [] };
+      edge.count += 1;
+      if (edge.sampleEdges.length < 3) {
+        edge.sampleEdges.push({ source: row.source_file, target: targetFile, type: row.type });
+      }
+      edges.set(key, edge);
+    }
+
+    return stronglyConnectedComponents(graph)
+      .filter((component) => component.length > 1)
+      .map((component) => {
+        const members = new Set(component);
+        let count = 0;
+        const samples: Array<{ source: string; target: string; type: string }> = [];
+        for (const edge of edges.values()) {
+          if (!members.has(edge.source) || !members.has(edge.target)) {
+            continue;
+          }
+          count += edge.count;
+          for (const sample of edge.sampleEdges) {
+            if (samples.length < 8) samples.push(sample);
+          }
+        }
+        const clusters = [...component].sort();
+        return {
+          clusters,
+          edges: count,
+          sampleEdges: samples,
+          recommendation: `Break the ${clusters.join(" <-> ")} cycle by moving shared contracts into a lower-level module or routing calls through one directional adapter.`
+        };
+      })
+      .sort((a, b) => b.edges - a.edges)
+      .slice(0, clampPositive(limit, 1, 100));
+  }
+
   detectChanges(root = this.latestRoot(), limit = 100): ChangeImpactResult {
     const repoRoot = path.resolve(root);
     const changed = new Set<string>();
@@ -540,6 +618,7 @@ export class MemoryStore {
     const edgeTypes = this.edgeTypes();
     const topSymbols = this.topSymbols();
     const boundaryData = this.boundariesAndClusters();
+    const dependencyCycles = this.dependencyCycles(8);
     const deadCode = this.findDeadCode(5);
 
     const topFiles = this.db
@@ -607,6 +686,16 @@ export class MemoryStore {
     if (secretHints > 0) risks.push(`${secretHints} sensitive-key-like text matches to review`);
     if (skippedFiles > 0) risks.push(`${skippedFiles} files skipped by size, binary, or ignore policy`);
     if (deadCode.length > 0) risks.push(`${deadCode.length} dead-code candidates sampled`);
+    if (dependencyCycles.length > 0) risks.push(`${dependencyCycles.length} dependency cycles across architecture clusters`);
+
+    const recommendations = architectureRecommendations({
+      dependencyCycles,
+      hotspots,
+      deadCode,
+      skippedFiles,
+      taskCount,
+      secretHints
+    });
 
     return {
       root,
@@ -628,6 +717,8 @@ export class MemoryStore {
       hotspots,
       boundaries: boundaryData.boundaries,
       clusters: boundaryData.clusters,
+      dependencyCycles,
+      recommendations,
       entrypoints,
       packages,
       deadCode: { candidates: deadCode.length, samples: deadCode },
@@ -924,6 +1015,154 @@ function clampPositive(value: number, min: number, max: number): number {
     return min;
   }
   return Math.min(max, Math.max(min, Math.floor(value)));
+}
+
+function stronglyConnectedComponents(graph: Map<string, Set<string>>): string[][] {
+  let nextIndex = 0;
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const indexByNode = new Map<string, number>();
+  const lowByNode = new Map<string, number>();
+  const components: string[][] = [];
+
+  function visit(node: string): void {
+    indexByNode.set(node, nextIndex);
+    lowByNode.set(node, nextIndex);
+    nextIndex += 1;
+    stack.push(node);
+    onStack.add(node);
+
+    for (const target of graph.get(node) ?? []) {
+      if (!indexByNode.has(target)) {
+        visit(target);
+        lowByNode.set(node, Math.min(lowByNode.get(node) ?? 0, lowByNode.get(target) ?? 0));
+      } else if (onStack.has(target)) {
+        lowByNode.set(node, Math.min(lowByNode.get(node) ?? 0, indexByNode.get(target) ?? 0));
+      }
+    }
+
+    if (lowByNode.get(node) !== indexByNode.get(node)) {
+      return;
+    }
+
+    const component: string[] = [];
+    while (stack.length > 0) {
+      const current = stack.pop() as string;
+      onStack.delete(current);
+      component.push(current);
+      if (current === node) break;
+    }
+    components.push(component);
+  }
+
+  for (const node of graph.keys()) {
+    if (!indexByNode.has(node)) {
+      visit(node);
+    }
+  }
+
+  return components;
+}
+
+function architectureRecommendations(input: {
+  dependencyCycles: DependencyCycle[];
+  hotspots: Array<{ path: string; score: number; reasons: string[] }>;
+  deadCode: DeadCodeCandidate[];
+  skippedFiles: number;
+  taskCount: number;
+  secretHints: number;
+}): ArchitectureRecommendation[] {
+  const recommendations: ArchitectureRecommendation[] = [];
+  const topCycle = input.dependencyCycles[0];
+  if (topCycle) {
+    recommendations.push({
+      priority: "high",
+      title: "Break cross-module dependency cycles",
+      detail: "Cyclic clusters make change impact harder to reason about. Start with the largest cycle and move shared contracts or adapter code behind one-directional boundaries.",
+      evidence: [`${topCycle.clusters.join(" -> ")} (${topCycle.edges} cross-cluster edges)`, ...topCycle.sampleEdges.slice(0, 3).map((edge) => `${edge.source} -> ${edge.target} (${edge.type})`)]
+    });
+  }
+
+  const hotspot = input.hotspots[0];
+  if (hotspot && hotspot.score >= 20) {
+    recommendations.push({
+      priority: "medium",
+      title: "Review the densest hotspot",
+      detail: "High symbol density or file size often means several responsibilities are sharing one file. Split only when the surrounding call graph shows separable behavior.",
+      evidence: [`${hotspot.path} scored ${hotspot.score.toFixed(1)}`, ...hotspot.reasons]
+    });
+  }
+
+  if (input.deadCode.length > 0) {
+    recommendations.push({
+      priority: "low",
+      title: "Confirm private dead-code candidates",
+      detail: "These functions have no inbound call edges in the static graph. Verify dynamic entrypoints before deleting them.",
+      evidence: input.deadCode.slice(0, 3).map((item) => `${item.symbol.name} in ${item.symbol.filePath}:${item.symbol.startLine}`)
+    });
+  }
+
+  if (input.secretHints > 0) {
+    recommendations.push({
+      priority: "medium",
+      title: "Audit sensitive configuration references",
+      detail: "Sensitive-key-like strings are review hints, not confirmed leaks. Check whether these are examples, environment variable names, or real values.",
+      evidence: [`${input.secretHints} sensitive-key-like text matches`]
+    });
+  }
+
+  if (input.taskCount > 0 || input.skippedFiles > 0) {
+    recommendations.push({
+      priority: "low",
+      title: "Triage indexing and maintenance notes",
+      detail: "Task markers and skipped files reduce confidence in automated architecture summaries. Review the highest-value ones before using the graph for risky changes.",
+      evidence: [`${input.taskCount} task markers`, `${input.skippedFiles} skipped files`]
+    });
+  }
+
+  return recommendations.slice(0, 8);
+}
+
+function resolveImportFile(sourceFile: string, specifier: string, filePaths: Set<string>): string | null {
+  if (!specifier.startsWith(".") && !specifier.startsWith("src/") && !specifier.startsWith("apps/") && !specifier.startsWith("packages/")) {
+    return null;
+  }
+
+  const base = specifier.startsWith(".")
+    ? path.posix.normalize(path.posix.join(path.posix.dirname(sourceFile), specifier))
+    : path.posix.normalize(specifier);
+  const withoutExtension = stripKnownExtension(base);
+  const candidates = [
+    base,
+    withoutExtension,
+    `${withoutExtension}.ts`,
+    `${withoutExtension}.tsx`,
+    `${withoutExtension}.js`,
+    `${withoutExtension}.jsx`,
+    `${withoutExtension}.mjs`,
+    `${withoutExtension}.cjs`,
+    `${withoutExtension}.swift`,
+    `${withoutExtension}.py`,
+    `${withoutExtension}.go`,
+    `${withoutExtension}.java`,
+    `${withoutExtension}.rs`,
+    `${withoutExtension}/index.ts`,
+    `${withoutExtension}/index.tsx`,
+    `${withoutExtension}/index.js`,
+    `${withoutExtension}/index.jsx`
+  ];
+
+  for (const candidate of candidates) {
+    if (filePaths.has(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function stripKnownExtension(value: string): string {
+  return value.replace(/\.(tsx?|jsx?|mjs|cjs|swift|py|go|java|rs|sql|json|ya?ml|md|sh)$/i, "");
 }
 
 function clusterName(filePath: string): string {

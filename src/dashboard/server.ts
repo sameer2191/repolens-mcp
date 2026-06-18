@@ -1,5 +1,5 @@
 import http from "node:http";
-import { architectureReport, findDeadCode, getArchitecture, getGraphSchema, graphSnapshot, searchCode, searchGraph, searchSymbols } from "../core/api.js";
+import { architectureReport, findDeadCode, findDependencyCycles, getArchitecture, getGraphSchema, graphSnapshot, searchCode, searchGraph, searchSymbols } from "../core/api.js";
 
 export interface DashboardOptions {
   dbPath?: string;
@@ -37,6 +37,8 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
         );
       } else if (url.pathname === "/api/dead-code") {
         sendJson(response, findDeadCode(numberParam(url, "limit") ?? 25, options.dbPath));
+      } else if (url.pathname === "/api/cycles") {
+        sendJson(response, findDependencyCycles(numberParam(url, "limit") ?? 25, options.dbPath));
       } else if (url.pathname === "/api/report") {
         const format = url.searchParams.get("format") === "html" ? "html" : "markdown";
         const body = architectureReport({ format, graphLimit: numberParam(url, "graphLimit") ?? 300 }, options.dbPath);
@@ -166,6 +168,10 @@ function dashboardHtml(): string {
         <div class="list" id="risks"></div>
       </section>
       <section>
+        <h2>Recommendations</h2>
+        <div class="list" id="recommendations"></div>
+      </section>
+      <section>
         <h2>Dead-Code Candidates</h2>
         <div class="list" id="dead-code"></div>
       </section>
@@ -199,6 +205,10 @@ function dashboardHtml(): string {
         </section>
       </div>
       <section>
+        <h2>Dependency Cycles</h2>
+        <div class="list" id="cycles"></div>
+      </section>
+      <section>
         <h2>Results</h2>
         <div class="list" id="results"><div class="sub">Use code search or graph search.</div></div>
       </section>
@@ -209,9 +219,11 @@ function dashboardHtml(): string {
     const metrics = document.querySelector('#metrics');
     const languages = document.querySelector('#languages');
     const risks = document.querySelector('#risks');
+    const recommendations = document.querySelector('#recommendations');
     const deadCode = document.querySelector('#dead-code');
     const hotspots = document.querySelector('#hotspots');
     const boundaries = document.querySelector('#boundaries');
+    const cycles = document.querySelector('#cycles');
     const results = document.querySelector('#results');
     const indexed = document.querySelector('#indexed');
     const search = document.querySelector('#search');
@@ -251,9 +263,11 @@ function dashboardHtml(): string {
       nodeLabels.innerHTML = table(['Label', 'Count'], schema.nodeLabels.slice(0, 12).map(n => [n.kind, fmt.format(n.count)]));
       edgeTypes.innerHTML = table(['Type', 'Count'], schema.edgeTypes.map(e => [e.type, fmt.format(e.count)]));
       risks.innerHTML = arch.risks.length ? arch.risks.map(r => item(escapeHtml(r), 'risk')).join('') : item('No review signals found.');
+      recommendations.innerHTML = arch.recommendations.length ? arch.recommendations.map(r => item('<b>' + escapeHtml(r.priority.toUpperCase()) + '</b> ' + escapeHtml(r.title) + '<div class="sub">' + escapeHtml(r.detail) + '</div><div class="path">' + escapeHtml(r.evidence.join(' | ')) + '</div>')).join('') : item('No recommendations found.');
       deadCode.innerHTML = dead.length ? dead.map(c => item('<b>' + escapeHtml(c.symbol.name) + '</b><div class="path">' + escapeHtml(c.symbol.filePath) + ':' + c.symbol.startLine + '</div><div class="sub">' + escapeHtml(c.reason) + '</div>')).join('') : item('No candidates found.');
       hotspots.innerHTML = arch.hotspots.map(h => item('<div class="path">' + escapeHtml(h.path) + '</div><div class="sub">score ' + h.score.toFixed(1) + ' - ' + escapeHtml(h.reasons.join(', ') || 'symbol dense') + '</div>')).join('');
       boundaries.innerHTML = arch.boundaries.length ? arch.boundaries.map(b => item('<b>' + escapeHtml(b.source) + ' -> ' + escapeHtml(b.target) + '</b><div class="sub">' + fmt.format(b.edges) + ' edges - ' + escapeHtml(b.sampleTypes.join(', ')) + '</div>')).join('') : item('No cross-boundary graph edges found.');
+      cycles.innerHTML = arch.dependencyCycles.length ? arch.dependencyCycles.map(c => item('<b>' + escapeHtml(c.clusters.join(' -> ')) + '</b><div class="sub">' + fmt.format(c.edges) + ' internal cycle edges</div><div class="path">' + escapeHtml(c.recommendation) + '</div>')).join('') : item('No cross-cluster dependency cycles found.');
       graphState = prepareGraph(graph);
       resizeGraph();
       drawGraph();

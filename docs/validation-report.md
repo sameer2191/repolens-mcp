@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 3 tests, 0 failures.
-- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, Swift extraction, symbol search, code search, graph schema, structural graph search, dead-code candidates, architecture summary, and trace behavior on a fixture repository.
+- Node test suite passed: 4 tests, 0 failures.
+- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, Swift extraction, symbol search, code search, graph schema, structural graph search, import-resolved dependency cycles, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -38,13 +38,15 @@ Result:
 - Files discovered: 32
 - Files indexed: 32
 - Files skipped: 0
-- Symbols: 199
-- Edges: 517
-- Full index elapsed: 225 ms
+- Symbols: 214
+- Edges: 585
+- Lines indexed: 4,410
+- Full index elapsed: 74 ms
 - No-op incremental elapsed: 15 ms
 - No-op incremental unchanged files: 32
 - Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
+- Import-resolved dependency cycles: 0
 
 ## Big Repo Validation
 
@@ -67,6 +69,10 @@ node --experimental-sqlite dist/src/cli.js architecture \
 
 node --experimental-sqlite dist/src/cli.js schema \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+
+node --experimental-sqlite dist/src/cli.js cycles \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 5
 
 node --experimental-sqlite dist/src/cli.js report \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
@@ -98,11 +104,12 @@ Result:
 - No-op incremental elapsed: 254 ms
 - No-op incremental unchanged files: 852
 - No-op incremental removed files: 0
-- Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (330 KB)
-- Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (7.5 KB)
+- Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (331 KB)
+- Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (8.8 KB)
 - Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html`
 - Graph JSON: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
+- Import-resolved dependency cycles: 0
 
 Top language coverage:
 
@@ -198,6 +205,16 @@ node --experimental-sqlite dist/src/cli.js schema \
 
 Confirmed Swift, TypeScript, Markdown, SQL, JSON, shell, JavaScript, YAML, and unknown text coverage with node-label and edge-type counts.
 
+Dependency cycles:
+
+```bash
+node --experimental-sqlite dist/src/cli.js cycles \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 5
+```
+
+Confirmed no import-resolved cross-cluster dependency cycles in the large validation database.
+
 Architecture report:
 
 ```bash
@@ -208,7 +225,7 @@ node --experimental-sqlite dist/src/cli.js report \
   --out /Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html
 ```
 
-Confirmed HTML and Markdown reports with summary metrics, language tables, graph schema counts, hotspots, top symbols, architecture boundaries, dead-code samples, review signals, and graph samples.
+Confirmed HTML and Markdown reports with summary metrics, language tables, graph schema counts, hotspots, top symbols, architecture boundaries, dependency-cycle checks, recommendations, dead-code samples, review signals, and graph samples.
 
 Structural graph search:
 
@@ -253,11 +270,12 @@ node --experimental-sqlite dist/src/cli.js serve \
 curl --fail http://127.0.0.1:9750/api/schema
 curl --fail 'http://127.0.0.1:9750/api/search-graph?q=live-session&relationship=CALLS&limit=3'
 curl --fail 'http://127.0.0.1:9750/api/dead-code?limit=3'
+curl --fail 'http://127.0.0.1:9750/api/cycles?limit=5'
 curl --fail 'http://127.0.0.1:9750/api/report?format=markdown&graphLimit=50'
 curl --fail http://127.0.0.1:9750/
 ```
 
-Confirmed the dashboard served the large validation database, returned the 816-file / 5,234-symbol / 29,013-edge schema, returned live-session graph matches, returned Swift dead-code candidates, generated a 7,715-byte Markdown report response, and served the 14,959-byte HTML dashboard shell.
+Confirmed the dashboard served the large validation database, returned the 816-file / 5,234-symbol / 29,013-edge schema, returned live-session graph matches, returned Swift dead-code candidates, returned an empty import-resolved cycle list, generated an 8,992-byte Markdown report response, and served the 15,978-byte HTML dashboard shell.
 
 Trace:
 
@@ -282,4 +300,4 @@ Confirmed modified files map back to indexed symbols and produced a medium risk 
 
 ## Conclusion
 
-The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, serves a local graph dashboard, and exposes graph schema, structural search, dead-code candidates, reports, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, serves a local graph dashboard, and exposes graph schema, structural search, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
