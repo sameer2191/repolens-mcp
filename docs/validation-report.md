@@ -243,6 +243,22 @@ node --experimental-sqlite dist/src/cli.js export-graph \
 
 Confirmed 1,000 nodes and 1,000 edges in the exported HTML graph. A matching JSON artifact was written to `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`.
 
+Dashboard routes:
+
+```bash
+node --experimental-sqlite dist/src/cli.js serve \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --port 9750
+
+curl --fail http://127.0.0.1:9750/api/schema
+curl --fail 'http://127.0.0.1:9750/api/search-graph?q=live-session&relationship=CALLS&limit=3'
+curl --fail 'http://127.0.0.1:9750/api/dead-code?limit=3'
+curl --fail 'http://127.0.0.1:9750/api/report?format=markdown&graphLimit=50'
+curl --fail http://127.0.0.1:9750/
+```
+
+Confirmed the dashboard served the large validation database, returned the 816-file / 5,234-symbol / 29,013-edge schema, returned live-session graph matches, returned Swift dead-code candidates, generated a 7,715-byte Markdown report response, and served the 14,959-byte HTML dashboard shell.
+
 Trace:
 
 ```bash
@@ -266,4 +282,4 @@ Confirmed modified files map back to indexed symbols and produced a medium risk 
 
 ## Conclusion
 
-The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, and exposes graph schema, structural search, dead-code candidates, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, serves a local graph dashboard, and exposes graph schema, structural search, dead-code candidates, reports, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.

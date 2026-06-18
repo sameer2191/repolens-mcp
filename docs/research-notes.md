@@ -28,6 +28,7 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 - Clear CLI commands and MCP tools for indexing, search, graph schema, structural graph search, architecture reports, architecture summaries, tracing, impact analysis, dead-code candidates, git-change impact, and architecture decisions.
 - Incremental indexing skips unchanged files, prunes removed files, and avoids call-edge rebuilds when there is no repository delta.
 - Browser dashboard without a bundler so the project is easy to build and inspect.
+- Dashboard APIs expose architecture, graph schema, graph search, dead-code candidates, graph previews, code search, and live Markdown/HTML architecture reports from the same local server.
 - Self-contained graph and architecture report exports for sharing HTML or Markdown artifacts without running a server.
 - CI that runs type-check, tests, self-indexing, and architecture output.
 
@@ -35,7 +36,7 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 
 - A small, inspectable TypeScript codebase with tests that a reviewer can understand quickly.
 - Built-in ADR memory, not just structural graph search.
-- Dashboard API and HTML are included in the same binary entrypoint, avoiding a separate frontend build.
+- Dashboard API and HTML are included in the same binary entrypoint, avoiding a separate frontend build while still exposing graph exploration, schema counts, review signals, dead-code samples, and report links.
 - Swift extraction and big-repo validation now cover a mixed mobile/web monorepo, not only TypeScript services.
 - Structural graph search, graph schema summaries, dead-code candidates, git-diff impact mapping, and portable graph exports are first-class CLI/MCP workflows.
 - Architecture reports combine metrics, language mix, schema counts, hotspots, boundaries, dead-code samples, review signals, and a graph preview into one shareable artifact.

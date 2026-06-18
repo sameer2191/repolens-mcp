@@ -10,6 +10,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots and architecture reports from the CLI.
+- **Operational dashboard**: browse graph previews, structural filters, schema counts, dead-code candidates, review signals, and report links without a frontend build.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
 - **Validation evidence**: tests, CI, CodeQL, docs, local dashboard, and a big-repo validation workflow.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
@@ -27,6 +28,8 @@ node --experimental-sqlite dist/src/cli.js serve
 
 Then open `http://127.0.0.1:9749`.
 
+The dashboard includes code search, graph search, graph schema tables, hotspot and boundary summaries, dead-code candidates, and one-click Markdown/HTML architecture reports.
+
 ## CLI
 
 ```bash
@@ -37,13 +40,13 @@ repolens-mcp symbols <query> [--kind function]
 repolens-mcp trace <symbol> [--direction inbound|outbound]
 repolens-mcp impact <path-or-symbol...>
 repolens-mcp schema [--db path]
-repolens-mcp search-graph [query] [--kind function] [--relationship CALLS]
+repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--min-degree n]
 repolens-mcp dead-code [--db path]
 repolens-mcp changes [repo] [--db path]
-repolens-mcp report [--db path] [--format markdown|html] [--out report.html]
+repolens-mcp report [--db path] [--format markdown|html] [--graph-limit n] [--out report.html]
 repolens-mcp export-graph --out graph.html [--db path]
 repolens-mcp decision --title "Use SQLite" --body "Keep memory local."
-repolens-mcp serve [--port 9749]
+repolens-mcp serve [--db path] [--port 9749]
 repolens-mcp mcp
 ```
 
@@ -89,6 +92,7 @@ node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js report --db /tmp/memory.db --format html --out report.html
 node --experimental-sqlite dist/src/cli.js export-graph --db /tmp/memory.db --out graph.html --limit 1000
+node --experimental-sqlite dist/src/cli.js serve --db /tmp/memory.db --port 9749
 ```
 
 The repo includes `docs/research-notes.md` with source-research notes and the design decisions behind this implementation.
