@@ -35,7 +35,7 @@ node --experimental-sqlite dist/src/cli.js demo
 Result:
 
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 99,862 bytes packed, 505,825 bytes unpacked, 58 runtime entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 100,395 bytes packed, 507,091 bytes unpacked, 58 runtime entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `package.json`, and `server.json`; compiled tests and fixtures are excluded.
 - Release workflow added for version tags and manual runs; it runs install, verification, demo indexing, `npm pack --json`, SHA-256 checksum generation, artifact upload, and GitHub release asset publishing for tag builds.
 - CI now also checks `npm pack --dry-run --json` and self-indexes into `.repolens/ci.db`.
@@ -58,21 +58,21 @@ Result:
 - Files discovered: 54
 - Files indexed: 54
 - Files skipped: 0
-- Symbols: 482
-- Edges: 1,535
-- Lines indexed: 9,039
-- Full index elapsed: 506 ms
-- No-op incremental elapsed: 22 ms
+- Symbols: 483
+- Edges: 1,541
+- Lines indexed: 9,052
+- Full index elapsed: 522 ms
+- No-op incremental elapsed: 31 ms
 - No-op incremental unchanged files: 54
-- Full-text code-search rows: 8,140 `code_lines` rows and 8,140 `code_fts` rows
+- Full-text code-search rows: 8,153 `code_lines` rows and 8,153 `code_fts` rows
 - Channel graph rows: 8 `channel` nodes, 2 `EMITS` edges, and 11 `LISTENS_ON` edges
-- HTTP call graph rows: 11 `http_call` nodes, 11 `CALLS_HTTP_ENDPOINT` edges, and 2 generated `HTTP_CALLS` route edges
+- HTTP call graph rows: 12 `http_call` nodes, 12 `CALLS_HTTP_ENDPOINT` edges, and 2 generated `HTTP_CALLS` route edges
 - Manifest graph rows: 11 `package` nodes and 26 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 54 files, 482 symbols, and 1,535 edges.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 54 files, 483 symbols, and 1,541 edges.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, and fixture route/client communities.
-- Graph package: `.repolens/self.rlgz` (1,225,266 bytes from a 4,792,320-byte SQLite snapshot)
-- Imported package totals: 54 files, 482 symbols, 1,535 edges
+- Graph package: `.repolens/self.rlgz` (1,349,092 bytes from a 5,107,712-byte SQLite snapshot)
+- Imported package totals: 54 files, 483 symbols, 1,541 edges
 - Language mix: TypeScript, Markdown, JSON, YAML, TOML, XML, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0

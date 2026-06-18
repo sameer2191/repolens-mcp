@@ -1,5 +1,5 @@
 import http from "node:http";
-import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols } from "../core/api.js";
+import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, fleetSummary, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols } from "../core/api.js";
 
 export interface DashboardOptions {
   dbPath?: string;
@@ -9,7 +9,7 @@ export interface DashboardOptions {
 
 export async function serveDashboard(options: DashboardOptions): Promise<http.Server> {
   const host = options.host ?? "127.0.0.1";
-  const server = http.createServer((request, response) => {
+  const server = http.createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? host}`);
     try {
       if (url.pathname === "/") {
@@ -47,6 +47,8 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
         sendJson(response, findDeadCode(numberParam(url, "limit") ?? 25, options.dbPath));
       } else if (url.pathname === "/api/cycles") {
         sendJson(response, findDependencyCycles(numberParam(url, "limit") ?? 25, options.dbPath));
+      } else if (url.pathname === "/api/fleet") {
+        sendJson(response, await fleetSummary(numberParam(url, "limit") ?? 50));
       } else if (url.pathname === "/api/report") {
         const format = url.searchParams.get("format") === "html" ? "html" : "markdown";
         const body = architectureReport({ format, graphLimit: numberParam(url, "graphLimit") ?? 300 }, options.dbPath);
@@ -169,7 +171,7 @@ function dashboardHtml(): string {
           <div><label for="graph-query">Query</label><input id="graph-query" placeholder="symbol, file, signature"></div>
           <div class="grid">
             <div><label for="graph-kind">Kind</label><input id="graph-kind" placeholder="function, class"></div>
-            <div><label for="graph-rel">Relationship</label><select id="graph-rel"><option value="">Any</option><option>CALLS</option><option>CALLS_LOCAL</option><option>DEFINES</option><option>IMPORTS</option><option>DECLARES</option></select></div>
+            <div><label for="graph-rel">Relationship</label><select id="graph-rel"><option value="">Any</option><option>CALLS</option><option>CALLS_LOCAL</option><option>CALLS_HTTP_ENDPOINT</option><option>HTTP_CALLS</option><option>DEFINES</option><option>IMPORTS</option><option>DECLARES</option></select></div>
           </div>
           <div class="grid">
             <div><label for="graph-file">File scope</label><input id="graph-file" placeholder="src/, apps/ios"></div>
@@ -188,6 +190,10 @@ function dashboardHtml(): string {
       <section>
         <h2>Metrics</h2>
         <div class="metrics" id="metrics"></div>
+      </section>
+      <section>
+        <h2>Fleet Service Links</h2>
+        <div class="list" id="fleet-links"></div>
       </section>
       <section>
         <h2>Review Signals</h2>
@@ -249,6 +255,7 @@ function dashboardHtml(): string {
     const metrics = document.querySelector('#metrics');
     const languages = document.querySelector('#languages');
     const risks = document.querySelector('#risks');
+    const fleetLinks = document.querySelector('#fleet-links');
     const recommendations = document.querySelector('#recommendations');
     const deadCode = document.querySelector('#dead-code');
     const hotspots = document.querySelector('#hotspots');
@@ -286,15 +293,19 @@ function dashboardHtml(): string {
       return url.toString();
     }
     async function load() {
-      const [arch, schema, graph, dead, communityRows] = await Promise.all([
+      const [arch, schema, graph, dead, communityRows, fleet] = await Promise.all([
         fetch('/api/architecture').then(r => r.json()),
         fetch('/api/schema').then(r => r.json()),
         fetch('/api/graph?limit=500').then(r => r.json()),
         fetch('/api/dead-code?limit=8').then(r => r.json()),
-        fetch('/api/communities?limit=8&minSize=4').then(r => r.json())
+        fetch('/api/communities?limit=8&minSize=4').then(r => r.json()),
+        fetch('/api/fleet?limit=20').then(r => r.json())
       ]);
       indexed.textContent = 'Indexed ' + new Date(arch.indexedAt).toLocaleString();
       metrics.innerHTML = metric('files', arch.totals.files) + metric('symbols', arch.totals.symbols) + metric('edges', arch.totals.edges) + metric('lines', arch.totals.lines);
+      fleetLinks.innerHTML = fleet.serviceLinks.length
+        ? fleet.serviceLinks.slice(0, 8).map(link => item('<b>' + escapeHtml(link.consumer) + ' -> ' + escapeHtml(link.provider) + '</b><div class="sub">' + escapeHtml(link.route) + ' - ' + fmt.format(link.calls) + ' call' + (link.calls === 1 ? '' : 's') + '</div><div class="path">' + escapeHtml(link.callFiles.join(' | ')) + '</div>')).join('')
+        : item(fleet.totals.projects ? 'No cross-project service links found.' : 'No catalog projects indexed yet.');
       languages.innerHTML = table(['Language', 'Files', 'Lines', 'Symbols'], arch.languages.map(l => [l.language, fmt.format(l.files), fmt.format(l.lines), fmt.format(l.symbols)]));
       nodeLabels.innerHTML = table(['Label', 'Count'], schema.nodeLabels.slice(0, 12).map(n => [n.kind, fmt.format(n.count)]));
       edgeTypes.innerHTML = table(['Type', 'Count'], schema.edgeTypes.map(e => [e.type, fmt.format(e.count)]));
@@ -367,7 +378,7 @@ function dashboardHtml(): string {
       ctx.clearRect(0, 0, w, h);
       ctx.strokeStyle = 'rgba(71,85,105,.16)';
       for (const edge of graphState.edges) { ctx.beginPath(); ctx.moveTo(edge.sourceNode.x, edge.sourceNode.y); ctx.lineTo(edge.targetNode.x, edge.targetNode.y); ctx.stroke(); }
-      const palette = { file:'#475569', function:'#0f766e', class:'#6d28d9', struct:'#2563eb', heading:'#b45309' };
+      const palette = { file:'#475569', function:'#0f766e', class:'#6d28d9', struct:'#2563eb', heading:'#b45309', route:'#be123c', http_call:'#0891b2' };
       for (const node of graphState.nodes) {
         ctx.fillStyle = palette[node.group] || '#64748b';
         ctx.beginPath(); ctx.arc(node.x, node.y, node.group === 'file' ? 3 : 4.4, 0, Math.PI * 2); ctx.fill();

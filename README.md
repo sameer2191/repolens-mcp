@@ -18,7 +18,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI.
-- **Operational dashboard**: browse graph previews, structural filters, schema counts, dead-code candidates, review signals, and report links without a frontend build.
+- **Operational dashboard**: browse graph previews, structural filters, schema counts, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
 - **Graph communities**: detects functional modules from weighted relationships, not just folder names.
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
@@ -46,7 +46,7 @@ node --experimental-sqlite dist/src/cli.js serve
 
 Then open `http://127.0.0.1:9749`.
 
-The dashboard includes code search, graph search, graph schema tables, hotspot and boundary summaries, dead-code candidates, and one-click Markdown/HTML architecture reports.
+The dashboard includes code search, graph search, graph schema tables, fleet service links, hotspot and boundary summaries, dead-code candidates, and one-click Markdown/HTML architecture reports.
 
 ## CLI
 

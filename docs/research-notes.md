@@ -29,7 +29,7 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 - Incremental indexing skips unchanged files, prunes removed files, and avoids call-edge rebuilds when there is no repository delta.
 - Watch mode keeps the graph fresh with polling-based incremental refreshes while preserving deterministic CLI behavior for tests and automation.
 - Browser dashboard without a bundler so the project is easy to build and inspect.
-- Dashboard APIs expose architecture, graph schema, graph search, semantic search, read-only graph queries, source snippets, import-resolved dependency cycles, dead-code candidates, graph previews, code search, and live Markdown/HTML architecture reports from the same local server.
+- Dashboard APIs expose architecture, fleet summaries, graph schema, graph search, semantic search, read-only graph queries, source snippets, import-resolved dependency cycles, dead-code candidates, graph previews, code search, and live Markdown/HTML architecture reports from the same local server.
 - Self-contained graph and architecture report exports for sharing HTML or Markdown artifacts without running a server, plus compressed checksummed `.rlgz` graph packages for reusing a SQLite graph without reindexing.
 - CI that runs type-check, tests, self-indexing, and architecture output.
 
@@ -38,7 +38,7 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 - A small, inspectable TypeScript codebase with tests that a reviewer can understand quickly.
 - Codex setup is explicit and reviewable through `doctor` and `install-codex --dry-run`, with safeguards around existing unmanaged MCP entries.
 - Built-in ADR memory, not just structural graph search.
-- Dashboard API and HTML are included in the same binary entrypoint, avoiding a separate frontend build while still exposing graph exploration, schema counts, review signals, dead-code samples, and report links.
+- Dashboard API and HTML are included in the same binary entrypoint, avoiding a separate frontend build while still exposing graph exploration, fleet service links, schema counts, review signals, dead-code samples, and report links.
 - Swift extraction and big-repo validation now cover a mixed mobile/web monorepo, not only TypeScript services.
 - Structural graph search, BM25 source search with code-aware token expansion, context packs for agents, multi-ecosystem package/dependency nodes, project inventory/status, fleet summaries with cross-project service links, runtime trace ingestion, Docker/Kubernetes infrastructure nodes, channel/event edges, first-class HTTP call nodes, route-call edges, deterministic graph communities, dependency-free semantic search, read-only Cypher-like graph queries, graph schema summaries, dependency-cycle detection, dead-code candidates, git-diff impact mapping, watch indexing, and portable graph/package exports are first-class workflows.
 - Indexing now writes local `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges without external embeddings or network calls.
