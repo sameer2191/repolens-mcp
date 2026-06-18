@@ -23,6 +23,7 @@ import type {
   Language,
   SemanticSearchMatch,
   SymbolNode,
+  SymbolReference,
   RuntimeTrace,
   SecretConfidence,
   SecretFinding,
@@ -513,6 +514,53 @@ export class MemoryStore {
       return null;
     }
     return this.snippetForLocation(file.path, 1, Math.min(file.lines, 40), 0);
+  }
+
+  findReferences(identifier: string, limit = 100): SymbolReference[] {
+    const symbol = this.getSymbol(identifier) ?? this.searchSymbols(identifier, undefined, 1)[0];
+    const targetName = (symbol?.name ?? identifier).trim();
+    if (!targetName) {
+      return [];
+    }
+    const exactMatcher = identifierMatcher(targetName);
+    const rows = this.db
+      .prepare(
+        `SELECT code_lines.file_path, files.language, code_lines.line, code_lines.text
+         FROM code_lines
+         JOIN files ON files.path = code_lines.file_path
+         WHERE lower(code_lines.text) LIKE ?
+         ORDER BY code_lines.file_path ASC, code_lines.line ASC
+         LIMIT 10000`
+      )
+      .all(`%${targetName.toLowerCase()}%`) as Array<{
+      file_path: string;
+      language: Language;
+      line: number;
+      text: string;
+    }>;
+
+    let definitionEmitted = false;
+    return rows
+      .filter((row) => exactMatcher(row.text))
+      .map((row) => {
+        const inSymbolRange = Boolean(symbol && row.file_path === symbol.filePath && row.line >= symbol.startLine && row.line <= symbol.endLine);
+        const isDefinition = inSymbolRange && !definitionEmitted;
+        if (isDefinition) {
+          definitionEmitted = true;
+        }
+        return {
+          filePath: row.file_path,
+          language: row.language,
+          line: row.line,
+          text: row.text,
+          kind: isDefinition ? "definition" : "reference",
+          score: isDefinition ? 1 : row.file_path === symbol?.filePath ? 0.82 : 0.7,
+          ...(symbol ? { symbol } : {}),
+          reason: isDefinition ? "symbol definition line" : `exact identifier match for ${targetName}`
+        } satisfies SymbolReference;
+      })
+      .sort((a, b) => b.score - a.score || a.filePath.localeCompare(b.filePath) || a.line - b.line)
+      .slice(0, clampPositive(limit, 1, 500));
   }
 
   private snippetForLocation(filePath: string, startLine: number, endLine: number, context: number, symbol?: SymbolNode): CodeSnippet | null {
@@ -2925,6 +2973,19 @@ function codeSearchTerms(value: string): string[] {
     addSearchTermSegment(segment, terms);
   }
   return [...terms];
+}
+
+function identifierMatcher(identifier: string): (line: string) => boolean {
+  if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(identifier)) {
+    const pattern = new RegExp(`(^|[^A-Za-z0-9_$])${escapeRegExp(identifier)}([^A-Za-z0-9_$]|$)`);
+    return (line) => pattern.test(line);
+  }
+  const lowered = identifier.toLowerCase();
+  return (line) => line.toLowerCase().includes(lowered);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function addSearchTermSegment(segment: string, terms: Set<string>): void {

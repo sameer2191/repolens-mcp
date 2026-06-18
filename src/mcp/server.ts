@@ -12,6 +12,7 @@ import {
   findDeadCode,
   findCommunities,
   findDependencyCycles,
+  findReferences,
   getArchitecture,
   getCodeSnippet,
   getGraphSchema,
@@ -228,6 +229,19 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ identifier, context, dbPath }) => text(getCodeSnippet(identifier, context, dbPath))
+  );
+
+  server.registerTool(
+    "find_references",
+    {
+      description: "Find indexed source lines that reference a symbol or identifier, including the definition line when available.",
+      inputSchema: {
+        identifier: z.string().describe("Symbol name, qualified symbol name, or identifier to search for."),
+        limit: z.number().int().positive().max(500).optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ identifier, limit, dbPath }) => text(findReferences(identifier, limit, dbPath))
   );
 
   server.registerTool(

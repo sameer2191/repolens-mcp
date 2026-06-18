@@ -116,6 +116,17 @@ export interface CodeSnippet {
   lines: Array<{ line: number; text: string; highlight: boolean }>;
 }
 
+export interface SymbolReference {
+  filePath: string;
+  language: Language;
+  line: number;
+  text: string;
+  kind: "definition" | "reference";
+  score: number;
+  symbol?: SymbolNode;
+  reason: string;
+}
+
 export type SecretConfidence = "low" | "medium" | "high";
 
 export interface SecretScanOptions {

@@ -12,16 +12,17 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 31 tools for indexing, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, semantic search, vector search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 32 tools for indexing, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
 - **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, and optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI; first index can bootstrap a missing database from `.repolens/graph.rlgz`.
-- **Operational dashboard**: browse graph previews, structural filters, semantic/vector search, schema counts, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
+- **Operational dashboard**: browse graph previews, structural filters, references, semantic/vector search, schema counts, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
 - **Graph communities**: detects functional modules from weighted relationships, not just folder names.
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
+- **Reference lookup**: finds exact indexed identifier references and labels definition lines for language-server-style navigation without requiring an external LSP process.
 - **Local semantic and vector search**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges, concept search, and persisted local vector embeddings over names, paths, signatures, metadata, and symbol bodies.
 - **Context packs for agents**: one query can return semantic matches, vector matches, graph matches, BM25 code hits, snippets, and nearby edges for focused development context.
 - **Redacted secret scan**: review high-confidence token shapes, sensitive assignments, and environment references from indexed source/config lines without returning raw secret values.
@@ -50,7 +51,7 @@ node --experimental-sqlite dist/src/cli.js serve
 
 Then open `http://127.0.0.1:9749`.
 
-The dashboard includes code search, semantic/vector search, graph search, graph schema tables, fleet service links, hotspot and boundary summaries, git-history signals, dead-code candidates, and one-click Markdown/HTML architecture reports.
+The dashboard includes code search, reference lookup, semantic/vector search, graph search, graph schema tables, fleet service links, hotspot and boundary summaries, git-history signals, dead-code candidates, and one-click Markdown/HTML architecture reports.
 
 From a local clone, the installer runs the same build and Codex checks:
 
@@ -76,6 +77,7 @@ repolens-mcp search <query> [--db path]
 repolens-mcp scan-secrets [--db path] [--limit n] [--min-confidence low|medium|high] [--include-tests]
 repolens-mcp symbols <query> [--kind function]
 repolens-mcp snippet <symbol-or-path:line> [--context n]
+repolens-mcp references <symbol> [--db path] [--limit n]
 repolens-mcp trace <symbol> [--direction inbound|outbound]
 repolens-mcp impact <path-or-symbol...>
 repolens-mcp schema [--db path]
@@ -122,6 +124,7 @@ repolens-mcp mcp
 | `scan_secrets` | Scan indexed source/config lines for redacted secret, token, credential, and sensitive environment patterns. |
 | `search_symbols` | Search functions, classes, routes, resources, headings, and package nodes. |
 | `get_code_snippet` | Return source lines around a symbol, qualified name, file path, or `path:line` target. |
+| `find_references` | Find indexed definition and reference lines for a symbol or identifier. |
 | `get_architecture` | Return language mix, hotspots, git-history churn, entrypoints, packages, and risk markers. |
 | `trace_symbol` | Trace inbound or outbound graph edges around a symbol. |
 | `impact_analysis` | Find adjacent symbols for changed files or symbols. |
@@ -189,6 +192,7 @@ node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js communities --db /tmp/memory.db --limit 12
 node --experimental-sqlite dist/src/cli.js snippet createOrder --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js references createOrder --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js semantic "order checkout flow" --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js vector "order checkout flow" --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js context-pack "order checkout flow" --db /tmp/memory.db

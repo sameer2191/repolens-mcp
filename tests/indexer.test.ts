@@ -112,6 +112,10 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.equal(snippet?.symbol?.name, "createOrder");
     assert.ok(snippet?.lines.some((line) => line.highlight && line.text.includes("createOrder")));
 
+    const references = store.findReferences("createOrder", 20);
+    assert.ok(references.some((reference) => reference.kind === "definition" && reference.filePath === "src/orders.ts"));
+    assert.ok(references.some((reference) => reference.kind === "reference" && reference.filePath === "src/server.ts"));
+
     const lineSnippet = store.getCodeSnippet("src/orders.ts:8", 1);
     assert.equal(lineSnippet?.filePath, "src/orders.ts");
     assert.ok(lineSnippet?.lines.some((line) => line.line === 8 && line.highlight));

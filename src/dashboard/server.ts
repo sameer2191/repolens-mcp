@@ -1,5 +1,5 @@
 import http from "node:http";
-import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, fleetSummary, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols, vectorSearch } from "../core/api.js";
+import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, findReferences, fleetSummary, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols, vectorSearch } from "../core/api.js";
 
 export interface DashboardOptions {
   dbPath?: string;
@@ -62,6 +62,9 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
           code: query ? searchCode(query, 20, options.dbPath) : [],
           symbols: query ? searchSymbols(query, undefined, 20, options.dbPath) : []
         });
+      } else if (url.pathname === "/api/references") {
+        const identifier = url.searchParams.get("id") ?? "";
+        sendJson(response, identifier ? findReferences(identifier, numberParam(url, "limit") ?? 50, options.dbPath) : []);
       } else if (url.pathname === "/api/snippet") {
         const identifier = url.searchParams.get("id") ?? "";
         sendJson(response, identifier ? getCodeSnippet(identifier, numberParam(url, "context"), options.dbPath) : null);
@@ -159,7 +162,10 @@ function dashboardHtml(): string {
     <aside class="stack">
       <section>
         <h2>Code Search</h2>
-        <input id="search" placeholder="Search code or symbols">
+        <div class="stack">
+          <input id="search" placeholder="Search code or symbols">
+          <button id="references-run" type="button">Find References</button>
+        </div>
       </section>
       <section>
         <h2>Semantic Search</h2>
@@ -269,6 +275,7 @@ function dashboardHtml(): string {
     const results = document.querySelector('#results');
     const indexed = document.querySelector('#indexed');
     const search = document.querySelector('#search');
+    const referencesRun = document.querySelector('#references-run');
     const semanticRun = document.querySelector('#semantic-run');
     const vectorRun = document.querySelector('#vector-run');
     const semanticQuery = document.querySelector('#semantic-query');
@@ -334,6 +341,12 @@ function dashboardHtml(): string {
         ...data.code.map(c => item('<div class="path">' + escapeHtml(c.filePath) + ':' + c.line + '</div><pre>' + escapeHtml(c.text) + '</pre>'))
       ].join('') || '<div class="sub">No matches.</div>';
     }
+    async function doReferences() {
+      const q = search.value.trim();
+      if (!q) { results.innerHTML = '<div class="sub">Enter a symbol or identifier.</div>'; return; }
+      const data = await fetch('/api/references?' + params({ id: q, limit: 50 })).then(r => r.json());
+      results.innerHTML = data.map(ref => item('<b>' + escapeHtml(ref.kind) + '</b> <span class="sub">score ' + ref.score.toFixed(2) + '</span><div class="path">' + escapeHtml(ref.filePath) + ':' + ref.line + '</div><pre>' + escapeHtml(ref.text) + '</pre><div class="sub">' + escapeHtml(ref.reason) + '</div>')).join('') || '<div class="sub">No references.</div>';
+    }
     async function doSemanticSearch() {
       const q = semanticQuery.value.trim();
       if (!q) { results.innerHTML = '<div class="sub">Enter a semantic query.</div>'; return; }
@@ -397,6 +410,7 @@ function dashboardHtml(): string {
       requestAnimationFrame(drawGraph);
     }
     search.addEventListener('input', () => { clearTimeout(window.__t); window.__t = setTimeout(doSearch, 120); });
+    referencesRun.addEventListener('click', doReferences);
     semanticRun.addEventListener('click', doSemanticSearch);
     vectorRun.addEventListener('click', doVectorSearch);
     graphRun.addEventListener('click', doGraphSearch);

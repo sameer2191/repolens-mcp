@@ -81,6 +81,10 @@ export function getCodeSnippet(identifier: string, context?: number, dbPath?: st
   return withStore(dbPath, (store) => store.getCodeSnippet(identifier, context));
 }
 
+export function findReferences(identifier: string, limit?: number, dbPath?: string) {
+  return withStore(dbPath, (store) => store.findReferences(identifier, limit));
+}
+
 export function traceSymbol(name: string, direction: "inbound" | "outbound", depth?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.traceSymbol(name, direction, depth));
 }

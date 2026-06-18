@@ -12,6 +12,7 @@ import {
   findDeadCode,
   findCommunities,
   findDependencyCycles,
+  findReferences,
   getArchitecture,
   getCodeSnippet,
   getGraphSchema,
@@ -135,6 +136,10 @@ async function main(): Promise<void> {
       break;
     case "snippet":
       print(getCodeSnippet(required(args.positional[0], "symbol or path:line"), numberFlag(args, "context"), stringFlag(args, "db")));
+      break;
+    case "references":
+    case "refs":
+      print(findReferences(required(args.positional[0], "symbol"), numberFlag(args, "limit"), stringFlag(args, "db")));
       break;
     case "trace":
       print(
@@ -474,6 +479,7 @@ Usage:
   repolens-mcp scan-secrets [--db path] [--limit n] [--min-confidence low|medium|high] [--include-tests]
   repolens-mcp symbols <query> [--kind function] [--db path]
   repolens-mcp snippet <symbol-or-path:line> [--context n] [--db path]
+  repolens-mcp references <symbol> [--db path] [--limit n]
   repolens-mcp trace <symbol> [--direction inbound|outbound] [--depth n] [--db path]
   repolens-mcp impact <path-or-symbol...> [--db path]
   repolens-mcp schema [--db path]

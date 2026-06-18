@@ -21,7 +21,7 @@ Result:
 
 - TypeScript build passed.
 - Node test suite passed: 29 tests, 0 failures.
-- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, MCP startup auto-indexing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, release/package dry-run checks, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, git-history hotspot extraction, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, MCP startup auto-indexing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, release/package dry-run checks, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, git-history hotspot extraction, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Package And Release
 
@@ -41,7 +41,7 @@ ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].each { |file| YAML.load_
 Result:
 
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 134,694 bytes packed, 694,410 bytes unpacked, 68 runtime entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 135,869 bytes packed, 703,126 bytes unpacked, 68 runtime entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `package.json`, `server.json`, and `install.sh`; compiled tests and fixtures are excluded.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
@@ -61,6 +61,7 @@ node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-
 node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000 --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db .repolens/self.db
 node --experimental-sqlite dist/src/cli.js vector "local vector search" --db .repolens/self.db --limit 5
+node --experimental-sqlite dist/src/cli.js references vectorSearch --db .repolens/self.db --limit 5
 node --experimental-sqlite dist/src/cli.js scan-secrets --db .repolens/self.db --limit 20 --min-confidence medium
 node --experimental-sqlite dist/src/cli.js communities --db .repolens/self.db --limit 5 --min-size 4
 node --experimental-sqlite dist/src/cli.js pack-graph --db .repolens/self.db --out .repolens/self.rlgz --label self-validation
@@ -72,30 +73,31 @@ Result:
 - Files discovered: 65
 - Files indexed: 65
 - Files skipped: 0
-- Symbols: 732
-- Edges: 2,212
-- Lines indexed: 13,857
-- Full index elapsed: 869 ms
-- No-op incremental elapsed: 25 ms
+- Symbols: 738
+- Edges: 2,271
+- Lines indexed: 13,987
+- Full index elapsed: 817 ms
+- No-op incremental elapsed: 35 ms
 - No-op incremental unchanged files: 65
-- Full-text code-search rows: 12,624 `code_lines` rows and 12,624 `code_fts` rows
-- Local vector rows: 535 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
-- MCP server tools registered: 31
-- Redacted secret scan: 0 high/medium-confidence findings across 11,270 indexed non-test lines.
+- Full-text code-search rows: 12,744 `code_lines` rows and 12,744 `code_fts` rows
+- Local vector rows: 541 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
+- Reference lookup: `references vectorSearch` returned the API definition plus exact identifier references in `src/core/api.ts`, `src/cli.ts`, and docs.
+- MCP server tools registered: 32
+- Redacted secret scan: 0 high/medium-confidence findings across 11,387 indexed non-test lines.
 - Channel graph rows: 8 `channel` nodes, 2 `EMITS` edges, and 11 `LISTENS_ON` edges
-- HTTP call graph rows: 13 `http_call` nodes, 13 `CALLS_HTTP_ENDPOINT` edges, and 4 generated `HTTP_CALLS` route edges
+- HTTP call graph rows: 14 `http_call` nodes, 14 `CALLS_HTTP_ENDPOINT` edges, and 4 generated `HTTP_CALLS` route edges
 - Import graph rows: 62 `IMPORTS_FILE` edges resolving local relative imports and package-local imports to file nodes.
 - Protocol graph rows: 2 `graphql_operation` nodes, 1 `graphql_type` node, 1 `grpc_service` node, 2 `trpc_procedure` nodes, 1 `trpc_call` node, and 8 `route` nodes across fixture and app routes
 - Manifest graph rows: 11 `package` nodes and 26 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
 - Lockfile graph rows: 1 `lockfile` node, 94 `locked_dependency` nodes, and 94 `LOCKS` edges from `package-lock.json`.
-- Git history hotspots: architecture summaries and reports rank high-churn files, including `src/core/store.ts` at 20 commits and 2,935 changed lines, and include a history-aware recommendation before risky edits.
+- Git history hotspots: architecture summaries and reports rank high-churn files, including `src/core/store.ts` at 21 commits and 3,108 changed lines, and include a history-aware recommendation before risky edits.
 - MCP startup auto-index: `REPOLENS_AUTO_INDEX=1` performed an incremental startup refresh on the fixture repo, and `REPOLENS_AUTO_INDEX=full` performed a full startup rebuild through the same `runIndex` path.
 - Graph package bootstrap: a missing database imported `.repolens/graph.rlgz`, reported the `bootstrapPackage` metadata, then ran an incremental refresh with unchanged files instead of rebuilding from scratch; `bootstrapPackage: false` kept the full rebuild path.
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 65 files, 732 symbols, and 2,212 edges.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 65 files, 738 symbols, and 2,271 edges.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, agent setup helpers, and fixture route/client communities.
 - Graph package import: `.repolens/self.rlgz` restored the self graph snapshot successfully with checksum verification.
-- Imported package totals: 65 files, 732 symbols, 2,212 edges, plus 535 persisted vector rows at 384 dimensions.
+- Imported package totals: 65 files, 738 symbols, 2,271 edges, plus 541 persisted vector rows at 384 dimensions.
 - Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -127,6 +129,10 @@ node --experimental-sqlite dist/src/cli.js semantic "live session repository" \
   --limit 8
 
 node --experimental-sqlite dist/src/cli.js vector "live session repository" \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 5
+
+node --experimental-sqlite dist/src/cli.js references getLiveSessionRepository \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
   --limit 5
 
@@ -191,6 +197,7 @@ Result:
 - No-op incremental removed files: 0
 - Full-text code-search rows: 85,063 `code_lines` rows and 85,063 `code_fts` rows
 - Local vector rows: 4,558 `symbol_vectors` rows at 384 dimensions.
+- Reference lookup returned the `getLiveSessionRepository` definition in `apps/web-admin/src/lib/server/repositories/live-session-repository.ts` plus exact route and test references under `apps/web-admin/src/app/api/...`.
 - Channel graph rows: 5 `channel` nodes, 6 `EMITS` edges, and 7 `LISTENS_ON` edges
 - Import graph rows: 642 `IMPORTS_FILE` edges resolving local relative, source-root, workspace-package, and path-alias imports.
 - HTTP route/call graph rows: 153 Next.js `route` nodes, 30 `http_call` nodes, 30 `CALLS_HTTP_ENDPOINT` edges, and 20 generated `HTTP_CALLS` route edges
@@ -365,6 +372,16 @@ node --experimental-sqlite dist/src/cli.js symbols repository \
 ```
 
 Confirmed repository interfaces and exported domain types under `apps/web-admin/src/lib/server/repositories`.
+
+Reference lookup:
+
+```bash
+node --experimental-sqlite dist/src/cli.js references getLiveSessionRepository \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 5
+```
+
+Confirmed the indexed lookup returned the live-session repository definition, the import site in the consumer feed route, the invocation line in that route, and mocked references in route tests.
 
 Semantic search and similarity edges:
 
@@ -613,6 +630,7 @@ curl --fail 'http://127.0.0.1:9750/api/communities?limit=2&minSize=4'
 curl --fail 'http://127.0.0.1:9750/api/search-graph?q=live-session&relationship=CALLS&limit=3'
 curl --fail 'http://127.0.0.1:9750/api/semantic?q=live%20session%20repository&limit=3'
 curl --fail 'http://127.0.0.1:9750/api/vector?q=live%20session%20repository&limit=3'
+curl --fail 'http://127.0.0.1:9750/api/references?id=getLiveSessionRepository&limit=3'
 curl --fail 'http://127.0.0.1:9750/api/query-graph?q=MATCH%20(f%3AFunction)%20WHERE%20f.filePath%20CONTAINS%20%27live-session%27%20RETURN%20f.name%2Cf.filePath%20LIMIT%203'
 curl --fail 'http://127.0.0.1:9750/api/dead-code?limit=3'
 curl --fail 'http://127.0.0.1:9750/api/cycles?limit=5'
@@ -621,7 +639,7 @@ curl --fail 'http://127.0.0.1:9750/api/report?format=markdown&graphLimit=50'
 curl --fail http://127.0.0.1:9750/
 ```
 
-Confirmed the dashboard served the validation database, returned graph-community rows, returned the 818-file / 5,812-symbol / 31,601-edge schema, returned live-session graph matches, returned semantic search rows, returned vector search rows, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated a Markdown report response, and served the HTML dashboard shell.
+Confirmed the dashboard served the validation database, returned graph-community rows, returned the 818-file / 5,812-symbol / 31,601-edge schema, returned live-session graph matches, returned semantic search rows, returned vector search rows, returned reference lookup rows for `getLiveSessionRepository`, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated a Markdown report response, and served the HTML dashboard shell.
 
 Trace:
 
@@ -646,4 +664,4 @@ Confirmed modified files map back to indexed symbols and produced a medium risk 
 
 ## Conclusion
 
-The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, bootstraps missing databases from shared graph packages, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a lock-protected local catalog, summarizes indexed fleets across languages/routes/HTTP calls/dependencies with inferred service links, generates cross-repo fleet graphs for shared dependencies, route overlaps, and consumer/provider HTTP edges, runs redacted secret scans, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, renders and removes managed multi-agent MCP setup guidance, supports explicit MCP startup auto-indexing, and exposes graph schema, structural search, semantic search, local vector search, generated similarity/semantic edges, read-only graph queries, import-resolved dependency cycles, architecture recommendations, git-history hotspots, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, bootstraps missing databases from shared graph packages, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a lock-protected local catalog, summarizes indexed fleets across languages/routes/HTTP calls/dependencies with inferred service links, generates cross-repo fleet graphs for shared dependencies, route overlaps, and consumer/provider HTTP edges, runs redacted secret scans, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, renders and removes managed multi-agent MCP setup guidance, supports explicit MCP startup auto-indexing, and exposes graph schema, structural search, indexed reference lookup, semantic search, local vector search, generated similarity/semantic edges, read-only graph queries, import-resolved dependency cycles, architecture recommendations, git-history hotspots, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
