@@ -160,6 +160,69 @@ test("detects dependency cycles between architecture clusters", async () => {
   assert.match(markdownReport, /src\/api -> src\/domain/);
 });
 
+test("resolves workspace package imports in dependency cycles", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-package-cycles-"));
+  const dbPath = path.join(tmp, "memory.db");
+  const store = new MemoryStore(dbPath);
+  try {
+    store.recordRun(tmp, null, new Date().toISOString());
+    for (const filePath of ["packages/api/package.json", "packages/domain/package.json", "packages/api/src/index.ts", "packages/domain/src/index.ts"]) {
+      store.insertFile({
+        path: filePath,
+        language: filePath.endsWith(".json") ? "json" : "typescript",
+        bytes: 80,
+        lines: 4,
+        sha256: filePath,
+        skipped: false
+      });
+    }
+    store.insertSymbol({
+      filePath: "packages/api/package.json",
+      language: "json",
+      kind: "package",
+      name: "@demo/api",
+      qualifiedName: "packages/api/package.json:package:@demo/api:1",
+      startLine: 1,
+      endLine: 1
+    });
+    store.insertSymbol({
+      filePath: "packages/domain/package.json",
+      language: "json",
+      kind: "package",
+      name: "@demo/domain",
+      qualifiedName: "packages/domain/package.json:package:@demo/domain:1",
+      startLine: 1,
+      endLine: 1
+    });
+    store.insertSymbol({
+      filePath: "packages/api/src/index.ts",
+      language: "typescript",
+      kind: "file",
+      name: "index.ts",
+      qualifiedName: "packages/api/src/index.ts:file",
+      startLine: 1,
+      endLine: 4
+    });
+    store.insertSymbol({
+      filePath: "packages/domain/src/index.ts",
+      language: "typescript",
+      kind: "file",
+      name: "index.ts",
+      qualifiedName: "packages/domain/src/index.ts:file",
+      startLine: 1,
+      endLine: 4
+    });
+    store.insertEdge({ source: "packages/api/src/index.ts:file", target: "external:@demo/domain", type: "IMPORTS", metadata: { import: "@demo/domain" } });
+    store.insertEdge({ source: "packages/domain/src/index.ts:file", target: "external:@demo/api", type: "IMPORTS", metadata: { import: "@demo/api" } });
+
+    const cycles = store.dependencyCycles();
+    assert.equal(cycles.length, 1);
+    assert.deepEqual(cycles[0].clusters, ["packages/api", "packages/domain"]);
+  } finally {
+    store.close();
+  }
+});
+
 test("incremental indexing skips unchanged files and prunes removed files", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-incremental-"));
   const repo = path.join(tmp, "repo");

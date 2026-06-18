@@ -25,7 +25,7 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 
 - Node 24 plus native SQLite for a dependency-light local graph store.
 - Stable MCP SDK v1 package rather than the pre-alpha v2 branch.
-- Clear CLI commands and MCP tools for indexing, search, source snippets, graph schema, structural graph search, import-resolved dependency cycles, architecture reports, architecture summaries, tracing, impact analysis, dead-code candidates, git-change impact, and architecture decisions.
+- Clear CLI commands and MCP tools for indexing, search, source snippets, graph schema, structural graph search, relative and workspace-package import cycle detection, architecture reports, architecture summaries, tracing, impact analysis, dead-code candidates, git-change impact, and architecture decisions.
 - Incremental indexing skips unchanged files, prunes removed files, and avoids call-edge rebuilds when there is no repository delta.
 - Browser dashboard without a bundler so the project is easy to build and inspect.
 - Dashboard APIs expose architecture, graph schema, graph search, source snippets, import-resolved dependency cycles, dead-code candidates, graph previews, code search, and live Markdown/HTML architecture reports from the same local server.

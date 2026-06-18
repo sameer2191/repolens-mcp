@@ -533,6 +533,9 @@ export class MemoryStore {
       .prepare("SELECT path FROM files WHERE skipped = 0")
       .all() as Array<{ path: string }>;
     const filePaths = new Set(fileRows.map((row) => row.path));
+    const packageRoots = (this.db
+      .prepare("SELECT name, file_path FROM symbols WHERE kind = 'package' ORDER BY length(name) DESC")
+      .all() as Array<{ name: string; file_path: string }>).map((row) => [row.name, path.posix.dirname(row.file_path)] as [string, string]);
     const rows = this.db
       .prepare(
         `SELECT source_symbol.file_path AS source_file,
@@ -554,7 +557,7 @@ export class MemoryStore {
       if (typeof imported !== "string") {
         continue;
       }
-      const targetFile = resolveImportFile(row.source_file, imported, filePaths);
+      const targetFile = resolveImportFile(row.source_file, imported, filePaths, packageRoots);
       if (!targetFile || targetFile === row.source_file) {
         continue;
       }
@@ -1185,14 +1188,31 @@ function architectureRecommendations(input: {
   return recommendations.slice(0, 8);
 }
 
-function resolveImportFile(sourceFile: string, specifier: string, filePaths: Set<string>): string | null {
-  if (!specifier.startsWith(".") && !specifier.startsWith("src/") && !specifier.startsWith("apps/") && !specifier.startsWith("packages/")) {
-    return null;
+function resolveImportFile(sourceFile: string, specifier: string, filePaths: Set<string>, packageRoots: Array<[string, string]> = []): string | null {
+  if (specifier.startsWith(".")) {
+    return resolveCandidate(path.posix.normalize(path.posix.join(path.posix.dirname(sourceFile), specifier)), filePaths);
   }
 
-  const base = specifier.startsWith(".")
-    ? path.posix.normalize(path.posix.join(path.posix.dirname(sourceFile), specifier))
-    : path.posix.normalize(specifier);
+  for (const [packageName, packageRoot] of packageRoots) {
+    if (specifier !== packageName && !specifier.startsWith(`${packageName}/`)) {
+      continue;
+    }
+    const subpath = specifier.slice(packageName.length).replace(/^\//, "");
+    const base = subpath ? path.posix.join(packageRoot, subpath) : path.posix.join(packageRoot, "src", "index");
+    const resolved = resolveCandidate(base, filePaths);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  if (specifier.startsWith("src/") || specifier.startsWith("apps/") || specifier.startsWith("packages/")) {
+    return resolveCandidate(path.posix.normalize(specifier), filePaths);
+  }
+
+  return null;
+}
+
+function resolveCandidate(base: string, filePaths: Set<string>): string | null {
   const withoutExtension = stripKnownExtension(base);
   const candidates = [
     base,

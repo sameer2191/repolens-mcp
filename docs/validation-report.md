@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 4 tests, 0 failures.
-- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, Swift extraction, symbol search, code search, source snippets, graph schema, structural graph search, import-resolved dependency cycles, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Node test suite passed: 5 tests, 0 failures.
+- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, Swift extraction, symbol search, code search, source snippets, graph schema, structural graph search, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -38,11 +38,11 @@ Result:
 - Files discovered: 32
 - Files indexed: 32
 - Files skipped: 0
-- Symbols: 217
-- Edges: 599
+- Symbols: 218
+- Edges: 601
 - Lines indexed: 4,410
-- Full index elapsed: 71 ms
-- No-op incremental elapsed: 14 ms
+- Full index elapsed: 66 ms
+- No-op incremental elapsed: 13 ms
 - No-op incremental unchanged files: 32
 - Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
@@ -231,7 +231,7 @@ node --experimental-sqlite dist/src/cli.js cycles \
   --limit 5
 ```
 
-Confirmed no import-resolved cross-cluster dependency cycles in the large validation database.
+Confirmed no relative-import or workspace-package-import cross-cluster dependency cycles in the large validation database.
 
 Architecture report:
 
