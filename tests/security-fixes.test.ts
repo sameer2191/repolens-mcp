@@ -72,6 +72,59 @@ test("path alias wildcards reject traversal fragments", () => {
   assert.ok(!edges.some((edge) => edge.target === "secret.ts:file"));
 });
 
+test("generated import traversal payloads cannot escape resolver roots", () => {
+  const symbols = [
+    fileSymbol("src/consumer.ts"),
+    fileSymbol("src/safe.ts"),
+    fileSymbol("packages/pkg/src/index.ts"),
+    packageSymbol("@local/pkg", "packages/pkg/package.json"),
+    fileSymbol("secret.ts")
+  ];
+  const traversalPayloads = [
+    "@/../secret",
+    "@alias/../secret",
+    "src/../secret",
+    "apps/../secret",
+    "packages/../secret",
+    "services/../secret",
+    "@local/pkg/../../secret",
+    "@/safe/../../secret",
+    "src/safe/../../secret"
+  ];
+  const validImports = [
+    "@/safe",
+    "@alias/safe",
+    "@local/pkg"
+  ];
+  const fileContents = new Map([
+    [
+      "tsconfig.json",
+      JSON.stringify({
+        compilerOptions: {
+          baseUrl: ".",
+          paths: {
+            "@alias/*": ["src/*"]
+          }
+        }
+      })
+    ],
+    [
+      "src/consumer.ts",
+      [...traversalPayloads, ...validImports].map((specifier, index) => `import value${index} from "${specifier}";`).join("\n")
+    ],
+    ["src/safe.ts", `export default "safe";`],
+    ["packages/pkg/src/index.ts", `export default "package";`],
+    ["secret.ts", `export default "hidden";`]
+  ]);
+
+  const edges = buildResolvedImportEdges(symbols, fileContents);
+
+  assert.ok(!edges.some((edge) => edge.target === "secret.ts:file"));
+  assert.ok(edges.some((edge) => edge.metadata?.import === "@/safe" && edge.target === "src/safe.ts:file"));
+  assert.ok(edges.some((edge) => edge.metadata?.import === "@alias/safe" && edge.target === "src/safe.ts:file"));
+  assert.ok(edges.some((edge) => edge.metadata?.import === "@local/pkg" && edge.target === "packages/pkg/src/index.ts:file"));
+});
+
 test("graph search name patterns are bounded wildcards, not raw regexes", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-name-pattern-"));
   const store = new MemoryStore(path.join(tmp, "memory.db"));
@@ -108,6 +161,18 @@ function fileSymbol(filePath: string): SymbolNode {
     kind: "file",
     name: filePath,
     qualifiedName: `${filePath}:file`,
+    startLine: 1,
+    endLine: 1
+  };
+}
+
+function packageSymbol(name: string, filePath: string): SymbolNode {
+  return {
+    filePath,
+    language: "json",
+    kind: "package",
+    name,
+    qualifiedName: `${filePath}:${name}`,
     startLine: 1,
     endLine: 1
   };

@@ -24,7 +24,15 @@ before committing any generated memory artifacts.
 
 ## Reporting A Vulnerability
 
-Use GitHub's private vulnerability reporting for this repository when available, or open a private security advisory from the Security tab. If neither flow is available, email the maintainer listed on the GitHub profile and include `RepoLens MCP security report` in the subject.
+Use GitHub's private vulnerability reporting for this repository when available:
+
+https://github.com/sameer2191/repolens-mcp/security/advisories/new
+
+You can also review the published policy at:
+
+https://github.com/sameer2191/repolens-mcp/security/policy
+
+If the private reporting flow is unavailable, open a private security advisory from the Security tab. Do not file public issues for suspected vulnerabilities until disclosure is coordinated.
 
 Please include:
 
