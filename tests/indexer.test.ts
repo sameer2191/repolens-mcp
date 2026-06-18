@@ -58,6 +58,15 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.equal(graphMatches[0]?.symbol.name, "createOrder");
     assert.ok(graphMatches[0]?.degree >= 1);
 
+    const nodeQuery = store.queryGraph("MATCH (f:Function) WHERE f.name = 'createOrder' RETURN f.name,f.filePath LIMIT 5");
+    assert.equal(nodeQuery.rows[0]?.["f.name"], "createOrder");
+    assert.equal(nodeQuery.rows[0]?.["f.filePath"], "src/orders.ts");
+
+    const callQuery = store.queryGraph("MATCH (a)-[r:CALLS]->(b:Function) WHERE b.name = 'createOrder' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(callQuery.rows.some((row) => row["b.name"] === "createOrder" && row["r.type"] === "CALLS"));
+
+    assert.throws(() => store.queryGraph("MATCH (f) DELETE f RETURN f.name"), /read-only/);
+
     const swiftSymbols = store.searchGraph({ kind: "class", filePattern: "ios" });
     assert.ok(swiftSymbols.some((match) => match.symbol.name === "CheckoutViewModel"));
 

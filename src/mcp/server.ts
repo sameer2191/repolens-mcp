@@ -13,6 +13,7 @@ import {
   impactAnalysis,
   jsonBlock,
   listDecisions,
+  queryGraph,
   rememberDecision,
   runIndex,
   searchCode,
@@ -147,6 +148,19 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ dbPath, ...options }) => text(searchGraph(options, dbPath))
+  );
+
+  server.registerTool(
+    "query_graph",
+    {
+      description: "Execute a read-only Cypher-like graph query over indexed symbols and edges. Supports MATCH node and one-hop edge patterns with simple WHERE and RETURN clauses.",
+      inputSchema: {
+        query: z.string().describe("Example: MATCH (a:Function)-[:CALLS]->(b) WHERE a.name = 'main' RETURN a.name,b.name LIMIT 10"),
+        limit: z.number().int().positive().max(500).optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ query, limit, dbPath }) => text(queryGraph(query, limit, dbPath))
   );
 
   server.registerTool(

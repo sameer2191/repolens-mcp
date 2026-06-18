@@ -14,6 +14,7 @@ import {
   impactAnalysis,
   jsonBlock,
   listDecisions,
+  queryGraph,
   rememberDecision,
   runIndex,
   searchCode,
@@ -93,6 +94,9 @@ async function main(): Promise<void> {
           stringFlag(args, "db")
         )
       );
+      break;
+    case "query-graph":
+      print(queryGraph(required(args.positional[0], "query"), numberFlag(args, "limit"), stringFlag(args, "db")));
       break;
     case "dead-code":
       print(findDeadCode(numberFlag(args, "limit"), stringFlag(args, "db")));
@@ -270,6 +274,7 @@ Usage:
   repolens-mcp impact <path-or-symbol...> [--db path]
   repolens-mcp schema [--db path]
   repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern regex] [--file-pattern src/] [--min-degree n] [--db path]
+  repolens-mcp query-graph "MATCH (a)-[:CALLS]->(b) RETURN a.name,b.name LIMIT 5" [--db path]
   repolens-mcp dead-code [--db path] [--limit n]
   repolens-mcp cycles [--db path] [--limit n]
   repolens-mcp changes [repo] [--db path] [--limit n]

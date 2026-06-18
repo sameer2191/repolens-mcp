@@ -136,6 +136,13 @@ export interface GraphSearchMatch {
   outbound: number;
 }
 
+export interface GraphQueryResult {
+  query: string;
+  columns: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+  limit: number;
+}
+
 export interface DeadCodeCandidate {
   symbol: SymbolNode;
   inbound: number;

@@ -1,5 +1,5 @@
 import http from "node:http";
-import { architectureReport, findDeadCode, findDependencyCycles, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, searchCode, searchGraph, searchSymbols } from "../core/api.js";
+import { architectureReport, findDeadCode, findDependencyCycles, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, searchSymbols } from "../core/api.js";
 
 export interface DashboardOptions {
   dbPath?: string;
@@ -35,6 +35,9 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
             options.dbPath
           )
         );
+      } else if (url.pathname === "/api/query-graph") {
+        const query = url.searchParams.get("q") ?? "";
+        sendJson(response, query ? queryGraph(query, numberParam(url, "limit"), options.dbPath) : { query, columns: [], rows: [], limit: 0 });
       } else if (url.pathname === "/api/dead-code") {
         sendJson(response, findDeadCode(numberParam(url, "limit") ?? 25, options.dbPath));
       } else if (url.pathname === "/api/cycles") {
@@ -110,7 +113,8 @@ function dashboardHtml(): string {
     .metric b { display:block; font-size:21px; line-height:1.1; }
     .metric span { color:var(--muted); font-size:12px; }
     label { display:block; color:#465163; font-size:12px; margin-bottom:5px; }
-    input, select { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:7px; font-size:14px; background:#fff; color:var(--ink); }
+    input, select, textarea { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:7px; font-size:14px; background:#fff; color:var(--ink); }
+    textarea { min-height:78px; resize:vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
     button, .button { display:inline-flex; justify-content:center; align-items:center; min-height:34px; padding:7px 11px; border:1px solid var(--line); border-radius:7px; background:#fff; color:#263447; font-size:13px; cursor:pointer; }
     button.primary, .button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
     button:hover, .button:hover { border-color:#9aa8bb; text-decoration:none; }
@@ -160,6 +164,13 @@ function dashboardHtml(): string {
             <div><label for="graph-degree">Min degree</label><input id="graph-degree" type="number" min="0" placeholder="0"></div>
           </div>
           <button class="primary" id="graph-run" type="button">Search Graph</button>
+        </div>
+      </section>
+      <section>
+        <h2>Query Graph</h2>
+        <div class="stack">
+          <textarea id="cypher-query">MATCH (a:Function)-[:CALLS]->(b) RETURN a.name,b.name,e.type LIMIT 10</textarea>
+          <button class="primary" id="cypher-run" type="button">Run Query</button>
         </div>
       </section>
       <section>
@@ -238,6 +249,8 @@ function dashboardHtml(): string {
     const graphRel = document.querySelector('#graph-rel');
     const graphFile = document.querySelector('#graph-file');
     const graphDegree = document.querySelector('#graph-degree');
+    const cypherRun = document.querySelector('#cypher-run');
+    const cypherQuery = document.querySelector('#cypher-query');
     const canvas = document.querySelector('#graph-canvas');
     const ctx = canvas.getContext('2d');
     let graphState = { nodes: [], edges: [] };
@@ -289,6 +302,12 @@ function dashboardHtml(): string {
       const data = await fetch('/api/search-graph?' + query).then(r => r.json());
       results.innerHTML = data.map(match => item('<b>' + escapeHtml(match.symbol.name) + '</b> <span class="sub">' + escapeHtml(match.symbol.kind) + '</span><div class="path">' + escapeHtml(match.symbol.filePath) + ':' + match.symbol.startLine + '</div><div class="sub">degree ' + fmt.format(match.degree) + ' - inbound ' + fmt.format(match.inbound) + ' - outbound ' + fmt.format(match.outbound) + '</div>')).join('') || '<div class="sub">No graph matches.</div>';
     }
+    async function doCypherQuery() {
+      const data = await fetch('/api/query-graph?' + params({ q: cypherQuery.value, limit: 50 })).then(r => r.json());
+      if (data.error) { results.innerHTML = item(escapeHtml(data.error), 'risk'); return; }
+      if (!data.rows.length) { results.innerHTML = '<div class="sub">No query rows.</div>'; return; }
+      results.innerHTML = data.rows.map(row => item(data.columns.map(column => '<div><b>' + escapeHtml(column) + '</b>: <span class="path">' + escapeHtml(row[column]) + '</span></div>').join(''))).join('');
+    }
     function prepareGraph(graph) {
       const nodes = graph.nodes.map((node, index) => ({ ...node, x: 40 + (index % 36) * 20, y: 46 + Math.floor(index / 36) * 20, vx: 0, vy: 0 }));
       const byId = new Map(nodes.map(node => [node.id, node]));
@@ -330,6 +349,7 @@ function dashboardHtml(): string {
     }
     search.addEventListener('input', () => { clearTimeout(window.__t); window.__t = setTimeout(doSearch, 120); });
     graphRun.addEventListener('click', doGraphSearch);
+    cypherRun.addEventListener('click', doCypherQuery);
     window.addEventListener('resize', resizeGraph);
     load().catch(err => { document.body.innerHTML = '<pre>' + escapeHtml(err.stack || err) + '</pre>'; });
   </script>

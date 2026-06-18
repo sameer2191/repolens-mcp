@@ -6,7 +6,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 16 tools for indexing, code search, symbol search, source snippets, graph schema, structural graph search, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, and graph snapshots.
+- **MCP-native**: exposes 17 tools for indexing, code search, symbol search, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, and graph snapshots.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots and architecture reports from the CLI.
@@ -43,6 +43,7 @@ repolens-mcp trace <symbol> [--direction inbound|outbound]
 repolens-mcp impact <path-or-symbol...>
 repolens-mcp schema [--db path]
 repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--min-degree n]
+repolens-mcp query-graph "MATCH (a)-[:CALLS]->(b) RETURN a.name,b.name LIMIT 5"
 repolens-mcp dead-code [--db path]
 repolens-mcp cycles [--db path] [--limit n]
 repolens-mcp changes [repo] [--db path]
@@ -66,6 +67,7 @@ repolens-mcp mcp
 | `impact_analysis` | Find adjacent symbols for changed files or symbols. |
 | `get_graph_schema` | Return node labels, edge types, language coverage, and totals. |
 | `search_graph` | Search structurally by query, kind, regex, relationship, file scope, or degree. |
+| `query_graph` | Run a read-only Cypher-like query over symbols and one-hop edges. |
 | `find_dead_code` | Find non-exported functions and methods with no inbound call edges. |
 | `find_dependency_cycles` | Find import-resolved dependency cycles between architecture clusters. |
 | `detect_changes` | Map uncommitted git changes to indexed graph impact. |
@@ -87,6 +89,18 @@ The extractor is intentionally compact and extensible:
 - Markdown: headings as knowledge nodes.
 - JSON: `package.json` package and dependency nodes.
 
+## Query Graph Subset
+
+`query-graph` and `query_graph` are read-only. Supported patterns:
+
+```cypher
+MATCH (f:Function) WHERE f.name = 'main' RETURN f.name,f.filePath LIMIT 10
+MATCH (a)-[r:CALLS]->(b) WHERE b.name CONTAINS 'order' RETURN a.name,b.name,r.type LIMIT 10
+MATCH (a)<-[:CALLS]-(b) RETURN a.name,b.name LIMIT 10
+```
+
+Supported `WHERE` operators are `=`, `<>`, `CONTAINS`, `STARTS WITH`, and `ENDS WITH`, joined with `AND`.
+
 ## Validation
 
 ```bash
@@ -97,6 +111,7 @@ node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js snippet createOrder --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js cycles --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js query-graph "MATCH (f:Function) RETURN f.name,f.filePath LIMIT 5" --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js report --db /tmp/memory.db --format html --out report.html
 node --experimental-sqlite dist/src/cli.js export-graph --db /tmp/memory.db --out graph.html --limit 1000
 node --experimental-sqlite dist/src/cli.js serve --db /tmp/memory.db --port 9749

@@ -52,6 +52,10 @@ export function searchGraph(options: GraphSearchOptions, dbPath?: string) {
   return withStore(dbPath, (store) => store.searchGraph(options));
 }
 
+export function queryGraph(query: string, limit?: number, dbPath?: string) {
+  return withStore(dbPath, (store) => store.queryGraph(query, limit));
+}
+
 export function findDeadCode(limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.findDeadCode(limit));
 }

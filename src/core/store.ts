@@ -12,6 +12,7 @@ import type {
   DependencyCycle,
   DecisionRecord,
   Edge,
+  GraphQueryResult,
   GraphSchema,
   GraphSearchMatch,
   GraphSearchOptions,
@@ -48,6 +49,28 @@ interface FileRow {
   indexed_at: string;
   skipped: number;
   skip_reason: string | null;
+}
+
+interface ParsedGraphQuery {
+  pattern:
+    | { kind: "node"; alias: string; label?: string }
+    | { kind: "edge"; leftAlias: string; leftLabel?: string; edgeAlias: string; edgeType?: string; rightAlias: string; rightLabel?: string; direction: "outbound" | "inbound" };
+  where: GraphWhereCondition[];
+  returns: GraphReturnExpression[];
+  limit: number;
+}
+
+interface GraphWhereCondition {
+  alias: string;
+  property: string;
+  operator: "=" | "<>" | "CONTAINS" | "STARTS WITH" | "ENDS WITH";
+  value: string;
+}
+
+interface GraphReturnExpression {
+  alias: string;
+  property: string;
+  output: string;
 }
 
 export class MemoryStore {
@@ -488,6 +511,61 @@ export class MemoryStore {
       outbound: row.outbound,
       degree: row.degree
     }));
+  }
+
+  queryGraph(query: string, limit = 100): GraphQueryResult {
+    const parsed = parseGraphQuery(query, clampPositive(limit, 1, 500));
+    const params: Array<string | number> = [];
+    const where: string[] = [];
+    const aliasMap =
+      parsed.pattern.kind === "node"
+        ? new Map([[parsed.pattern.alias, "s"]])
+        : new Map([
+            [parsed.pattern.leftAlias, "left_symbol"],
+            [parsed.pattern.rightAlias, "right_symbol"],
+            [parsed.pattern.edgeAlias, "edges"],
+            ["e", "edges"]
+          ]);
+
+    if (parsed.pattern.kind === "node" && parsed.pattern.label) {
+      where.push("lower(s.kind) = lower(?)");
+      params.push(normalizeGraphLabel(parsed.pattern.label));
+    } else if (parsed.pattern.kind === "edge") {
+      if (parsed.pattern.leftLabel) {
+        where.push("lower(left_symbol.kind) = lower(?)");
+        params.push(normalizeGraphLabel(parsed.pattern.leftLabel));
+      }
+      if (parsed.pattern.rightLabel) {
+        where.push("lower(right_symbol.kind) = lower(?)");
+        params.push(normalizeGraphLabel(parsed.pattern.rightLabel));
+      }
+      if (parsed.pattern.edgeType) {
+        where.push("edges.type = ?");
+        params.push(parsed.pattern.edgeType.toUpperCase());
+      }
+    }
+
+    for (const condition of parsed.where) {
+      where.push(whereSql(condition, aliasMap, params));
+    }
+
+    const selectSql = parsed.returns.map((expr, index) => `${propertySql(expr.alias, expr.property, aliasMap)} AS c${index}`);
+    const fromSql =
+      parsed.pattern.kind === "node"
+        ? "symbols s"
+        : parsed.pattern.direction === "outbound"
+          ? "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.source JOIN symbols right_symbol ON right_symbol.qualified_name = edges.target"
+          : "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.target JOIN symbols right_symbol ON right_symbol.qualified_name = edges.source";
+    const sql = `SELECT ${selectSql.join(", ")} FROM ${fromSql}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} LIMIT ?`;
+    const rows = this.db.prepare(sql).all(...params, parsed.limit) as Array<Record<string, string | number | boolean | null>>;
+    return {
+      query,
+      columns: parsed.returns.map((expr) => expr.output),
+      rows: rows.map((row) =>
+        Object.fromEntries(parsed.returns.map((expr, index) => [expr.output, row[`c${index}`] ?? null]))
+      ),
+      limit: parsed.limit
+    };
   }
 
   findDeadCode(limit = 50): DeadCodeCandidate[] {
@@ -1080,6 +1158,179 @@ function clampPositive(value: number, min: number, max: number): number {
     return min;
   }
   return Math.min(max, Math.max(min, Math.floor(value)));
+}
+
+function parseGraphQuery(query: string, defaultLimit: number): ParsedGraphQuery {
+  const trimmed = query.trim().replace(/;+\s*$/, "");
+  if (!trimmed) {
+    throw new Error("query_graph requires a query");
+  }
+  if (/\b(CREATE|MERGE|DELETE|SET|REMOVE|DROP|INSERT|UPDATE|ALTER|PRAGMA|ATTACH|DETACH)\b/i.test(stripQuotedStrings(trimmed))) {
+    throw new Error("query_graph is read-only; mutation keywords are not supported");
+  }
+
+  const limitMatch = /\s+LIMIT\s+(\d+)\s*$/i.exec(trimmed);
+  const limit = limitMatch ? clampPositive(Number(limitMatch[1]), 1, 500) : defaultLimit;
+  const withoutLimit = limitMatch ? trimmed.slice(0, limitMatch.index).trim() : trimmed;
+  const match = /^MATCH\s+(.+?)\s+(?:WHERE\s+(.+?)\s+)?RETURN\s+(.+)$/i.exec(withoutLimit);
+  if (!match) {
+    throw new Error("Supported query shape: MATCH (...) [WHERE alias.property OP 'value'] RETURN alias.property[, ...] [LIMIT n]");
+  }
+
+  return {
+    pattern: parseMatchPattern(match[1].trim()),
+    where: parseWhere(match[2]?.trim()),
+    returns: parseReturn(match[3].trim()),
+    limit
+  };
+}
+
+function parseMatchPattern(pattern: string): ParsedGraphQuery["pattern"] {
+  const node = /^\((\w+)(?::([A-Za-z_][\w-]*))?\)$/.exec(pattern);
+  if (node) {
+    return { kind: "node", alias: node[1], label: node[2] };
+  }
+
+  const outbound = /^\((\w+)(?::([A-Za-z_][\w-]*))?\)\s*-\s*\[(?:(\w+))?(?::([A-Za-z_][\w-]*))?\]\s*->\s*\((\w+)(?::([A-Za-z_][\w-]*))?\)$/.exec(pattern);
+  if (outbound) {
+    return {
+      kind: "edge",
+      leftAlias: outbound[1],
+      leftLabel: outbound[2],
+      edgeAlias: outbound[3] || "e",
+      edgeType: outbound[4],
+      rightAlias: outbound[5],
+      rightLabel: outbound[6],
+      direction: "outbound"
+    };
+  }
+
+  const inbound = /^\((\w+)(?::([A-Za-z_][\w-]*))?\)\s*<-\s*\[(?:(\w+))?(?::([A-Za-z_][\w-]*))?\]\s*-\s*\((\w+)(?::([A-Za-z_][\w-]*))?\)$/.exec(pattern);
+  if (inbound) {
+    return {
+      kind: "edge",
+      leftAlias: inbound[1],
+      leftLabel: inbound[2],
+      edgeAlias: inbound[3] || "e",
+      edgeType: inbound[4],
+      rightAlias: inbound[5],
+      rightLabel: inbound[6],
+      direction: "inbound"
+    };
+  }
+
+  throw new Error("Supported MATCH patterns: (n), (a)-[:TYPE]->(b), or (a)<-[:TYPE]-(b)");
+}
+
+function parseWhere(where: string | undefined): GraphWhereCondition[] {
+  if (!where) {
+    return [];
+  }
+  return where.split(/\s+AND\s+/i).map((part) => {
+    const match = /^(\w+)\.([A-Za-z_]\w*)\s*(=|<>|CONTAINS|STARTS WITH|ENDS WITH)\s*(?:'([^']*)'|"([^"]*)"|([^\s]+))$/i.exec(part.trim());
+    if (!match) {
+      throw new Error(`Unsupported WHERE condition: ${part}`);
+    }
+    return {
+      alias: match[1],
+      property: match[2],
+      operator: match[3].toUpperCase() as GraphWhereCondition["operator"],
+      value: match[4] ?? match[5] ?? match[6] ?? ""
+    };
+  });
+}
+
+function parseReturn(returnText: string): GraphReturnExpression[] {
+  const expressions = returnText.split(",").map((part) => {
+    const match = /^(\w+)(?:\.([A-Za-z_]\w*))?(?:\s+AS\s+([A-Za-z_]\w*))?$/i.exec(part.trim());
+    if (!match) {
+      throw new Error(`Unsupported RETURN expression: ${part}`);
+    }
+    const property = match[2] ?? "qualifiedName";
+    return {
+      alias: match[1],
+      property,
+      output: match[3] ?? `${match[1]}.${property}`
+    };
+  });
+  if (expressions.length === 0) {
+    throw new Error("RETURN must include at least one expression");
+  }
+  return expressions;
+}
+
+function whereSql(condition: GraphWhereCondition, aliasMap: Map<string, string>, params: Array<string | number>): string {
+  const column = propertySql(condition.alias, condition.property, aliasMap);
+  switch (condition.operator) {
+    case "=":
+      params.push(condition.value);
+      return `lower(CAST(${column} AS TEXT)) = lower(?)`;
+    case "<>":
+      params.push(condition.value);
+      return `lower(CAST(${column} AS TEXT)) <> lower(?)`;
+    case "CONTAINS":
+      params.push(`%${condition.value.toLowerCase()}%`);
+      return `lower(CAST(${column} AS TEXT)) LIKE ?`;
+    case "STARTS WITH":
+      params.push(`${condition.value.toLowerCase()}%`);
+      return `lower(CAST(${column} AS TEXT)) LIKE ?`;
+    case "ENDS WITH":
+      params.push(`%${condition.value.toLowerCase()}`);
+      return `lower(CAST(${column} AS TEXT)) LIKE ?`;
+  }
+}
+
+function propertySql(alias: string, property: string, aliasMap: Map<string, string>): string {
+  const table = aliasMap.get(alias);
+  if (!table) {
+    throw new Error(`Unknown query alias '${alias}'`);
+  }
+  const normalized = normalizeGraphProperty(property);
+  if (table === "edges") {
+    const edgeColumns: Record<string, string> = {
+      type: "type",
+      source: "source",
+      target: "target",
+      weight: "weight"
+    };
+    const column = edgeColumns[normalized];
+    if (!column) {
+      throw new Error(`Unsupported edge property '${property}'`);
+    }
+    return `${table}.${column}`;
+  }
+  const symbolColumns: Record<string, string> = {
+    id: "id",
+    name: "name",
+    kind: "kind",
+    label: "kind",
+    language: "language",
+    filepath: "file_path",
+    file: "file_path",
+    qualifiedname: "qualified_name",
+    qualified: "qualified_name",
+    startline: "start_line",
+    endline: "end_line",
+    signature: "signature",
+    exported: "exported"
+  };
+  const column = symbolColumns[normalized];
+  if (!column) {
+    throw new Error(`Unsupported symbol property '${property}'`);
+  }
+  return `${table}.${column}`;
+}
+
+function normalizeGraphProperty(property: string): string {
+  return property.replace(/_/g, "").toLowerCase();
+}
+
+function normalizeGraphLabel(label: string): string {
+  return label.replace(/Node$/i, "").toLowerCase();
+}
+
+function stripQuotedStrings(value: string): string {
+  return value.replace(/'[^']*'|"[^"]*"/g, "''");
 }
 
 function stronglyConnectedComponents(graph: Map<string, Set<string>>): string[][] {

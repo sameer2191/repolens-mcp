@@ -21,7 +21,7 @@ Result:
 
 - TypeScript build passed.
 - Node test suite passed: 5 tests, 0 failures.
-- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, Swift extraction, symbol search, code search, source snippets, graph schema, structural graph search, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, Swift extraction, symbol search, code search, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -38,11 +38,11 @@ Result:
 - Files discovered: 32
 - Files indexed: 32
 - Files skipped: 0
-- Symbols: 218
-- Edges: 601
-- Lines indexed: 4,410
-- Full index elapsed: 66 ms
-- No-op incremental elapsed: 13 ms
+- Symbols: 233
+- Edges: 643
+- Lines indexed: 4,960
+- Full index elapsed: 84 ms
+- No-op incremental elapsed: 14 ms
 - No-op incremental unchanged files: 32
 - Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
@@ -223,6 +223,20 @@ node --experimental-sqlite dist/src/cli.js schema \
 
 Confirmed Swift, TypeScript, Markdown, SQL, JSON, shell, JavaScript, YAML, and unknown text coverage with node-label and edge-type counts.
 
+Read-only graph query:
+
+```bash
+node --experimental-sqlite dist/src/cli.js query-graph \
+  "MATCH (f:Function) WHERE f.filePath CONTAINS 'live-session' RETURN f.name,f.filePath LIMIT 5" \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+
+node --experimental-sqlite dist/src/cli.js query-graph \
+  "MATCH (a)-[r:CALLS]->(b) WHERE b.name = 'makeSession' RETURN a.name,b.name,r.type LIMIT 5" \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+```
+
+Confirmed node and one-hop relationship queries with `WHERE`, `RETURN`, edge aliases, and `LIMIT` on the large validation database.
+
 Dependency cycles:
 
 ```bash
@@ -287,6 +301,7 @@ node --experimental-sqlite dist/src/cli.js serve \
 
 curl --fail http://127.0.0.1:9750/api/schema
 curl --fail 'http://127.0.0.1:9750/api/search-graph?q=live-session&relationship=CALLS&limit=3'
+curl --fail 'http://127.0.0.1:9750/api/query-graph?q=MATCH%20(f%3AFunction)%20WHERE%20f.filePath%20CONTAINS%20%27live-session%27%20RETURN%20f.name%2Cf.filePath%20LIMIT%203'
 curl --fail 'http://127.0.0.1:9750/api/dead-code?limit=3'
 curl --fail 'http://127.0.0.1:9750/api/cycles?limit=5'
 curl --fail 'http://127.0.0.1:9750/api/snippet?id=makeSession&context=1'
@@ -294,7 +309,7 @@ curl --fail 'http://127.0.0.1:9750/api/report?format=markdown&graphLimit=50'
 curl --fail http://127.0.0.1:9750/
 ```
 
-Confirmed the dashboard served the large validation database, returned the 816-file / 5,234-symbol / 29,013-edge schema, returned live-session graph matches, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated an 8,992-byte Markdown report response, and served the 15,978-byte HTML dashboard shell.
+Confirmed the dashboard served the large validation database, returned the 816-file / 5,234-symbol / 29,013-edge schema, returned live-session graph matches, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated an 8,992-byte Markdown report response, and served the 17,168-byte HTML dashboard shell.
 
 Trace:
 
@@ -319,4 +334,4 @@ Confirmed modified files map back to indexed symbols and produced a medium risk 
 
 ## Conclusion
 
-The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, serves a local graph dashboard, and exposes graph schema, structural search, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, serves a local graph dashboard, and exposes graph schema, structural search, read-only graph queries, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
