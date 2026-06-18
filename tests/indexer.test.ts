@@ -4,11 +4,29 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { architectureReport, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
+import { extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
 
 const fixture = path.join(process.cwd(), "tests", "fixtures", "sample-repo");
+
+test("extracts Next.js app route handlers from file paths", () => {
+  const extracted = extractFromFile(
+    "apps/web-admin/src/app/api/orders/[id]/route.ts",
+    "typescript",
+    `
+export async function GET() {
+  return Response.json({});
+}
+
+export const POST = async () => Response.json({});
+`
+  );
+  const routes = extracted.symbols.filter((symbol) => symbol.kind === "route");
+  assert.ok(routes.some((route) => route.name === "GET /api/orders/:id" && route.metadata?.framework === "next-app-router"));
+  assert.ok(routes.some((route) => route.name === "POST /api/orders/:id" && route.metadata?.path === "/api/orders/:id"));
+});
 
 test("indexes a TypeScript repo with symbols, routes, search, and architecture", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-test-"));

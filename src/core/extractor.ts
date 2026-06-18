@@ -336,6 +336,26 @@ function extractRoutes(filePath: string, language: Language, content: string): S
     /@(?:app|router)\.route\(\s*["']([^"']+)["']/g
   ];
   const routes: SymbolNode[] = [];
+  const nextRoutePath = nextRoutePathFromFile(filePath);
+  if (nextRoutePath && ["typescript", "javascript"].includes(language)) {
+    const nextMethodRegexes = [
+      /^\s*export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s*\(/gm,
+      /^\s*export\s+const\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s*=/gm
+    ];
+    for (const regex of nextMethodRegexes) {
+      for (const match of content.matchAll(regex)) {
+        const method = match[1].toUpperCase();
+        const line = offsetToLine(content, match.index ?? 0);
+        routes.push(
+          makeSymbol(filePath, language, "route", `${method} ${nextRoutePath}`, line, line, undefined, true, {
+            method,
+            path: nextRoutePath,
+            framework: "next-app-router"
+          })
+        );
+      }
+    }
+  }
   for (const regex of routeRegexes) {
     for (const match of content.matchAll(regex)) {
       const method = match[1]?.toUpperCase() ?? "ROUTE";
@@ -350,6 +370,37 @@ function extractRoutes(filePath: string, language: Language, content: string): S
     }
   }
   return routes;
+}
+
+function nextRoutePathFromFile(filePath: string): string | null {
+  const normalized = filePath.replace(/\\/g, "/");
+  const match = /(?:^|\/)app\/api(?:\/(.+))?\/route\.[cm]?[jt]sx?$/.exec(normalized);
+  if (!match) {
+    return null;
+  }
+  const routePart = match[1] ?? "";
+  const segments = routePart
+    .split("/")
+    .filter(Boolean)
+    .filter((segment) => !(segment.startsWith("(") && segment.endsWith(")")))
+    .map(nextRouteSegment);
+  return `/api${segments.length > 0 ? `/${segments.join("/")}` : ""}`;
+}
+
+function nextRouteSegment(segment: string): string {
+  const optionalCatchAll = /^\[\[\.\.\.([A-Za-z0-9_-]+)\]\]$/.exec(segment);
+  if (optionalCatchAll) {
+    return `*${optionalCatchAll[1]}?`;
+  }
+  const catchAll = /^\[\.\.\.([A-Za-z0-9_-]+)\]$/.exec(segment);
+  if (catchAll) {
+    return `*${catchAll[1]}`;
+  }
+  const dynamic = /^\[([A-Za-z0-9_-]+)\]$/.exec(segment);
+  if (dynamic) {
+    return `:${dynamic[1]}`;
+  }
+  return segment;
 }
 
 function extractChannelLinks(filePath: string, language: Language, content: string, symbols: SymbolNode[]): ExtractionResult {

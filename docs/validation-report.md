@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 14 tests, 0 failures.
-- Covered Codex MCP config rendering/install safeguards, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, concurrent catalog writes, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, release/package dry-run checks, Swift extraction, multi-ecosystem manifest extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Node test suite passed: 15 tests, 0 failures.
+- Covered Codex MCP config rendering/install safeguards, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, concurrent catalog writes, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, release/package dry-run checks, Swift extraction, Next.js App Router route extraction, multi-ecosystem manifest extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Package And Release
 
@@ -35,7 +35,7 @@ node --experimental-sqlite dist/src/cli.js demo
 Result:
 
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 99,192 bytes packed, 502,079 bytes unpacked, 58 runtime entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 99,862 bytes packed, 505,825 bytes unpacked, 58 runtime entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `package.json`, and `server.json`; compiled tests and fixtures are excluded.
 - Release workflow added for version tags and manual runs; it runs install, verification, demo indexing, `npm pack --json`, SHA-256 checksum generation, artifact upload, and GitHub release asset publishing for tag builds.
 - CI now also checks `npm pack --dry-run --json` and self-indexes into `.repolens/ci.db`.
@@ -58,21 +58,21 @@ Result:
 - Files discovered: 54
 - Files indexed: 54
 - Files skipped: 0
-- Symbols: 478
-- Edges: 1,524
-- Lines indexed: 8,962
-- Full index elapsed: 472 ms
-- No-op incremental elapsed: 34 ms
+- Symbols: 482
+- Edges: 1,535
+- Lines indexed: 9,039
+- Full index elapsed: 506 ms
+- No-op incremental elapsed: 22 ms
 - No-op incremental unchanged files: 54
-- Full-text code-search rows: 8,068 `code_lines` rows and 8,068 `code_fts` rows
+- Full-text code-search rows: 8,140 `code_lines` rows and 8,140 `code_fts` rows
 - Channel graph rows: 8 `channel` nodes, 2 `EMITS` edges, and 11 `LISTENS_ON` edges
 - HTTP call graph rows: 11 `http_call` nodes, 11 `CALLS_HTTP_ENDPOINT` edges, and 2 generated `HTTP_CALLS` route edges
 - Manifest graph rows: 11 `package` nodes and 26 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 54 files, 478 symbols, and 1,524 edges.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 54 files, 482 symbols, and 1,535 edges.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, and fixture route/client communities.
-- Graph package: `.repolens/self.rlgz` (1,384,203 bytes from a 5,033,984-byte SQLite snapshot)
-- Imported package totals: 54 files, 478 symbols, 1,524 edges
+- Graph package: `.repolens/self.rlgz` (1,225,266 bytes from a 4,792,320-byte SQLite snapshot)
+- Imported package totals: 54 files, 482 symbols, 1,535 edges
 - Language mix: TypeScript, Markdown, JSON, YAML, TOML, XML, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -145,21 +145,21 @@ Result:
 - Files discovered: 852
 - Files indexed: 817
 - Files skipped: 35
-- Symbols: 5,270
-- Edges: 30,397
+- Symbols: 5,423
+- Edges: 30,571
 - Lines indexed: 96,337
-- Full index elapsed: 15,923 ms
-- No-op incremental elapsed: 246 ms
+- Full index elapsed: 15,654 ms
+- No-op incremental elapsed: 275 ms
 - No-op incremental unchanged files: 852
 - No-op incremental removed files: 0
 - Full-text code-search rows: 82,090 `code_lines` rows and 82,090 `code_fts` rows
 - Channel graph rows: 5 `channel` nodes, 6 `EMITS` edges, and 7 `LISTENS_ON` edges
-- HTTP call graph rows: 30 `http_call` nodes and 30 `CALLS_HTTP_ENDPOINT` edges
-- Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (339,395 bytes)
-- Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (9,232 bytes)
+- HTTP route/call graph rows: 153 Next.js `route` nodes, 30 `http_call` nodes, 30 `CALLS_HTTP_ENDPOINT` edges, and 20 generated `HTTP_CALLS` route edges
+- Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (339,469 bytes)
+- Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (9,268 bytes)
 - Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html` (1,000 nodes, 1,000 edges, 348,985 bytes)
-- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (13,340,508 bytes from a 72,052,736-byte SQLite snapshot)
-- Imported graph package totals: 817 files, 5,270 symbols, 30,397 edges
+- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (12,278,314 bytes from a 69,976,064-byte SQLite snapshot)
+- Imported graph package totals: 817 files, 5,423 symbols, 30,571 edges
 - Graph communities sampled: order repository, iOS load flows, access/cart clearing, auth/request helpers, address book, live-session tests, cart, and menu management communities.
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
 - Import-resolved dependency cycles: 0
@@ -169,7 +169,7 @@ Top language coverage:
 | Language | Files | Lines | Symbols |
 | --- | ---: | ---: | ---: |
 | Swift | 212 | 42,029 | 2,627 |
-| TypeScript | 404 | 40,663 | 1,502 |
+| TypeScript | 404 | 40,663 | 1,655 |
 | Markdown | 104 | 6,828 | 868 |
 | SQL | 49 | 2,188 | 167 |
 | JSON | 12 | 410 | 60 |
@@ -185,15 +185,17 @@ Graph schema:
 | Heading nodes | 764 |
 | Struct nodes | 348 |
 | Class nodes | 205 |
+| Route nodes | 153 |
 | `CALLS` edges | 20,111 |
-| `DEFINES` edges | 4,282 |
+| `DEFINES` edges | 4,435 |
 | `CALLS_LOCAL` edges | 3,163 |
 | `IMPORTS` edges | 1,321 |
 | `DECLARES` edges | 166 |
-| `SIMILAR_TO` edges | 1,193 |
+| `SIMILAR_TO` edges | 1,194 |
 | `SEMANTICALLY_RELATED` edges | 118 |
 | HTTP call nodes | 30 |
 | `CALLS_HTTP_ENDPOINT` edges | 30 |
+| `HTTP_CALLS` edges | 20 |
 
 Incremental refresh:
 
@@ -204,7 +206,7 @@ node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
   --incremental
 ```
 
-Confirmed a no-op incremental pass preserved 5,270 symbols and 30,397 edges while marking all 852 discovered files unchanged.
+Confirmed a no-op incremental pass preserved 5,423 symbols and 30,571 edges while marking all 852 discovered files unchanged.
 
 Representative hotspots:
 
@@ -519,7 +521,7 @@ node --experimental-sqlite dist/src/cli.js unpack-graph \
   --overwrite
 ```
 
-Confirmed the package exporter created a checksummed `.rlgz` artifact and the importer restored a graph with 817 files, 5,270 symbols, and 30,397 edges.
+Confirmed the package exporter created a checksummed `.rlgz` artifact and the importer restored a graph with 817 files, 5,423 symbols, and 30,571 edges.
 
 Watch mode:
 
@@ -531,7 +533,7 @@ node --experimental-sqlite dist/src/cli.js watch /Users/sameer/Desktop/testing \
   --runs 2
 ```
 
-Confirmed two watch-mode incremental passes over the large validation database preserved 5,270 symbols and 30,397 edges. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
+Confirmed two watch-mode incremental passes over the large validation database preserved 5,423 symbols and 30,571 edges. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
 
 Index lock:
 
@@ -561,7 +563,7 @@ curl --fail 'http://127.0.0.1:9750/api/report?format=markdown&graphLimit=50'
 curl --fail http://127.0.0.1:9750/
 ```
 
-Confirmed the dashboard served the validation database, returned graph-community rows, returned the 817-file / 5,270-symbol / 30,397-edge schema, returned live-session graph matches, returned semantic search rows, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated a Markdown report response, and served the HTML dashboard shell.
+Confirmed the dashboard served the validation database, returned graph-community rows, returned the 817-file / 5,423-symbol / 30,571-edge schema, returned live-session graph matches, returned semantic search rows, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated a Markdown report response, and served the HTML dashboard shell.
 
 Trace:
 

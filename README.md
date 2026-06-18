@@ -120,7 +120,7 @@ repolens-mcp mcp
 
 The extractor is intentionally compact and extensible:
 
-- TypeScript and JavaScript: classes, interfaces, types, functions, const functions, imports, Express-style routes.
+- TypeScript and JavaScript: classes, interfaces, types, functions, const functions, imports, Express-style routes, and Next.js App Router `app/api/**/route.ts` handlers.
 - HTTP call linking: literal `fetch`, Axios, and Node `http` calls become `http_call` nodes with `CALLS_HTTP_ENDPOINT`; matching route nodes also receive `HTTP_CALLS`.
 - Channel/event linking: EventEmitter/Socket.IO-style `emit`, `on`, `once`, `addListener`, `subscribe`, DOM `CustomEvent`, Python `@*.on`, and Swift `NotificationCenter` patterns become `channel` nodes with `EMITS` and `LISTENS_ON` edges.
 - Swift: classes, structs, enums, protocols, actors, functions, and imports.
