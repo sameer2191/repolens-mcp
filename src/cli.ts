@@ -7,6 +7,7 @@ import {
   contextPack,
   deleteProject,
   detectChanges,
+  fleetGraph,
   fleetSummary,
   findDeadCode,
   findCommunities,
@@ -93,6 +94,16 @@ async function main(): Promise<void> {
     case "fleet-summary":
     case "fleet":
       print(await fleetSummary(numberFlag(args, "limit")));
+      break;
+    case "fleet-graph":
+    case "cross-repo":
+      print(
+        await fleetGraph({
+          limit: numberFlag(args, "limit"),
+          maxNodes: numberFlag(args, "max-nodes"),
+          maxEdges: numberFlag(args, "max-edges")
+        })
+      );
       break;
     case "architecture":
       print(getArchitecture(stringFlag(args, "db")));
@@ -426,6 +437,7 @@ Usage:
   repolens-mcp project-status [root-or-db-or-label]
   repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
   repolens-mcp fleet-summary [--limit n]
+  repolens-mcp fleet-graph [--limit n] [--max-nodes n] [--max-edges n]
   repolens-mcp architecture [--db path]
   repolens-mcp search <query> [--db path] [--limit n]
   repolens-mcp symbols <query> [--kind function] [--db path]

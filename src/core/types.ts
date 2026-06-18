@@ -340,6 +340,8 @@ export interface FleetSummary {
   risks: string[];
 }
 
+export type { FleetGraph, FleetGraphEdge, FleetGraphNode, FleetGraphOptions } from "./fleet-graph.js";
+
 export interface DeleteProjectResult {
   identifier: string;
   removed: number;

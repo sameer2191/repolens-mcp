@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { deleteProject, fleetSummary, getProjectStatus, listProjects, runIndex } from "../src/core/api.js";
+import { deleteProject, fleetGraph, fleetSummary, getProjectStatus, listProjects, runIndex } from "../src/core/api.js";
 
 test("tracks indexed projects in the local catalog", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-catalog-"));
@@ -67,6 +67,19 @@ test("summarizes a fleet of indexed projects", async () => {
     assert.ok(fleet.routeOverlaps.some((route) => route.route === "GET /orders" && route.count === 2));
     assert.ok(fleet.serviceLinks.some((link) => link.consumer === "service-a" && link.provider === "service-b" && link.route === "GET /orders" && link.calls >= 1));
     assert.ok(fleet.languages.some((language) => language.language === "typescript" && language.projects === 2));
+
+    const graph = await fleetGraph({ maxNodes: 200, maxEdges: 500 });
+    assert.equal(graph.totals.projects, 2);
+    assert.equal(graph.totals.projectNodes, 2);
+    assert.ok(graph.totals.graphNodes >= 2);
+    assert.ok(graph.totals.graphEdges >= 1);
+    assert.ok(graph.nodes.some((node) => node.id === "project:service-a" && node.group === "project"));
+    assert.ok(graph.nodes.some((node) => node.id === "project:service-b" && node.group === "project"));
+    assert.ok(graph.nodes.some((node) => node.id === "dependency:express" && node.group === "dependency"));
+    assert.ok(graph.nodes.some((node) => node.id === "route:GET /orders" && node.group === "route"));
+    assert.ok(graph.edges.some((edge) => edge.source === "project:service-a" && edge.target === "dependency:express" && edge.type === "DEPENDS_ON"));
+    assert.ok(graph.edges.some((edge) => edge.source === "project:service-a" && edge.target === "project:service-b" && edge.type === "CROSS_REPO_HTTP_CALLS"));
+    assert.ok(graph.edges.some((edge) => edge.source === "project:service-a" && edge.target === "route:GET /orders" && edge.type === "ROUTE_OVERLAP"));
   } finally {
     if (previousCatalog === undefined) {
       delete process.env.REPOLENS_CATALOG;

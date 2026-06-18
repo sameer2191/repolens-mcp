@@ -7,6 +7,7 @@ import {
   listProjects as listCatalogProjects,
   recordProjectIndex
 } from "./catalog.js";
+import { buildFleetGraph, type FleetGraphOptions } from "./fleet-graph.js";
 import { indexRepository } from "./indexer.js";
 import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
@@ -43,6 +44,10 @@ export async function deleteProject(identifier: string, deleteDb?: boolean) {
 
 export async function fleetSummary(limit?: number) {
   return catalogFleetSummary(limit);
+}
+
+export async function fleetGraph(options: FleetGraphOptions = {}) {
+  return buildFleetGraph(await catalogFleetSummary(options.limit), options);
 }
 
 export function withStore<T>(rootOrDbPath: string | undefined, fn: (store: MemoryStore) => T): T {

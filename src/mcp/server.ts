@@ -6,6 +6,7 @@ import {
   contextPack,
   deleteProject,
   detectChanges,
+  fleetGraph,
   fleetSummary,
   findDeadCode,
   findCommunities,
@@ -122,6 +123,19 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ limit }) => text(await fleetSummary(limit))
+  );
+
+  server.registerTool(
+    "cross_repo_graph",
+    {
+      description: "Build a catalog-wide graph across indexed repositories, including shared dependencies, overlapping routes, and inferred cross-repo HTTP caller/provider edges.",
+      inputSchema: {
+        limit: z.number().int().positive().max(500).optional().describe("Maximum indexed projects to include from the local catalog."),
+        maxNodes: z.number().int().positive().max(5000).optional().describe("Maximum nodes to return."),
+        maxEdges: z.number().int().positive().max(10000).optional().describe("Maximum edges to return.")
+      }
+    },
+    async ({ limit, maxNodes, maxEdges }) => text(await fleetGraph({ limit, maxNodes, maxEdges }))
   );
 
   server.registerTool(

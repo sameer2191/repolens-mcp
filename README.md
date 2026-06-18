@@ -11,10 +11,10 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 28 tools for indexing, project inventory/status, fleet summaries, multi-agent setup, BM25 code search, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 29 tools for indexing, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, BM25 code search, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
-- **Project catalog and fleet summaries**: `list-projects`, `project-status`, `fleet-summary`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and infer service links when one local project calls a route provided by another.
+- **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI.
@@ -66,6 +66,7 @@ repolens-mcp list-projects [--limit n]
 repolens-mcp project-status [root-or-db-or-label]
 repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
 repolens-mcp fleet-summary [--limit n]
+repolens-mcp fleet-graph [--limit n] [--max-nodes n] [--max-edges n]
 repolens-mcp architecture [--db path]
 repolens-mcp search <query> [--db path]
 repolens-mcp symbols <query> [--kind function]
@@ -109,6 +110,7 @@ repolens-mcp mcp
 | `index_status` | Return the latest indexed status for a root, database path, label, or project folder name. |
 | `delete_project` | Remove a project from the local catalog, with optional safe `.repolens` DB cleanup. |
 | `fleet_summary` | Aggregate indexed projects by language, package, dependency, route, HTTP call, route overlap, and inferred service link. |
+| `cross_repo_graph` | Return a catalog-wide graph of indexed repositories, shared dependencies, overlapping routes, and inferred cross-repo HTTP caller/provider edges. |
 | `agent_setup` | Render or write project-local RepoLens MCP setup guidance for supported coding agents. |
 | `search_code` | Search indexed source lines with BM25 ranking and code-aware token expansion. |
 | `search_symbols` | Search functions, classes, routes, resources, headings, and package nodes. |
@@ -172,6 +174,7 @@ node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/mem
 node --experimental-sqlite dist/src/cli.js list-projects
 node --experimental-sqlite dist/src/cli.js project-status /path/to/big/repo
 node --experimental-sqlite dist/src/cli.js fleet-summary
+node --experimental-sqlite dist/src/cli.js fleet-graph --limit 20 --max-nodes 500 --max-edges 1000
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
