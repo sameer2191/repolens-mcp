@@ -294,6 +294,20 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.registerTool(
+    "trace_path",
+    {
+      description: "Compatibility alias for trace_symbol. Trace inbound or outbound graph edges for a symbol.",
+      inputSchema: {
+        name: z.string(),
+        direction: z.enum(["inbound", "outbound"]).default("outbound"),
+        depth: z.number().int().positive().max(5).optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ name, direction, depth, dbPath }) => text(traceSymbol(name, direction, depth, dbPath))
+  );
+
+  server.registerTool(
     "impact_analysis",
     {
       description: "Find symbols adjacent to changed file paths or symbol names.",

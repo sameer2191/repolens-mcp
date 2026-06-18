@@ -183,7 +183,7 @@ ${snippets}
 ## Recommended Agent Behavior
 
 - Run \`repolens-mcp index . --db ${options.dbPath}\` after clone or major branch changes.
-- Prefer \`${options.serverName}.context_pack\`, \`${options.serverName}.search_graph\`, and \`${options.serverName}.trace_path\` before opening many files.
+- Prefer \`${options.serverName}.context_pack\`, \`${options.serverName}.search_graph\`, and \`${options.serverName}.trace_symbol\` before opening many files.
 - Use \`${options.serverName}.get_graph_schema\` first when writing graph queries.
 - Use \`${options.serverName}.detect_changes\` before risky edits.
 `;
@@ -242,7 +242,7 @@ Use it before broad file exploration:
 
 - \`${options.serverName}.context_pack\` for focused implementation context.
 - \`${options.serverName}.search_graph\` for symbols, routes, services, packages, and protocol surfaces.
-- \`${options.serverName}.trace_path\` to inspect inbound or outbound call paths.
+- \`${options.serverName}.trace_symbol\` to inspect inbound or outbound call paths.
 - \`${options.serverName}.query_graph\` for read-only graph queries.
 - \`${options.serverName}.detect_changes\` before risky edits.
 

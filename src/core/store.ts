@@ -327,7 +327,7 @@ export class MemoryStore {
 
   deleteDerivedEdges(): void {
     this.db
-      .prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL', 'HTTP_CALLS', 'IMPORTS_FILE', 'INHERITS', 'IMPLEMENTS', 'USES_TYPE', 'SIMILAR_TO', 'SEMANTICALLY_RELATED')")
+      .prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL', 'DATA_FLOWS', 'HTTP_CALLS', 'IMPORTS_FILE', 'INHERITS', 'IMPLEMENTS', 'USES_TYPE', 'SIMILAR_TO', 'SEMANTICALLY_RELATED')")
       .run();
   }
 
@@ -2279,6 +2279,7 @@ function secretSeverityRank(severity: "low" | "medium" | "high"): number {
 function communityEdgeWeight(type: string, weight: number): number {
   const multiplier: Record<string, number> = {
     HTTP_CALLS: 2.4,
+    DATA_FLOWS: 0.95,
     CALLS_LOCAL: 2,
     CALLS: 1.6,
     INHERITS: 1.55,

@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { architectureReport, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
-import { addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
+import { addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
@@ -126,6 +126,116 @@ export function serializeOrder(input: Partial<Order>): PersistedOrder {
   assert.ok(edges.some((edge) => edge.type === "IMPLEMENTS" && edge.source === symbol("MemoryOrderRepository") && edge.target === symbol("OrderRepository")));
   assert.ok(edges.some((edge) => edge.type === "USES_TYPE" && edge.source === symbol("serializeOrder") && edge.target === symbol("Order")));
   assert.ok(!edges.some((edge) => edge.type === "IMPLEMENTS" && edge.source === symbol("BaseRepository")));
+});
+
+test("extracts conservative function argument data-flow edges", () => {
+  const content = `
+export function persistOrder(order: Order, actor: User) {
+  return { order, actor };
+}
+
+export function checkout(cart: Cart, currentUser: User) {
+  const order = buildOrder(cart);
+  return persistOrder(order, currentUser);
+}
+`;
+  const extracted = extractFromFile("src/flow.ts", "typescript", content);
+  const edges = addDataFlowEdges(extracted.symbols, new Map([["src/flow.ts", content]]));
+  const checkout = extracted.symbols.find((symbol) => symbol.name === "checkout")?.qualifiedName;
+  const persistOrder = extracted.symbols.find((symbol) => symbol.name === "persistOrder")?.qualifiedName;
+  const flow = edges.find((edge) => edge.source === checkout && edge.target === persistOrder && edge.type === "DATA_FLOWS");
+
+  assert.ok(flow);
+  assert.deepEqual(flow.metadata?.mappings, [
+    { argument: "order", parameter: "order" },
+    { argument: "currentUser", parameter: "actor" }
+  ]);
+});
+
+test("keeps data-flow mappings positional and suppresses ambiguous targets", () => {
+  const sourceContent = `
+export function save(status: string, order: Order) {
+  return order;
+}
+
+export function checkout(order: Order) {
+  return save("draft", order);
+}
+`;
+  const otherContent = `
+export function save(order: Order) {
+  return order;
+}
+`;
+  const source = extractFromFile("src/source.ts", "typescript", sourceContent);
+  const other = extractFromFile("src/other.ts", "typescript", otherContent);
+  const symbols = [...source.symbols, ...other.symbols];
+  const edges = addDataFlowEdges(
+    symbols,
+    new Map([
+      ["src/source.ts", sourceContent],
+      ["src/other.ts", otherContent]
+    ])
+  );
+  const checkout = symbols.find((symbol) => symbol.filePath === "src/source.ts" && symbol.name === "checkout")?.qualifiedName;
+  const localSave = symbols.find((symbol) => symbol.filePath === "src/source.ts" && symbol.name === "save")?.qualifiedName;
+  const remoteSave = symbols.find((symbol) => symbol.filePath === "src/other.ts" && symbol.name === "save")?.qualifiedName;
+  const flow = edges.find((edge) => edge.source === checkout && edge.target === localSave && edge.type === "DATA_FLOWS");
+
+  assert.deepEqual(flow?.metadata?.mappings, [{ argument: "order", parameter: "order" }]);
+  assert.ok(!edges.some((edge) => edge.source === checkout && edge.target === remoteSave && edge.type === "DATA_FLOWS"));
+});
+
+test("indexes data-flow edges and removes stale data-flow edges incrementally", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-data-flow-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.writeFile(
+    path.join(repo, "src", "flow.ts"),
+    `
+export function persistOrder(order: Order) {
+  return order;
+}
+
+export function checkout(order: Order) {
+  return persistOrder(order);
+}
+`
+  );
+
+  await indexRepository({ root: repo, dbPath });
+  let store = new MemoryStore(dbPath);
+  try {
+    const schema = store.graphSchema();
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "DATA_FLOWS"));
+    const dataFlow = store.queryGraph("MATCH (a)-[r:DATA_FLOWS]->(b) WHERE b.name = 'persistOrder' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(dataFlow.rows.some((row) => row["a.name"] === "checkout" && row["b.name"] === "persistOrder" && row["r.type"] === "DATA_FLOWS"));
+  } finally {
+    store.close();
+  }
+
+  await fs.writeFile(
+    path.join(repo, "src", "flow.ts"),
+    `
+export function persistOrder(order: Order) {
+  return order;
+}
+
+export function checkout(order: Order) {
+  return order;
+}
+`
+  );
+
+  await indexRepository({ root: repo, dbPath, incremental: true });
+  store = new MemoryStore(dbPath);
+  try {
+    const stale = store.queryGraph("MATCH (a)-[r:DATA_FLOWS]->(b) RETURN a.name,b.name,r.type LIMIT 5");
+    assert.equal(stale.rows.length, 0);
+  } finally {
+    store.close();
+  }
 });
 
 test("indexes a TypeScript repo with symbols, routes, search, and architecture", async () => {

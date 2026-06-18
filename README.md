@@ -12,7 +12,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 33 tools for indexing, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 34 tools for indexing, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
@@ -37,7 +37,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
 - **Architecture recommendations**: turns structural hotspots, git-history churn, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
-- **Validation evidence**: tests, CI, CodeQL, OpenSSF Scorecard, CycloneDX SBOM generation, GitHub build-provenance attestations, docs, local dashboard, and a big-repo validation workflow.
+- **Validation evidence**: tests, CI, CodeQL, OpenSSF Scorecard, CycloneDX SBOM generation, GitHub build-provenance attestations, docs, local dashboard smoke checks, and a documented local big-repo validation run.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
 - **No frontend build required**: the dashboard is served by the CLI.
 
@@ -130,7 +130,7 @@ repolens-mcp mcp
 | `get_code_snippet` | Return source lines around a symbol, qualified name, file path, or `path:line` target. |
 | `find_references` | Find indexed definition and reference lines for a symbol or identifier. |
 | `get_architecture` | Return language mix, hotspots, git-history churn, entrypoints, packages, and risk markers. |
-| `trace_symbol` | Trace inbound or outbound graph edges around a symbol. |
+| `trace_symbol` / `trace_path` | Trace inbound or outbound graph edges around a symbol. |
 | `impact_analysis` | Find adjacent symbols for changed files or symbols. |
 | `get_graph_schema` | Return node labels, edge types, language coverage, and totals. |
 | `find_communities` | Detect weighted graph communities with representative symbols, cohesion, and boundary counts. |
@@ -153,6 +153,7 @@ repolens-mcp mcp
 The extractor is intentionally compact and extensible:
 
 - TypeScript and JavaScript: classes, interfaces, types, functions, const functions, imports, resolved local import edges, Express-style routes, and Next.js App Router `app/api/**/route.ts` handlers.
+- Conservative data-flow edges: maps meaningful call arguments to target parameters when the callee can be resolved without ambiguous duplicate names, and prunes stale `DATA_FLOWS` edges during incremental refreshes.
 - HTTP call linking: literal `fetch`, Axios, and Node `http` calls become `http_call` nodes with `CALLS_HTTP_ENDPOINT`; matching route nodes also receive `HTTP_CALLS`.
 - GraphQL, gRPC, and OpenAPI: `.graphql`, `.gql`, `.proto`, OpenAPI JSON, and OpenAPI YAML files produce protocol nodes; protobuf `rpc` methods become route nodes using `/Service/Method` paths, and OpenAPI `{id}` path params normalize to `:id`.
 - tRPC: common procedure declarations and client calls become `trpc_procedure` and `trpc_call` nodes.

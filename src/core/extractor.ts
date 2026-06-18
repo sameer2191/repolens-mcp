@@ -326,6 +326,59 @@ export function addTypeRelationEdges(symbols: SymbolNode[], fileContents: Map<st
   return edges;
 }
 
+export function addDataFlowEdges(symbols: SymbolNode[], fileContents: Map<string, string>, candidateEdges: Edge[] = []): Edge[] {
+  const callables = symbols.filter((symbol) => ["function", "method"].includes(symbol.kind) && isCallableName(symbol.name));
+  if (callables.length === 0) {
+    return [];
+  }
+  const byName = new Map<string, SymbolNode[]>();
+  for (const callable of callables) {
+    byName.set(callable.name, [...(byName.get(callable.name) ?? []), callable]);
+  }
+  const callCandidates = new Set(
+    candidateEdges.filter((edge) => edge.type === "CALLS" || edge.type === "CALLS_LOCAL").map((edge) => `${edge.source}\0${edge.target}`)
+  );
+  const edges: Edge[] = [];
+  const seen = new Set<string>();
+  for (const source of callables) {
+    const content = textForSymbol(source, fileContents);
+    if (!content) {
+      continue;
+    }
+    for (const target of callables) {
+      if (source.qualifiedName === target.qualifiedName) {
+        continue;
+      }
+      if (!dataFlowCandidateAllowed(source, target, byName, callCandidates)) {
+        continue;
+      }
+      const params = parameterNames(target.signature || declarationTextForSymbol(target, fileContents), target.language);
+      for (const call of functionCallArguments(content, target.name)) {
+        const mappings = mapArgumentsToParameters(call.args, params);
+        if (mappings.length === 0) {
+          continue;
+        }
+        const key = `${source.qualifiedName}\0${target.qualifiedName}\0${target.name}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        edges.push({
+          source: source.qualifiedName,
+          target: target.qualifiedName,
+          type: "DATA_FLOWS",
+          weight: source.filePath === target.filePath ? 0.82 : 0.68,
+          metadata: {
+            call: target.name,
+            mappings
+          }
+        });
+      }
+    }
+  }
+  return edges;
+}
+
 export function addHttpEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
   const routes = symbols.filter((symbol) => symbol.kind === "route" && typeof symbol.metadata?.path === "string");
   const httpCalls = symbols.filter((symbol) => symbol.kind === "http_call" && typeof symbol.metadata?.path === "string");
@@ -1996,6 +2049,143 @@ function resolveTypeSymbol(name: string, source: SymbolNode, typeLookup: Map<str
     candidates[0] ??
     null
   );
+}
+
+interface DataFlowArgument {
+  text: string;
+  index: number;
+}
+
+function dataFlowCandidateAllowed(source: SymbolNode, target: SymbolNode, byName: Map<string, SymbolNode[]>, callCandidates: Set<string>): boolean {
+  const sameFileTargets = (byName.get(target.name) ?? []).filter((candidate) => candidate.filePath === source.filePath);
+  if (source.filePath === target.filePath) {
+    return sameFileTargets.length === 1;
+  }
+  return (byName.get(target.name) ?? []).length === 1 && callCandidates.has(`${source.qualifiedName}\0${target.qualifiedName}`);
+}
+
+function parameterNames(signature: string, language: Language): string[] {
+  const open = signature.indexOf("(");
+  const close = open >= 0 ? findMatchingParen(signature, open) : null;
+  if (open < 0 || close === null || close <= open) {
+    return [];
+  }
+  return splitArguments(signature.slice(open + 1, close))
+    .map((part) => parameterNameFromPart(part, language))
+    .filter((name): name is string => Boolean(name));
+}
+
+function parameterNameFromPart(part: string, language: Language): string | undefined {
+  const cleaned = part
+    .trim()
+    .replace(/=.*$/, "")
+    .replace(/^\.\.\./, "")
+    .replace(/^@[A-Za-z_$][\w$]*(?:\([^)]*\))?\s*/, "");
+  if (!cleaned || /^[{[]/.test(cleaned)) {
+    return undefined;
+  }
+  const beforeColon = cleaned.includes(":") ? cleaned.slice(0, cleaned.indexOf(":")) : cleaned;
+  const tokens = [...beforeColon.matchAll(/[A-Za-z_$][\w$]*\??/g)]
+    .map((match) => match[0].replace(/\?$/, ""))
+    .filter((token) => !ignoredParameterTokens.has(token) && token !== "_");
+  if (tokens.length === 0) {
+    return undefined;
+  }
+  if (language === "java" || language === "go") {
+    return tokens.at(-1);
+  }
+  return tokens.at(-1);
+}
+
+const ignoredParameterTokens = new Set(["public", "private", "protected", "readonly", "final", "static", "const", "let", "var", "inout", "mutating"]);
+
+function functionCallArguments(content: string, name: string): Array<{ args: DataFlowArgument[] }> {
+  const escaped = escapeRegExp(name);
+  const regex = new RegExp(`(?:^|[^A-Za-z0-9_$])${escaped}\\s*\\(`, "g");
+  const calls: Array<{ args: DataFlowArgument[] }> = [];
+  for (const match of content.matchAll(regex)) {
+    const open = (match.index ?? 0) + match[0].lastIndexOf("(");
+    const close = findMatchingParen(content, open);
+    if (close === null || close - open > 1000) {
+      continue;
+    }
+    const rawArgs = content.slice(open + 1, close);
+    const args = splitArguments(rawArgs).map((text, index) => ({ text, index }));
+    if (args.length > 0) {
+      calls.push({ args });
+    }
+  }
+  return calls;
+}
+
+function splitArguments(value: string): string[] {
+  const args: string[] = [];
+  let current = "";
+  let depth = 0;
+  for (const char of value) {
+    if (char === "(" || char === "[" || char === "{") depth += 1;
+    if (char === ")" || char === "]" || char === "}") depth = Math.max(0, depth - 1);
+    if (char === "," && depth === 0) {
+      args.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  if (current.trim()) {
+    args.push(current.trim());
+  }
+  return args;
+}
+
+function meaningfulDataArgument(arg: string): boolean {
+  const trimmed = arg.trim();
+  return Boolean(trimmed && !/^(["'`\d.{}\[])/.test(trimmed) && !/^(true|false|null|undefined)$/i.test(trimmed));
+}
+
+function mapArgumentsToParameters(args: DataFlowArgument[], params: string[]): Array<{ argument: string; parameter?: string }> {
+  return args
+    .filter((argument) => meaningfulDataArgument(argument.text))
+    .slice(0, 12)
+    .map((argument) => ({
+      argument: argument.text.slice(0, 120),
+      ...(params[argument.index] ? { parameter: params[argument.index] } : {})
+    }));
+}
+
+function findMatchingParen(content: string, open: number): number | null {
+  if (content[open] !== "(") {
+    return null;
+  }
+  let depth = 0;
+  let quote: string | null = null;
+  let escaped = false;
+  for (let index = open; index < content.length; index += 1) {
+    const char = content[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === "\"" || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return null;
 }
 
 function callsName(content: string, name: string): boolean {
