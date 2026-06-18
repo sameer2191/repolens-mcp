@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
+import { importGraphPackage } from "./artifact.js";
 import { addCallEdges, addHttpEdges, extractFromFile } from "./extractor.js";
 import { sha256 } from "./hash.js";
 import { buildResolvedImportEdges } from "./import-resolver.js";
@@ -8,7 +9,7 @@ import { shouldIgnoreDirectory, shouldIgnoreFile } from "./ignore.js";
 import { detectLanguage, isTextCandidate, normalizeSlashes } from "./language.js";
 import { buildSemanticEdges } from "./semantic.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
-import type { IndexedFile, IndexOptions, IndexResult, SymbolNode } from "./types.js";
+import type { GraphPackageImportResult, IndexedFile, IndexOptions, IndexResult, SymbolNode } from "./types.js";
 
 const DEFAULT_MAX_FILE_BYTES = 750_000;
 
@@ -22,7 +23,8 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
   const started = performance.now();
   const root = path.resolve(options.root);
   const dbPath = path.resolve(options.dbPath ?? process.env.REPOLENS_DB ?? defaultDbPath(root));
-  const incremental = options.incremental ?? false;
+  const bootstrapPackage = await bootstrapGraphPackage(root, dbPath, options.bootstrapPackage);
+  const incremental = options.incremental ?? Boolean(bootstrapPackage);
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
   const indexedAt = new Date().toISOString();
   const store = new MemoryStore(dbPath);
@@ -165,6 +167,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
       dbPath,
       indexedAt,
       mode: incremental ? "incremental" : "full",
+      ...(bootstrapPackage ? { bootstrapPackage } : {}),
       filesDiscovered: walked.length,
       filesIndexed,
       filesSkipped,
@@ -180,6 +183,34 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
     }
     store.close();
   }
+}
+
+async function bootstrapGraphPackage(
+  root: string,
+  dbPath: string,
+  configuredPackage: string | false | undefined
+): Promise<GraphPackageImportResult | undefined> {
+  if (configuredPackage === false || (configuredPackage === undefined && isFalseLike(process.env.REPOLENS_BOOTSTRAP_PACKAGE))) {
+    return undefined;
+  }
+  if (await fileExists(dbPath)) {
+    return undefined;
+  }
+  const packagePath = path.resolve(root, configuredPackage ?? process.env.REPOLENS_BOOTSTRAP_PACKAGE ?? ".repolens/graph.rlgz");
+  if (!(await fileExists(packagePath))) {
+    return undefined;
+  }
+  return importGraphPackage({ packagePath, dbPath });
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  const stats = await fs.stat(filePath).catch(() => null);
+  return Boolean(stats?.isFile());
+}
+
+function isFalseLike(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "0" || normalized === "false" || normalized === "off" || normalized === "no";
 }
 
 function isSameSkippedFile(previous: IndexedFile | undefined, next: IndexedFile): boolean {

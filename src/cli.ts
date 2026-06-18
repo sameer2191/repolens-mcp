@@ -56,9 +56,10 @@ async function main(): Promise<void> {
       const result = await runIndex({
         root,
         dbPath: stringFlag(args, "db"),
-        incremental: booleanFlag(args, "incremental"),
+        incremental: args.flags.has("incremental") ? true : undefined,
         maxFileBytes: numberFlag(args, "max-file-bytes"),
-        runLabel: stringFlag(args, "label")
+        runLabel: stringFlag(args, "label"),
+        bootstrapPackage: booleanFlag(args, "no-bootstrap") ? false : stringFlag(args, "bootstrap-package")
       });
       print(result);
       break;
@@ -457,7 +458,7 @@ function help(): string {
   return `repolens-mcp
 
 Usage:
-  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name]
+  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap]
   repolens-mcp list-projects [--limit n]
   repolens-mcp project-status [root-or-db-or-label]
   repolens-mcp delete-project <root-or-db-or-label> [--delete-db]

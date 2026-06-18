@@ -17,7 +17,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
 - **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, and optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
-- **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI.
+- **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI; first index can bootstrap a missing database from `.repolens/graph.rlgz`.
 - **Operational dashboard**: browse graph previews, structural filters, schema counts, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
 - **Graph communities**: detects functional modules from weighted relationships, not just folder names.
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
@@ -64,6 +64,7 @@ From a local clone, the installer runs the same build and Codex checks:
 
 ```bash
 repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name]
+repolens-mcp index [repo] [--bootstrap-package .repolens/graph.rlgz] [--no-bootstrap]
 repolens-mcp list-projects [--limit n]
 repolens-mcp project-status [root-or-db-or-label]
 repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
@@ -106,7 +107,7 @@ repolens-mcp mcp
 
 | Tool | Purpose |
 | --- | --- |
-| `index_repository` | Build or refresh the local SQLite memory. |
+| `index_repository` | Build or refresh the local SQLite memory, optionally bootstrapping from a `.rlgz` graph package when the database is missing. |
 | `export_graph_package` | Create a compressed, checksummed `.rlgz` package from an indexed graph database. |
 | `import_graph_package` | Import a compressed `.rlgz` package into a local graph database. |
 | `list_projects` | List repositories indexed through RepoLens on this machine. |
@@ -201,6 +202,23 @@ node --experimental-sqlite dist/src/cli.js agent-setup --target /tmp/project --a
 
 The repo includes `docs/research-notes.md` with source-research notes and the design decisions behind this implementation.
 It also includes `docs/validation-report.md` with the local self-index and `/Users/sameer/Desktop/testing` big-repo validation results.
+
+## Team-Shared Graph Bootstrap
+
+Create a reusable graph package:
+
+```bash
+repolens-mcp index . --db .repolens/memory.db
+repolens-mcp pack-graph --db .repolens/memory.db --out .repolens/graph.rlgz --label main
+```
+
+On another machine or a fresh clone, the first index will import `.repolens/graph.rlgz` when the target database is missing, then run an incremental refresh for local changes:
+
+```bash
+repolens-mcp index . --db .repolens/memory.db
+```
+
+Use `--bootstrap-package path/to/graph.rlgz` for a custom artifact, `REPOLENS_BOOTSTRAP_PACKAGE=path/to/graph.rlgz` for MCP/session-wide configuration, or `--no-bootstrap` / `REPOLENS_BOOTSTRAP_PACKAGE=0` to force a fresh database.
 
 ## MCP Client Config
 

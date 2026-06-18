@@ -328,6 +328,30 @@ test("packs and imports a reusable graph package", async () => {
   }
 });
 
+test("bootstraps a missing database from a default graph package", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-bootstrap-"));
+  const repo = path.join(tmp, "repo");
+  await fs.cp(fixture, repo, { recursive: true });
+  const seedDbPath = path.join(tmp, "seed.db");
+  await indexRepository({ root: repo, dbPath: seedDbPath });
+
+  const packagePath = path.join(repo, ".repolens", "graph.rlgz");
+  await packGraph(packagePath, seedDbPath, "bootstrap-fixture");
+
+  const bootDbPath = path.join(tmp, "bootstrapped.db");
+  const result = await indexRepository({ root: repo, dbPath: bootDbPath });
+  assert.equal(result.mode, "incremental");
+  assert.equal(result.bootstrapPackage?.label, "bootstrap-fixture");
+  assert.equal(result.bootstrapPackage?.dbPath, bootDbPath);
+  assert.ok(result.filesUnchanged > 0);
+  assert.ok(result.symbols >= 14);
+
+  const noBootstrapDbPath = path.join(tmp, "no-bootstrap.db");
+  const noBootstrap = await indexRepository({ root: repo, dbPath: noBootstrapDbPath, bootstrapPackage: false });
+  assert.equal(noBootstrap.mode, "full");
+  assert.equal(noBootstrap.bootstrapPackage, undefined);
+});
+
 test("indexes package-manager lockfiles as resolved dependency graph nodes", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-lockfiles-"));
   const repo = path.join(tmp, "repo");

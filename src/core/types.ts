@@ -27,6 +27,7 @@ export interface IndexOptions {
   incremental?: boolean;
   maxFileBytes?: number;
   runLabel?: string;
+  bootstrapPackage?: string | false;
 }
 
 export interface IndexedFile {
@@ -320,6 +321,7 @@ export interface IndexResult {
   dbPath: string;
   indexedAt: string;
   mode: "full" | "incremental";
+  bootstrapPackage?: GraphPackageImportResult;
   filesDiscovered: number;
   filesIndexed: number;
   filesSkipped: number;

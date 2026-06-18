@@ -56,10 +56,13 @@ export async function startMcpServer(): Promise<void> {
         root: z.string().optional().describe("Repository root. Defaults to current working directory."),
         dbPath: z.string().optional().describe("Optional SQLite database path."),
         incremental: z.boolean().optional().describe("Skip unchanged files and prune removed files using existing SQLite metadata."),
-        maxFileBytes: z.number().int().positive().optional().describe("Skip files larger than this size.")
+        maxFileBytes: z.number().int().positive().optional().describe("Skip files larger than this size."),
+        bootstrapPackage: z.string().optional().describe("Optional .rlgz graph package to import when the target database is missing."),
+        noBootstrap: z.boolean().optional().describe("Disable default .repolens/graph.rlgz bootstrap when true.")
       }
     },
-    async ({ root, dbPath, incremental, maxFileBytes }) => text(await runIndex({ root: root ?? process.cwd(), dbPath, incremental, maxFileBytes }))
+    async ({ root, dbPath, incremental, maxFileBytes, bootstrapPackage, noBootstrap }) =>
+      text(await runIndex({ root: root ?? process.cwd(), dbPath, incremental, maxFileBytes, bootstrapPackage: noBootstrap ? false : bootstrapPackage }))
   );
 
   server.registerTool(
