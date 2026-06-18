@@ -595,7 +595,7 @@ Usage:
   repolens-mcp symbols <query> [--kind function] [--db path]
   repolens-mcp snippet <symbol-or-path:line> [--context n] [--db path]
   repolens-mcp references <symbol> [--db path] [--limit n]
-  repolens-mcp trace <symbol> [--direction inbound|outbound] [--depth n] [--db path]
+  repolens-mcp trace <symbol> [--direction inbound|outbound|both] [--mode all|calls|data_flow|cross_service] [--edge-types A,B] [--parameter name] [--include-tests|--exclude-tests] [--depth n] [--db path]
   repolens-mcp impact <path-or-symbol...> [--db path]
   repolens-mcp schema [--db path]
   repolens-mcp communities [--db path] [--limit n] [--min-size n]
