@@ -3,7 +3,6 @@ name: OpenSSF Scorecard
 on:
   push:
     branches: [main]
-  branch_protection_rule:
   schedule:
     - cron: "37 8 * * 2"
 
