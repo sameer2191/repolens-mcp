@@ -35,18 +35,21 @@ node --experimental-sqlite dist/src/cli.js agent-setup --target /tmp/repolens-ag
 node --experimental-sqlite dist/src/cli.js uninstall-codex --dry-run
 node --experimental-sqlite dist/src/cli.js uninstall-agents --target /tmp/repolens-agent-uninstall-smoke --agents codex
 npm sbom --sbom-format cyclonedx --json
+ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].each { |file| YAML.load_file(file); puts file }'
 ```
 
 Result:
 
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 131,481 bytes packed, 672,280 bytes unpacked, 68 runtime entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 131,570 bytes packed, 672,576 bytes unpacked, 68 runtime entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `package.json`, `server.json`, and `install.sh`; compiled tests and fixtures are excluded.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
 - `agent-setup` dry-run rendered the expected guide and instruction targets for Codex, Claude, and Gemini without writing files.
 - `uninstall-codex --dry-run` detected the managed Codex block without writing, and `uninstall-agents` removed generated managed blocks from a temporary project target.
 - Release workflow added for version tags and manual runs; it runs install, verification, demo indexing, `npm pack --json`, CycloneDX SBOM generation, SHA-256 checksum generation for the tarball and SBOM, artifact upload, and GitHub release asset publishing for tag builds.
+- Release workflow now also requests `id-token: write` and `attestations: write`, then calls `actions/attest-build-provenance@v2` for the tarball, SBOM, and checksum manifest before uploading release artifacts.
+- OpenSSF Scorecard workflow added with SARIF upload to GitHub code scanning.
 - CI now also checks `npm pack --dry-run --json`, generates a CycloneDX SBOM, and self-indexes into `.repolens/ci.db`.
 
 ## Self Index
@@ -65,18 +68,18 @@ node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db
 
 Result:
 
-- Files discovered: 64
-- Files indexed: 64
+- Files discovered: 65
+- Files indexed: 65
 - Files skipped: 0
-- Symbols: 718
+- Symbols: 719
 - Edges: 2,167
-- Lines indexed: 13,510
-- Full index elapsed: 724 ms
-- No-op incremental elapsed: 23 ms
-- No-op incremental unchanged files: 64
-- Full-text code-search rows: 12,304 `code_lines` rows and 12,304 `code_fts` rows
+- Lines indexed: 13,557
+- Full index elapsed: 762 ms
+- No-op incremental elapsed: 53 ms
+- No-op incremental unchanged files: 65
+- Full-text code-search rows: 12,348 `code_lines` rows and 12,348 `code_fts` rows
 - MCP server tools registered: 30
-- Redacted secret scan: 0 high/medium-confidence findings across 10,957 indexed non-test lines.
+- Redacted secret scan: 0 high/medium-confidence findings across 11,000 indexed non-test lines.
 - Channel graph rows: 8 `channel` nodes, 2 `EMITS` edges, and 11 `LISTENS_ON` edges
 - HTTP call graph rows: 12 `http_call` nodes, 12 `CALLS_HTTP_ENDPOINT` edges, and 4 generated `HTTP_CALLS` route edges
 - Import graph rows: 62 `IMPORTS_FILE` edges resolving local relative imports and package-local imports to file nodes.
@@ -86,11 +89,11 @@ Result:
 - Git history hotspots: architecture summaries and reports rank high-churn files, including `src/core/store.ts` at 20 commits and 2,935 changed lines, and include a history-aware recommendation before risky edits.
 - MCP startup auto-index: `REPOLENS_AUTO_INDEX=1` performed an incremental startup refresh on the fixture repo, and `REPOLENS_AUTO_INDEX=full` performed a full startup rebuild through the same `runIndex` path.
 - Graph package bootstrap: a missing database imported `.repolens/graph.rlgz`, reported the `bootstrapPackage` metadata, then ran an incremental refresh with unchanged files instead of rebuilding from scratch; `bootstrapPackage: false` kept the full rebuild path.
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 64 files, 718 symbols, and 2,167 edges.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 65 files, 719 symbols, and 2,167 edges.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, agent setup helpers, and fixture route/client communities.
 - Graph package import: `.repolens/self.rlgz` restored the self graph snapshot successfully with checksum verification.
-- Imported package totals: 64 files, 718 symbols, 2,167 edges
+- Imported package totals: 65 files, 719 symbols, 2,167 edges
 - Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0

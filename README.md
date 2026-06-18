@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/sameer2191/repolens-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sameer2191/repolens-mcp/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/sameer2191/repolens-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/sameer2191/repolens-mcp/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/sameer2191/repolens-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/sameer2191/repolens-mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D24-339933.svg)](package.json)
 
@@ -33,7 +34,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
 - **Architecture recommendations**: turns structural hotspots, git-history churn, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
-- **Validation evidence**: tests, CI, CodeQL, CycloneDX SBOM generation, docs, local dashboard, and a big-repo validation workflow.
+- **Validation evidence**: tests, CI, CodeQL, OpenSSF Scorecard, CycloneDX SBOM generation, GitHub build-provenance attestations, docs, local dashboard, and a big-repo validation workflow.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
 - **No frontend build required**: the dashboard is served by the CLI.
 
