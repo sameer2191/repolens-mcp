@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 8 tests, 0 failures.
-- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, Dockerfile/Kubernetes/Kustomize graph extraction, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Node test suite passed: 12 tests, 0 failures.
+- Covered Codex MCP config rendering/install safeguards, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, Dockerfile/Kubernetes/Kustomize graph extraction, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -38,20 +38,20 @@ node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db
 
 Result:
 
-- Files discovered: 39
-- Files indexed: 39
+- Files discovered: 41
+- Files indexed: 41
 - Files skipped: 0
-- Symbols: 311
-- Edges: 1,025
-- Lines indexed: 6,645
-- Full index elapsed: 290 ms
-- No-op incremental elapsed: 18 ms
-- No-op incremental unchanged files: 39
-- Full-text code-search rows: 6,000 `code_lines` rows and 6,000 `code_fts` rows
+- Symbols: 327
+- Edges: 1,084
+- Lines indexed: 6,939
+- Full index elapsed: 282 ms
+- No-op incremental elapsed: 17 ms
+- No-op incremental unchanged files: 41
+- Full-text code-search rows: 6,251 `code_lines` rows and 6,251 `code_fts` rows
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, and fixture route/client communities.
-- Graph package: `.repolens/self.rlgz` (835,107 bytes from a 3,092,480-byte SQLite snapshot)
-- Imported package totals: 39 files, 311 symbols, 1,025 edges
+- Graph package: `.repolens/self.rlgz` (989,080 bytes from a 3,473,408-byte SQLite snapshot)
+- Imported package totals: 41 files, 327 symbols, 1,084 edges
 - Language mix: TypeScript, Markdown, JSON, YAML, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -128,7 +128,7 @@ Result:
 - Edges: 30,324
 - Lines indexed: 96,330
 - Full index elapsed: 14,528 ms
-- No-op incremental elapsed: 191 ms
+- No-op incremental elapsed: 160 ms
 - No-op incremental unchanged files: 852
 - No-op incremental removed files: 0
 - Full-text code-search rows: 82,084 `code_lines` rows and 82,084 `code_fts` rows
@@ -238,6 +238,15 @@ node --experimental-sqlite dist/src/cli.js query-graph \
 ```
 
 Confirmed the fixture graph exposes `Deployment/orders-api`, `Service/orders-api`, Dockerfile container images, a `CONFIGURES` edge from the deployment to `ghcr.io/example/orders-api:1.2.3`, and a Kustomization `IMPORTS` edge to `deployment.yaml`.
+
+Codex setup:
+
+```bash
+node --experimental-sqlite dist/src/cli.js doctor
+node --experimental-sqlite dist/src/cli.js install-codex --dry-run --db .repolens/memory.db
+```
+
+Confirmed `doctor` detected the local `~/.codex/config.toml`, reported `repolensConfigured: true` on this machine, and `install-codex --dry-run` refused to replace the existing unmanaged `mcp_servers.repolens` entry without `--force`.
 
 Symbol lookup:
 

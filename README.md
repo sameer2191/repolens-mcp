@@ -7,6 +7,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 ## Why It Stands Out
 
 - **MCP-native**: exposes 21 tools for indexing, BM25 code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **Codex-ready setup**: `doctor` inspects the local Codex MCP configuration, and `install-codex` can add a managed MCP block with dry-run and force safeguards.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
@@ -60,6 +61,8 @@ repolens-mcp report [--db path] [--format markdown|html] [--graph-limit n] [--ou
 repolens-mcp export-graph --out graph.html [--db path]
 repolens-mcp pack-graph --out graph.rlgz [--db path] [--label name]
 repolens-mcp unpack-graph graph.rlgz [--db path] [--overwrite]
+repolens-mcp doctor [--config ~/.codex/config.toml] [--name repolens]
+repolens-mcp install-codex [--db .repolens/memory.db] [--dry-run] [--force]
 repolens-mcp decision --title "Use SQLite" --body "Keep memory local."
 repolens-mcp serve [--db path] [--port 9749]
 repolens-mcp mcp
@@ -143,6 +146,16 @@ The repo includes `docs/research-notes.md` with source-research notes and the de
 It also includes `docs/validation-report.md` with the local self-index and `/Users/sameer/Desktop/testing` big-repo validation results.
 
 ## MCP Client Config
+
+Codex users can inspect or install the MCP entry directly:
+
+```bash
+repolens-mcp doctor
+repolens-mcp install-codex --db .repolens/memory.db --dry-run
+repolens-mcp install-codex --db .repolens/memory.db
+```
+
+`install-codex` refuses to replace an existing unmanaged `mcp_servers.repolens` entry unless `--force` is passed.
 
 ```json
 {

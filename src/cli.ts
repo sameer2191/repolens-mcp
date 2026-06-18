@@ -28,6 +28,7 @@ import {
   unpackGraph
 } from "./core/api.js";
 import type { ReportFormat } from "./core/report.js";
+import { codexDoctor, installCodexConfig } from "./core/codex.js";
 import { defaultDbPath } from "./core/store.js";
 import { serveDashboard } from "./dashboard/server.js";
 import { startMcpServer } from "./mcp/server.js";
@@ -207,6 +208,22 @@ async function main(): Promise<void> {
       console.error(`Dashboard: ${url}`);
       break;
     }
+    case "doctor":
+      print(await codexDoctor(currentCliPath(), process.execPath, stringFlag(args, "config"), stringFlag(args, "name") ?? "repolens"));
+      break;
+    case "install-codex":
+      print(
+        await installCodexConfig({
+          configPath: stringFlag(args, "config"),
+          serverName: stringFlag(args, "name"),
+          command: stringFlag(args, "command") ?? process.execPath,
+          cliPath: stringFlag(args, "cli") ?? currentCliPath(),
+          dbPath: stringFlag(args, "db"),
+          dryRun: booleanFlag(args, "dry-run"),
+          force: booleanFlag(args, "force")
+        })
+      );
+      break;
     case "mcp":
       await startMcpServer();
       break;
@@ -276,6 +293,10 @@ function print(value: unknown): void {
   process.stdout.write(`${jsonBlock(value)}\n`);
 }
 
+function currentCliPath(): string {
+  return path.resolve(process.argv[1] ?? "repolens-mcp");
+}
+
 async function createDemoRepo(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-demo-"));
   await fs.mkdir(path.join(root, "src"), { recursive: true });
@@ -323,6 +344,8 @@ Usage:
   repolens-mcp pack-graph --out graph.rlgz [--db path] [--label name]
   repolens-mcp unpack-graph graph.rlgz [--db path] [--overwrite]
   repolens-mcp serve [--db path] [--port 9749]
+  repolens-mcp doctor [--config ~/.codex/config.toml] [--name repolens]
+  repolens-mcp install-codex [--db .repolens/memory.db] [--dry-run] [--force] [--config ~/.codex/config.toml]
   repolens-mcp mcp
   repolens-mcp demo
 `;

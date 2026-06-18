@@ -25,7 +25,7 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 
 - Node 24 plus native SQLite for a dependency-light local graph store.
 - Stable MCP SDK v1 package rather than the pre-alpha v2 branch.
-- Clear CLI commands and MCP tools for indexing, graph package exchange, BM25 code search, semantic search, source snippets, graph schema, graph community detection, structural graph search, read-only Cypher-like graph queries, Docker/Kubernetes/Kustomize infrastructure graph extraction, route-call linking, relative and workspace-package import cycle detection, architecture reports, architecture summaries, tracing, impact analysis, dead-code candidates, git-change impact, and architecture decisions.
+- Clear CLI commands and MCP tools for Codex setup checks, indexing, graph package exchange, BM25 code search, semantic search, source snippets, graph schema, graph community detection, structural graph search, read-only Cypher-like graph queries, Docker/Kubernetes/Kustomize infrastructure graph extraction, route-call linking, relative and workspace-package import cycle detection, architecture reports, architecture summaries, tracing, impact analysis, dead-code candidates, git-change impact, and architecture decisions.
 - Incremental indexing skips unchanged files, prunes removed files, and avoids call-edge rebuilds when there is no repository delta.
 - Watch mode keeps the graph fresh with polling-based incremental refreshes while preserving deterministic CLI behavior for tests and automation.
 - Browser dashboard without a bundler so the project is easy to build and inspect.
@@ -36,6 +36,7 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 ## Improvements To Highlight
 
 - A small, inspectable TypeScript codebase with tests that a reviewer can understand quickly.
+- Codex setup is explicit and reviewable through `doctor` and `install-codex --dry-run`, with safeguards around existing unmanaged MCP entries.
 - Built-in ADR memory, not just structural graph search.
 - Dashboard API and HTML are included in the same binary entrypoint, avoiding a separate frontend build while still exposing graph exploration, schema counts, review signals, dead-code samples, and report links.
 - Swift extraction and big-repo validation now cover a mixed mobile/web monorepo, not only TypeScript services.
