@@ -1,0 +1,17 @@
+type Order {
+  id: ID!
+  total: Float!
+}
+
+query GetOrders {
+  orders {
+    id
+    total
+  }
+}
+
+mutation SubmitOrder($total: Float!) {
+  submitOrder(total: $total) {
+    id
+  }
+}

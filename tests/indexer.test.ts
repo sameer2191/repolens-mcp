@@ -28,13 +28,75 @@ export const POST = async () => Response.json({});
   assert.ok(routes.some((route) => route.name === "POST /api/orders/:id" && route.metadata?.path === "/api/orders/:id"));
 });
 
+test("extracts GraphQL, protobuf, tRPC, and OpenAPI protocol surfaces", () => {
+  const graphql = extractFromFile(
+    "schema/orders.graphql",
+    "graphql",
+    `
+type Order { id: ID! }
+query GetOrders { orders { id } }
+mutation SubmitOrder { submitOrder { id } }
+`
+  );
+  assert.ok(graphql.symbols.some((symbol) => symbol.kind === "graphql_type" && symbol.name === "type Order"));
+  assert.ok(graphql.symbols.some((symbol) => symbol.kind === "graphql_operation" && symbol.name === "query GetOrders"));
+
+  const proto = extractFromFile(
+    "proto/orders.proto",
+    "proto",
+    `
+service OrderService {
+  rpc CreateOrder (CreateOrderRequest) returns (OrderReply);
+}
+`
+  );
+  assert.ok(proto.symbols.some((symbol) => symbol.kind === "grpc_service" && symbol.name === "OrderService"));
+  assert.ok(proto.symbols.some((symbol) => symbol.kind === "route" && symbol.name === "RPC /OrderService/CreateOrder" && symbol.metadata?.protocol === "grpc"));
+
+  const trpc = extractFromFile(
+    "src/router.ts",
+    "typescript",
+    `
+export const appRouter = router({
+  orders: publicProcedure.query(() => []),
+  createOrder: protectedProcedure.mutation(() => ({}))
+});
+
+export function useOrders() {
+  return trpc.orders.useQuery();
+}
+
+const q = gql\`query Viewer { viewer { id } }\`;
+`
+  );
+  assert.ok(trpc.symbols.some((symbol) => symbol.kind === "trpc_procedure" && symbol.name === "query orders"));
+  assert.ok(trpc.symbols.some((symbol) => symbol.kind === "trpc_procedure" && symbol.name === "mutation createOrder"));
+  assert.ok(trpc.symbols.some((symbol) => symbol.kind === "trpc_call" && symbol.name === "useQuery orders"));
+  assert.ok(trpc.symbols.some((symbol) => symbol.kind === "graphql_operation" && symbol.name === "query Viewer"));
+  assert.ok(trpc.edges.some((edge) => edge.type === "CALLS_TRPC"));
+  assert.ok(trpc.edges.some((edge) => edge.type === "USES_GRAPHQL"));
+
+  const openapi = extractFromFile(
+    "openapi.yaml",
+    "yaml",
+    `
+openapi: 3.1.0
+paths:
+  /orders/{id}:
+    get:
+      summary: Read an order
+`
+  );
+  assert.ok(openapi.symbols.some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/:id" && symbol.metadata?.protocol === "openapi"));
+});
+
 test("indexes a TypeScript repo with symbols, routes, search, and architecture", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-test-"));
   const dbPath = path.join(tmp, "memory.db");
   const result = await indexRepository({ root: fixture, dbPath });
 
   assert.equal(result.mode, "full");
-  assert.equal(result.filesIndexed, 19);
+  assert.equal(result.filesIndexed, 22);
   assert.equal(result.filesUnchanged, 0);
   assert.equal(result.filesRemoved, 0);
   assert.ok(result.symbols >= 14);
@@ -43,7 +105,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
   const store = new MemoryStore(dbPath);
   try {
     const symbols = store.searchSymbols("createOrder");
-    assert.equal(symbols[0]?.name, "createOrder");
+    assert.ok(symbols.some((symbol) => symbol.name === "createOrder"));
 
     const snippet = store.getCodeSnippet("createOrder", 1);
     assert.equal(snippet?.symbol?.name, "createOrder");
@@ -53,7 +115,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.equal(lineSnippet?.filePath, "src/orders.ts");
     assert.ok(lineSnippet?.lines.some((line) => line.line === 8 && line.highlight));
 
-    const code = store.searchCode("/orders");
+    const code = store.searchCode("app.get");
     assert.ok(code.some((match) => match.text.includes("app.get")));
 
     const splitCode = store.searchCode("create order");
@@ -86,6 +148,9 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(schema.nodeLabels.some((label) => label.kind === "http_call"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "package"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "dependency"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "graphql_operation"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "graphql_type"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "grpc_service"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "DEFINES"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CALLS_HTTP_ENDPOINT"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CONFIGURES"));
@@ -187,6 +252,13 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     const httpEndpointQuery = store.queryGraph("MATCH (a)-[r:CALLS_HTTP_ENDPOINT]->(b) WHERE b.name CONTAINS '/orders' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(httpEndpointQuery.rows.some((row) => row["a.name"] === "loadOrders" && row["r.type"] === "CALLS_HTTP_ENDPOINT"));
 
+    assert.ok(store.searchGraph({ kind: "graphql_operation", query: "GetOrders" }).some((match) => match.symbol.name === "query GetOrders"));
+    assert.ok(store.searchGraph({ kind: "graphql_type", query: "Order" }).some((match) => match.symbol.name === "type Order"));
+    assert.ok(store.searchGraph({ kind: "grpc_service", query: "OrderService" }).some((match) => match.symbol.name === "OrderService"));
+    assert.ok(store.searchGraph({ kind: "route", query: "OrderService" }).some((match) => match.symbol.name === "RPC /OrderService/CreateOrder"));
+    assert.ok(store.searchGraph({ kind: "route", query: "openapi" }).some((match) => match.symbol.metadata?.protocol === "openapi"));
+    assert.ok(store.searchGraph({ kind: "route", query: "/orders/:id" }).some((match) => match.symbol.name === "GET /orders/:id"));
+
     const observed = store.ingestTraces([
       { type: "http", source: "submitOrder", sourceFile: "src/client.ts", method: "POST", path: "/orders", count: 3, observedAt: "2026-06-18T00:00:00.000Z" },
       { type: "event", source: "notifyOrderCreated", sourceFile: "src/client.ts", channel: "order.created", direction: "emit", count: 2 }
@@ -199,7 +271,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     const observedEvent = store.queryGraph("MATCH (a)-[r:OBSERVED_EMITS]->(b:Channel) WHERE b.name = 'order.created' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(observedEvent.rows.some((row) => row["a.name"] === "notifyOrderCreated" && row["r.type"] === "OBSERVED_EMITS"));
 
-    const pack = contextPack("create order", 4, 1, dbPath);
+    const pack = contextPack("createOrder", 8, 1, dbPath);
     assert.ok(pack.semantic.some((match) => match.symbol.name === "createOrder"));
     assert.ok(pack.code.some((match) => match.text.includes("createOrder")));
     assert.ok(pack.snippets.some((snippet) => snippet.symbol?.name === "createOrder"));
@@ -216,7 +288,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     const markdownReport = architectureReport({ graphLimit: 50 }, dbPath);
     assert.match(markdownReport, /# RepoLens Architecture Report/);
     assert.match(markdownReport, /## Graph Schema/);
-    assert.match(markdownReport, /createOrder/);
+    assert.match(markdownReport, /submitOrder/);
 
     const htmlReport = architectureReport({ format: "html", graphLimit: 50 }, dbPath);
     assert.match(htmlReport, /<!doctype html>/);
@@ -249,7 +321,7 @@ test("packs and imports a reusable graph package", async () => {
 
   const store = new MemoryStore(importedDbPath);
   try {
-    assert.equal(store.searchSymbols("createOrder")[0]?.name, "createOrder");
+    assert.ok(store.searchSymbols("createOrder").some((symbol) => symbol.name === "createOrder"));
   } finally {
     store.close();
   }

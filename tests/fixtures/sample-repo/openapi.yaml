@@ -1,0 +1,13 @@
+openapi: 3.1.0
+info:
+  title: Orders API
+  version: 1.0.0
+paths:
+  /orders:
+    get:
+      summary: List orders
+    post:
+      summary: Submit an order
+  /orders/{id}:
+    get:
+      summary: Read an order

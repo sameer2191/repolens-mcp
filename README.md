@@ -26,6 +26,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Route-call edges**: stores literal HTTP requests as `http_call` nodes, connects callers with `CALLS_HTTP_ENDPOINT`, and links matching in-repo routes with `HTTP_CALLS`.
 - **Runtime trace ingestion**: imports observed HTTP, event, or symbol traces as `OBSERVED_*` graph edges with counts and timestamps.
 - **Channel/event edges**: detects EventEmitter, Socket.IO-style, DOM custom event, Python decorator/call, and Swift `NotificationCenter` channels with `EMITS` and `LISTENS_ON` edges.
+- **Protocol surfaces**: extracts GraphQL operations/types, gRPC services/RPC routes from protobuf, OpenAPI routes, and common tRPC procedures/calls.
 - **Manifest dependency graph**: extracts package and dependency nodes from npm, Composer, Python, Go, Cargo, Maven, Gradle, Dart, Elixir, Ruby, and `requirements.txt` manifests.
 - **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
 - **Architecture recommendations**: turns hotspots, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
@@ -47,6 +48,13 @@ node --experimental-sqlite dist/src/cli.js serve
 Then open `http://127.0.0.1:9749`.
 
 The dashboard includes code search, graph search, graph schema tables, fleet service links, hotspot and boundary summaries, dead-code candidates, and one-click Markdown/HTML architecture reports.
+
+From a local clone, the installer runs the same build and Codex checks:
+
+```bash
+./install.sh --install-codex --dry-run
+./install.sh --install-codex
+```
 
 ## CLI
 
@@ -122,6 +130,8 @@ The extractor is intentionally compact and extensible:
 
 - TypeScript and JavaScript: classes, interfaces, types, functions, const functions, imports, Express-style routes, and Next.js App Router `app/api/**/route.ts` handlers.
 - HTTP call linking: literal `fetch`, Axios, and Node `http` calls become `http_call` nodes with `CALLS_HTTP_ENDPOINT`; matching route nodes also receive `HTTP_CALLS`.
+- GraphQL, gRPC, and OpenAPI: `.graphql`, `.gql`, `.proto`, OpenAPI JSON, and OpenAPI YAML files produce protocol nodes; protobuf `rpc` methods become route nodes using `/Service/Method` paths, and OpenAPI `{id}` path params normalize to `:id`.
+- tRPC: common procedure declarations and client calls become `trpc_procedure` and `trpc_call` nodes.
 - Channel/event linking: EventEmitter/Socket.IO-style `emit`, `on`, `once`, `addListener`, `subscribe`, DOM `CustomEvent`, Python `@*.on`, and Swift `NotificationCenter` patterns become `channel` nodes with `EMITS` and `LISTENS_ON` edges.
 - Swift: classes, structs, enums, protocols, actors, functions, and imports.
 - Python: classes, functions, imports, route decorators.

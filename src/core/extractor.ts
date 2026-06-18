@@ -115,6 +115,11 @@ export function extractFromFile(filePath: string, language: Language, content: s
     edges.push({ source: fileNode, target: route.qualifiedName, type: "DEFINES", weight: 1 });
   }
 
+  for (const route of extractOpenApiRoutes(filePath, language, content)) {
+    symbols.push(route);
+    edges.push({ source: fileNode, target: route.qualifiedName, type: "DEFINES", weight: 1 });
+  }
+
   for (const symbol of extractManifestSymbols(filePath, language, content)) {
     symbols.push(symbol);
     edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
@@ -137,6 +142,16 @@ export function extractFromFile(filePath: string, language: Language, content: s
     for (const symbol of extractSql(filePath, content)) {
       symbols.push(symbol);
       edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
+    }
+  } else if (language === "graphql") {
+    for (const symbol of extractGraphql(filePath, language, content)) {
+      symbols.push(symbol);
+      edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
+    }
+  } else if (language === "proto") {
+    for (const symbol of extractProto(filePath, content)) {
+      symbols.push(symbol);
+      edges.push({ source: fileNode, target: symbol.qualifiedName, type: symbol.kind === "route" ? "DEFINES" : "DECLARES", weight: 1 });
     }
   }
 
@@ -179,6 +194,14 @@ export function extractFromFile(filePath: string, language: Language, content: s
     symbols.push(symbol);
   }
   for (const edge of httpCalls.edges) {
+    edges.push(edge);
+  }
+
+  const protocols = extractProtocolLinks(filePath, language, content, symbols);
+  for (const symbol of protocols.symbols) {
+    symbols.push(symbol);
+  }
+  for (const edge of protocols.edges) {
     edges.push(edge);
   }
 
@@ -403,6 +426,100 @@ function nextRouteSegment(segment: string): string {
   return segment;
 }
 
+function extractOpenApiRoutes(filePath: string, language: Language, content: string): SymbolNode[] {
+  if (!["yaml", "json"].includes(language)) {
+    return [];
+  }
+  if (!/^\s*(?:openapi|swagger)\s*[:=]/im.test(content) && !/"(?:openapi|swagger)"\s*:/.test(content)) {
+    return [];
+  }
+  return language === "json" ? extractOpenApiJsonRoutes(filePath, language, content) : extractOpenApiYamlRoutes(filePath, language, content);
+}
+
+function extractOpenApiJsonRoutes(filePath: string, language: Language, content: string): SymbolNode[] {
+  try {
+    const parsed = JSON.parse(content) as { paths?: Record<string, Record<string, unknown>> };
+    const symbols: SymbolNode[] = [];
+    for (const [rawPath, pathItem] of Object.entries(parsed.paths ?? {})) {
+      if (!pathItem || typeof pathItem !== "object") {
+        continue;
+      }
+      for (const method of Object.keys(pathItem)) {
+        const upperMethod = method.toUpperCase();
+        if (!isOpenApiMethod(upperMethod)) {
+          continue;
+        }
+        const routePath = openApiPathToRoutePath(rawPath);
+        const line = Math.max(1, offsetToLine(content, Math.max(0, content.indexOf(`"${rawPath}"`))));
+        symbols.push(openApiRouteSymbol(filePath, language, upperMethod, routePath, line));
+      }
+    }
+    return symbols;
+  } catch {
+    return [];
+  }
+}
+
+function extractOpenApiYamlRoutes(filePath: string, language: Language, content: string): SymbolNode[] {
+  const lines = content.split(/\r?\n/);
+  const symbols: SymbolNode[] = [];
+  let inPaths = false;
+  let pathsIndent = 0;
+  let currentPath: string | null = null;
+  let currentPathIndent = 0;
+
+  for (const [index, line] of lines.entries()) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    const indent = line.match(/^\s*/)?.[0].length ?? 0;
+    if (/^paths\s*:\s*$/.test(trimmed)) {
+      inPaths = true;
+      pathsIndent = indent;
+      currentPath = null;
+      currentPathIndent = indent;
+      continue;
+    }
+    if (!inPaths) {
+      continue;
+    }
+    if (indent <= pathsIndent && !/^paths\s*:\s*$/.test(trimmed)) {
+      inPaths = false;
+      currentPath = null;
+      continue;
+    }
+    const pathMatch = /^(["']?\/[^:"']*["']?)\s*:\s*$/.exec(trimmed);
+    if (pathMatch) {
+      currentPath = openApiPathToRoutePath(pathMatch[1].replace(/^["']|["']$/g, ""));
+      currentPathIndent = indent;
+      continue;
+    }
+    const methodMatch = /^(get|post|put|patch|delete|head|options|trace)\s*:\s*$/.exec(trimmed);
+    if (currentPath && methodMatch && indent > currentPathIndent) {
+      symbols.push(openApiRouteSymbol(filePath, language, methodMatch[1].toUpperCase(), currentPath, index + 1));
+    }
+  }
+
+  return symbols;
+}
+
+function openApiRouteSymbol(filePath: string, language: Language, method: string, routePath: string, line: number): SymbolNode {
+  return makeSymbol(filePath, language, "route", `${method} ${routePath}`, line, line, undefined, true, {
+    method,
+    path: routePath,
+    protocol: "openapi"
+  });
+}
+
+function openApiPathToRoutePath(value: string): string {
+  return value.replace(/\{([A-Za-z0-9_-]+)\}/g, ":$1");
+}
+
+function isOpenApiMethod(method: string): boolean {
+  return ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE"].includes(method);
+}
+
 function extractChannelLinks(filePath: string, language: Language, content: string, symbols: SymbolNode[]): ExtractionResult {
   if (!["typescript", "javascript", "python", "swift"].includes(language)) {
     return { symbols: [], edges: [], imports: [] };
@@ -517,6 +634,156 @@ function extractHttpCallLinks(filePath: string, language: Language, content: str
   }
 
   return { symbols: callSymbols, edges, imports: [] };
+}
+
+function extractProtocolLinks(filePath: string, language: Language, content: string, symbols: SymbolNode[]): ExtractionResult {
+  if (!["typescript", "javascript"].includes(language)) {
+    return { symbols: [], edges: [], imports: [] };
+  }
+
+  const protocolSymbols: SymbolNode[] = [];
+  const edges: Edge[] = [];
+  const fileNode = fileQualifiedName(filePath);
+
+  for (const symbol of extractGraphqlTemplates(filePath, language, content)) {
+    protocolSymbols.push(symbol);
+    const source = sourceSymbolForLine(symbols, symbol.startLine, filePath)?.qualifiedName ?? fileNode;
+    edges.push({ source, target: symbol.qualifiedName, type: "USES_GRAPHQL", weight: 0.75, metadata: symbol.metadata });
+  }
+
+  for (const symbol of extractTrpc(filePath, language, content)) {
+    protocolSymbols.push(symbol);
+    const source = sourceSymbolForLine(symbols, symbol.startLine, filePath)?.qualifiedName ?? fileNode;
+    edges.push({ source, target: symbol.qualifiedName, type: symbol.kind === "trpc_call" ? "CALLS_TRPC" : "DEFINES", weight: symbol.kind === "trpc_call" ? 0.75 : 0.9, metadata: symbol.metadata });
+  }
+
+  return { symbols: protocolSymbols, edges, imports: [] };
+}
+
+function extractGraphql(filePath: string, language: Language, content: string): SymbolNode[] {
+  return [...extractGraphqlOperations(filePath, language, content), ...extractGraphqlTypes(filePath, language, content)];
+}
+
+function extractGraphqlTemplates(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const templateRegex = /\b(?:gql|graphql)\s*`([\s\S]*?)`/g;
+  for (const match of content.matchAll(templateRegex)) {
+    const body = match[1] ?? "";
+    const baseLine = offsetToLine(content, match.index ?? 0);
+    for (const operation of extractGraphqlOperations(filePath, language, body, baseLine)) {
+      symbols.push({ ...operation, qualifiedName: `${operation.qualifiedName}:template`, metadata: { ...operation.metadata, source: "template" } });
+    }
+  }
+  return symbols;
+}
+
+function extractGraphqlOperations(filePath: string, language: Language, content: string, baseLine = 1): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const operationRegex = /\b(query|mutation|subscription)\s+([A-Za-z_][\w]*)?/g;
+  for (const match of content.matchAll(operationRegex)) {
+    const operation = match[1].toLowerCase();
+    const name = match[2] || "anonymous";
+    const line = baseLine + offsetToLine(content, match.index ?? 0) - 1;
+    symbols.push(
+      makeSymbol(filePath, language, "graphql_operation", `${operation} ${name}`, line, line, undefined, true, {
+        protocol: "graphql",
+        operation,
+        name
+      })
+    );
+  }
+  return symbols;
+}
+
+function extractGraphqlTypes(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const typeRegex = /^\s*(type|input|interface|enum|scalar)\s+([A-Za-z_][\w]*)/gm;
+  for (const match of content.matchAll(typeRegex)) {
+    const category = match[1].toLowerCase();
+    const name = match[2];
+    const line = offsetToLine(content, match.index ?? 0);
+    symbols.push(
+      makeSymbol(filePath, language, "graphql_type", `${category} ${name}`, line, line, undefined, true, {
+        protocol: "graphql",
+        category,
+        name
+      })
+    );
+  }
+  return symbols;
+}
+
+function extractProto(filePath: string, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  let currentService: { name: string; line: number } | null = null;
+  const lines = content.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const serviceMatch = /^\s*service\s+([A-Za-z_][\w]*)\s*\{?/.exec(line);
+    if (serviceMatch) {
+      currentService = { name: serviceMatch[1], line: index + 1 };
+      symbols.push(
+        makeSymbol(filePath, "proto", "grpc_service", currentService.name, currentService.line, currentService.line, line.trim(), true, {
+          protocol: "grpc",
+          service: currentService.name
+        })
+      );
+      continue;
+    }
+    if (/^\s*}\s*$/.test(line)) {
+      currentService = null;
+      continue;
+    }
+    const rpcMatch = /^\s*rpc\s+([A-Za-z_][\w]*)\s*\(([^)]*)\)\s+returns\s+\(([^)]*)\)/.exec(line);
+    if (rpcMatch && currentService) {
+      const method = rpcMatch[1];
+      symbols.push(
+        makeSymbol(filePath, "proto", "route", `RPC /${currentService.name}/${method}`, index + 1, index + 1, line.trim(), true, {
+          protocol: "grpc",
+          method: "RPC",
+          path: `/${currentService.name}/${method}`,
+          service: currentService.name,
+          rpc: method,
+          request: rpcMatch[2].trim(),
+          response: rpcMatch[3].trim()
+        })
+      );
+    }
+  }
+  return symbols;
+}
+
+function extractTrpc(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const declarationRegex = /([A-Za-z_$][\w$]*)\s*:\s*(?:publicProcedure|protectedProcedure|procedure|adminProcedure)[\s\S]{0,240}?\.(query|mutation|subscription)\s*\(/g;
+  for (const match of content.matchAll(declarationRegex)) {
+    const name = match[1];
+    const procedureType = match[2].toLowerCase();
+    const line = offsetToLine(content, match.index ?? 0);
+    symbols.push(
+      makeSymbol(filePath, language, "trpc_procedure", `${procedureType} ${name}`, line, line, undefined, true, {
+        protocol: "trpc",
+        procedure: name,
+        procedureType
+      })
+    );
+  }
+
+  const callRegex = /\b(?:trpc|api)\.([A-Za-z_$][\w$.]*)\.(useQuery|useMutation|query|mutate|mutation)\s*\(/g;
+  for (const match of content.matchAll(callRegex)) {
+    const procedure = match[1];
+    const callType = match[2];
+    const line = offsetToLine(content, match.index ?? 0);
+    symbols.push(
+      makeSymbol(filePath, language, "trpc_call", `${callType} ${procedure}`, line, line, undefined, false, {
+        protocol: "trpc",
+        procedure,
+        callType
+      })
+    );
+  }
+
+  return symbols;
 }
 
 function extractSwiftChannelOccurrences(content: string): ChannelOccurrence[] {

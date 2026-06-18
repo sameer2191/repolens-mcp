@@ -12,6 +12,8 @@ export type Language =
   | "json"
   | "toml"
   | "xml"
+  | "graphql"
+  | "proto"
   | "ruby"
   | "elixir"
   | "gradle"
