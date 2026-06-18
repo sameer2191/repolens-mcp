@@ -5,6 +5,7 @@ import { addCallEdges, extractFromFile } from "./extractor.js";
 import { sha256 } from "./hash.js";
 import { shouldIgnoreDirectory, shouldIgnoreFile } from "./ignore.js";
 import { detectLanguage, isTextCandidate, normalizeSlashes } from "./language.js";
+import { buildSemanticEdges } from "./semantic.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
 import type { IndexedFile, IndexOptions, IndexResult, SymbolNode } from "./types.js";
 
@@ -26,8 +27,11 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
   const store = new MemoryStore(dbPath);
   const fileContents = new Map<string, string>();
   const allSymbols: SymbolNode[] = [];
+  let lockAcquired = false;
 
   try {
+    store.acquireLock("index");
+    lockAcquired = true;
     const walked = await walk(root, root, options.includeHidden ?? false);
     const walkedPaths = new Set(walked.map((file) => file.relativePath));
     const previousFiles = incremental ? new Map(store.listFiles().map((file) => [file.path, file])) : new Map<string, IndexedFile>();
@@ -142,9 +146,11 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
 
     if (graphNeedsRebuild) {
       const callEdges = addCallEdges(allSymbols, fileContents);
+      const semanticEdges = buildSemanticEdges(allSymbols, fileContents);
       store.transaction(() => {
-        store.deleteCallEdges();
+        store.deleteDerivedEdges();
         for (const edge of callEdges) store.insertEdge(edge);
+        for (const edge of semanticEdges) store.insertEdge(edge);
       });
     }
     const counts = store.counts();
@@ -164,6 +170,9 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
       elapsedMs: Math.round(performance.now() - started)
     };
   } finally {
+    if (lockAcquired) {
+      store.releaseLock("index");
+    }
     store.close();
   }
 }

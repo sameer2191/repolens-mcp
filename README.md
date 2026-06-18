@@ -6,11 +6,13 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 17 tools for indexing, code search, symbol search, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, and graph snapshots.
+- **MCP-native**: exposes 20 tools for indexing, code search, symbol search, semantic search, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
-- **Portable graph and report artifacts**: export self-contained HTML graph snapshots and architecture reports from the CLI.
+- **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
+- **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI.
 - **Operational dashboard**: browse graph previews, structural filters, schema counts, dead-code candidates, review signals, and report links without a frontend build.
+- **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
 - **Architecture recommendations**: turns hotspots, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
 - **Validation evidence**: tests, CI, CodeQL, docs, local dashboard, and a big-repo validation workflow.
@@ -42,13 +44,17 @@ repolens-mcp snippet <symbol-or-path:line> [--context n]
 repolens-mcp trace <symbol> [--direction inbound|outbound]
 repolens-mcp impact <path-or-symbol...>
 repolens-mcp schema [--db path]
+repolens-mcp watch [repo] [--db path] [--interval-ms n]
 repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--min-degree n]
+repolens-mcp semantic "live session repository" [--limit n]
 repolens-mcp query-graph "MATCH (a)-[:CALLS]->(b) RETURN a.name,b.name LIMIT 5"
 repolens-mcp dead-code [--db path]
 repolens-mcp cycles [--db path] [--limit n]
 repolens-mcp changes [repo] [--db path]
 repolens-mcp report [--db path] [--format markdown|html] [--graph-limit n] [--out report.html]
 repolens-mcp export-graph --out graph.html [--db path]
+repolens-mcp pack-graph --out graph.rlgz [--db path] [--label name]
+repolens-mcp unpack-graph graph.rlgz [--db path] [--overwrite]
 repolens-mcp decision --title "Use SQLite" --body "Keep memory local."
 repolens-mcp serve [--db path] [--port 9749]
 repolens-mcp mcp
@@ -59,6 +65,8 @@ repolens-mcp mcp
 | Tool | Purpose |
 | --- | --- |
 | `index_repository` | Build or refresh the local SQLite memory. |
+| `export_graph_package` | Create a compressed, checksummed `.rlgz` package from an indexed graph database. |
+| `import_graph_package` | Import a compressed `.rlgz` package into a local graph database. |
 | `search_code` | Search indexed source lines. |
 | `search_symbols` | Search functions, classes, routes, resources, headings, and package nodes. |
 | `get_code_snippet` | Return source lines around a symbol, qualified name, file path, or `path:line` target. |
@@ -67,6 +75,7 @@ repolens-mcp mcp
 | `impact_analysis` | Find adjacent symbols for changed files or symbols. |
 | `get_graph_schema` | Return node labels, edge types, language coverage, and totals. |
 | `search_graph` | Search structurally by query, kind, regex, relationship, file scope, or degree. |
+| `semantic_search` | Search symbols by local semantic token overlap across names, paths, signatures, and bodies. |
 | `query_graph` | Run a read-only Cypher-like query over symbols and one-hop edges. |
 | `find_dead_code` | Find non-exported functions and methods with no inbound call edges. |
 | `find_dependency_cycles` | Find import-resolved dependency cycles between architecture clusters. |
@@ -110,10 +119,14 @@ node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/mem
 node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js snippet createOrder --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js semantic "order checkout flow" --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js cycles --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js query-graph "MATCH (f:Function) RETURN f.name,f.filePath LIMIT 5" --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js report --db /tmp/memory.db --format html --out report.html
 node --experimental-sqlite dist/src/cli.js export-graph --db /tmp/memory.db --out graph.html --limit 1000
+node --experimental-sqlite dist/src/cli.js pack-graph --db /tmp/memory.db --out graph.rlgz --label validation
+node --experimental-sqlite dist/src/cli.js unpack-graph graph.rlgz --db /tmp/imported-memory.db
+node --experimental-sqlite dist/src/cli.js watch /path/to/big/repo --db /tmp/memory.db --interval-ms 2500
 node --experimental-sqlite dist/src/cli.js serve --db /tmp/memory.db --port 9749
 ```
 

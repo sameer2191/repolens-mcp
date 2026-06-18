@@ -25,11 +25,12 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 
 - Node 24 plus native SQLite for a dependency-light local graph store.
 - Stable MCP SDK v1 package rather than the pre-alpha v2 branch.
-- Clear CLI commands and MCP tools for indexing, search, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle detection, architecture reports, architecture summaries, tracing, impact analysis, dead-code candidates, git-change impact, and architecture decisions.
+- Clear CLI commands and MCP tools for indexing, graph package exchange, search, semantic search, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle detection, architecture reports, architecture summaries, tracing, impact analysis, dead-code candidates, git-change impact, and architecture decisions.
 - Incremental indexing skips unchanged files, prunes removed files, and avoids call-edge rebuilds when there is no repository delta.
+- Watch mode keeps the graph fresh with polling-based incremental refreshes while preserving deterministic CLI behavior for tests and automation.
 - Browser dashboard without a bundler so the project is easy to build and inspect.
-- Dashboard APIs expose architecture, graph schema, graph search, read-only graph queries, source snippets, import-resolved dependency cycles, dead-code candidates, graph previews, code search, and live Markdown/HTML architecture reports from the same local server.
-- Self-contained graph and architecture report exports for sharing HTML or Markdown artifacts without running a server.
+- Dashboard APIs expose architecture, graph schema, graph search, semantic search, read-only graph queries, source snippets, import-resolved dependency cycles, dead-code candidates, graph previews, code search, and live Markdown/HTML architecture reports from the same local server.
+- Self-contained graph and architecture report exports for sharing HTML or Markdown artifacts without running a server, plus compressed checksummed `.rlgz` graph packages for reusing a SQLite graph without reindexing.
 - CI that runs type-check, tests, self-indexing, and architecture output.
 
 ## Improvements To Highlight
@@ -38,7 +39,8 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 - Built-in ADR memory, not just structural graph search.
 - Dashboard API and HTML are included in the same binary entrypoint, avoiding a separate frontend build while still exposing graph exploration, schema counts, review signals, dead-code samples, and report links.
 - Swift extraction and big-repo validation now cover a mixed mobile/web monorepo, not only TypeScript services.
-- Structural graph search, read-only Cypher-like graph queries, graph schema summaries, dependency-cycle detection, dead-code candidates, git-diff impact mapping, and portable graph exports are first-class CLI/MCP workflows.
+- Structural graph search, dependency-free semantic search, read-only Cypher-like graph queries, graph schema summaries, dependency-cycle detection, dead-code candidates, git-diff impact mapping, watch indexing, and portable graph/package exports are first-class workflows.
+- Indexing now writes local `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges without external embeddings or network calls.
 - Architecture reports combine metrics, language mix, schema counts, hotspots, boundaries, import-resolved cycle checks, recommendations, dead-code samples, review signals, and a graph preview into one shareable artifact.
-- A no-op incremental run on the large validation repo completed in 254 ms while preserving a 5,234-symbol, 29,013-edge graph.
+- A no-op incremental run on the large validation repo completed in 198 ms while preserving a 5,234-symbol, 30,324-edge graph.
 - Project is intentionally honest about scope: it is not a 158-language static C engine, but it is local-first, readable, easy to modify, and validated against a large real workspace.

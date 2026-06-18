@@ -13,13 +13,16 @@ import {
   impactAnalysis,
   jsonBlock,
   listDecisions,
+  packGraph,
   queryGraph,
   rememberDecision,
   runIndex,
   searchCode,
   searchGraph,
+  semanticSearch,
   searchSymbols,
-  traceSymbol
+  traceSymbol,
+  unpackGraph
 } from "../core/api.js";
 
 export async function startMcpServer(): Promise<void> {
@@ -40,6 +43,32 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ root, dbPath, incremental, maxFileBytes }) => text(await runIndex({ root: root ?? process.cwd(), dbPath, incremental, maxFileBytes }))
+  );
+
+  server.registerTool(
+    "export_graph_package",
+    {
+      description: "Create a compressed, checksummed RepoLens graph package from a local SQLite graph database.",
+      inputSchema: {
+        outPath: z.string().describe("Destination path for the .rlgz graph package."),
+        dbPath: z.string().optional(),
+        label: z.string().optional()
+      }
+    },
+    async ({ outPath, dbPath, label }) => text(await packGraph(outPath, dbPath, label))
+  );
+
+  server.registerTool(
+    "import_graph_package",
+    {
+      description: "Import a compressed RepoLens graph package into a local SQLite graph database.",
+      inputSchema: {
+        packagePath: z.string().describe("Path to a .rlgz graph package."),
+        dbPath: z.string().optional(),
+        overwrite: z.boolean().optional()
+      }
+    },
+    async ({ packagePath, dbPath, overwrite }) => text(await unpackGraph(packagePath, dbPath, overwrite))
   );
 
   server.registerTool(
@@ -148,6 +177,19 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ dbPath, ...options }) => text(searchGraph(options, dbPath))
+  );
+
+  server.registerTool(
+    "semantic_search",
+    {
+      description: "Search indexed symbols by local semantic token overlap across names, paths, signatures, and symbol bodies.",
+      inputSchema: {
+        query: z.union([z.string(), z.array(z.string())]).describe("Concept query, for example ['live', 'session', 'repository']."),
+        limit: z.number().int().positive().max(100).optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ query, limit, dbPath }) => text(semanticSearch(query, limit, dbPath))
   );
 
   server.registerTool(

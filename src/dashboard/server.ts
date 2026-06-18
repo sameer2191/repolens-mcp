@@ -1,5 +1,5 @@
 import http from "node:http";
-import { architectureReport, findDeadCode, findDependencyCycles, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, searchSymbols } from "../core/api.js";
+import { architectureReport, findDeadCode, findDependencyCycles, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols } from "../core/api.js";
 
 export interface DashboardOptions {
   dbPath?: string;
@@ -38,6 +38,9 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
       } else if (url.pathname === "/api/query-graph") {
         const query = url.searchParams.get("q") ?? "";
         sendJson(response, query ? queryGraph(query, numberParam(url, "limit"), options.dbPath) : { query, columns: [], rows: [], limit: 0 });
+      } else if (url.pathname === "/api/semantic") {
+        const query = url.searchParams.get("q") ?? "";
+        sendJson(response, query ? semanticSearch(query, numberParam(url, "limit") ?? 25, options.dbPath) : []);
       } else if (url.pathname === "/api/dead-code") {
         sendJson(response, findDeadCode(numberParam(url, "limit") ?? 25, options.dbPath));
       } else if (url.pathname === "/api/cycles") {
@@ -152,6 +155,13 @@ function dashboardHtml(): string {
         <input id="search" placeholder="Search code or symbols">
       </section>
       <section>
+        <h2>Semantic Search</h2>
+        <div class="stack">
+          <input id="semantic-query" placeholder="live session repository">
+          <button class="primary" id="semantic-run" type="button">Search Meaning</button>
+        </div>
+      </section>
+      <section>
         <h2>Graph Search</h2>
         <div class="stack">
           <div><label for="graph-query">Query</label><input id="graph-query" placeholder="symbol, file, signature"></div>
@@ -241,6 +251,8 @@ function dashboardHtml(): string {
     const results = document.querySelector('#results');
     const indexed = document.querySelector('#indexed');
     const search = document.querySelector('#search');
+    const semanticRun = document.querySelector('#semantic-run');
+    const semanticQuery = document.querySelector('#semantic-query');
     const nodeLabels = document.querySelector('#node-labels');
     const edgeTypes = document.querySelector('#edge-types');
     const graphRun = document.querySelector('#graph-run');
@@ -297,6 +309,12 @@ function dashboardHtml(): string {
         ...data.code.map(c => item('<div class="path">' + escapeHtml(c.filePath) + ':' + c.line + '</div><pre>' + escapeHtml(c.text) + '</pre>'))
       ].join('') || '<div class="sub">No matches.</div>';
     }
+    async function doSemanticSearch() {
+      const q = semanticQuery.value.trim();
+      if (!q) { results.innerHTML = '<div class="sub">Enter a semantic query.</div>'; return; }
+      const data = await fetch('/api/semantic?' + params({ q, limit: 30 })).then(r => r.json());
+      results.innerHTML = data.map(match => item('<b>' + escapeHtml(match.symbol.name) + '</b> <span class="sub">' + escapeHtml(match.symbol.kind) + ' score ' + match.score.toFixed(3) + '</span><div class="path">' + escapeHtml(match.symbol.filePath) + ':' + match.symbol.startLine + '</div><div class="sub">' + escapeHtml(match.reasons.join(' | ')) + '</div>')).join('') || '<div class="sub">No semantic matches.</div>';
+    }
     async function doGraphSearch() {
       const query = params({ q: graphQuery.value, kind: graphKind.value, relationship: graphRel.value, file: graphFile.value, minDegree: graphDegree.value, limit: 30 });
       const data = await fetch('/api/search-graph?' + query).then(r => r.json());
@@ -348,6 +366,7 @@ function dashboardHtml(): string {
       requestAnimationFrame(drawGraph);
     }
     search.addEventListener('input', () => { clearTimeout(window.__t); window.__t = setTimeout(doSearch, 120); });
+    semanticRun.addEventListener('click', doSemanticSearch);
     graphRun.addEventListener('click', doGraphSearch);
     cypherRun.addEventListener('click', doCypherQuery);
     window.addEventListener('resize', resizeGraph);

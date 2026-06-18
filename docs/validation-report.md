@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 5 tests, 0 failures.
-- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, Swift extraction, symbol search, code search, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Node test suite passed: 8 tests, 0 failures.
+- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, symbol search, code search, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -31,19 +31,23 @@ Command:
 node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000
 node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000 --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db .repolens/self.db
+node --experimental-sqlite dist/src/cli.js pack-graph --db .repolens/self.db --out .repolens/self.rlgz --label self-validation
+node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db .repolens/self-imported.db --overwrite
 ```
 
 Result:
 
-- Files discovered: 32
-- Files indexed: 32
+- Files discovered: 35
+- Files indexed: 35
 - Files skipped: 0
-- Symbols: 233
-- Edges: 643
-- Lines indexed: 4,960
-- Full index elapsed: 84 ms
-- No-op incremental elapsed: 14 ms
-- No-op incremental unchanged files: 32
+- Symbols: 269
+- Edges: 901
+- Lines indexed: 5,804
+- Full index elapsed: 159 ms
+- No-op incremental elapsed: 15 ms
+- No-op incremental unchanged files: 35
+- Graph package: `.repolens/self.rlgz` (257,127 bytes from a 1,130,496-byte SQLite snapshot)
+- Imported package totals: 35 files, 269 symbols, 901 edges
 - Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -70,6 +74,10 @@ node --experimental-sqlite dist/src/cli.js architecture \
 node --experimental-sqlite dist/src/cli.js schema \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
 
+node --experimental-sqlite dist/src/cli.js semantic "live session repository" \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 8
+
 node --experimental-sqlite dist/src/cli.js cycles \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
   --limit 5
@@ -90,6 +98,16 @@ node --experimental-sqlite dist/src/cli.js export-graph \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
   --limit 1000 \
   --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html
+
+node --experimental-sqlite dist/src/cli.js pack-graph \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --out /Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz \
+  --label testing-validation
+
+node --experimental-sqlite dist/src/cli.js unpack-graph \
+  /Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation-imported.db \
+  --overwrite
 ```
 
 Result:
@@ -98,16 +116,18 @@ Result:
 - Files indexed: 816
 - Files skipped: 36
 - Symbols: 5,234
-- Edges: 29,013
+- Edges: 30,324
 - Lines indexed: 96,330
-- Full index elapsed: 10,531 ms
-- No-op incremental elapsed: 254 ms
+- Full index elapsed: 11,508 ms
+- No-op incremental elapsed: 198 ms
 - No-op incremental unchanged files: 852
 - No-op incremental removed files: 0
 - Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (331 KB)
 - Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (8.8 KB)
 - Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html`
 - Graph JSON: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`
+- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (4,842,960 bytes from a 40,456,192-byte SQLite snapshot)
+- Imported graph package totals: 816 files, 5,234 symbols, 30,324 edges
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
 - Import-resolved dependency cycles: 0
 
@@ -136,6 +156,9 @@ Graph schema:
 | `DEFINES` edges | 4,252 |
 | `CALLS_LOCAL` edges | 3,163 |
 | `IMPORTS` edges | 1,321 |
+| `SIMILAR_TO` edges | 1,193 |
+| `SEMANTICALLY_RELATED` edges | 118 |
+| `DECLARES` edges | 166 |
 
 Incremental refresh:
 
@@ -146,7 +169,7 @@ node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
   --incremental
 ```
 
-Confirmed a no-op incremental pass preserved 5,234 symbols and 29,013 edges while marking all 852 discovered files unchanged.
+Confirmed a no-op incremental pass preserved 5,234 symbols and 30,324 edges while marking all 852 discovered files unchanged.
 
 Representative hotspots:
 
@@ -195,6 +218,24 @@ node --experimental-sqlite dist/src/cli.js symbols repository \
 ```
 
 Confirmed repository interfaces and exported domain types under `apps/web-admin/src/lib/server/repositories`.
+
+Semantic search and similarity edges:
+
+```bash
+node --experimental-sqlite dist/src/cli.js semantic "live session repository" \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 8
+
+node --experimental-sqlite dist/src/cli.js query-graph \
+  "MATCH (a)-[r:SIMILAR_TO]->(b) RETURN a.name,b.name,r.weight LIMIT 5" \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+
+node --experimental-sqlite dist/src/cli.js query-graph \
+  "MATCH (a)-[r:SEMANTICALLY_RELATED]->(b) RETURN a.name,b.name,r.weight LIMIT 5" \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+```
+
+Confirmed concept search returned live-session domain symbols, `SIMILAR_TO` returned near-duplicate token-profile links, and `SEMANTICALLY_RELATED` returned cross-symbol semantic links.
 
 Source snippets:
 
@@ -257,7 +298,7 @@ node --experimental-sqlite dist/src/cli.js report \
   --out /Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html
 ```
 
-Confirmed HTML and Markdown reports with summary metrics, language tables, graph schema counts, hotspots, top symbols, architecture boundaries, dependency-cycle checks, recommendations, dead-code samples, review signals, and graph samples.
+Confirmed HTML and Markdown reports with summary metrics, language tables, graph schema counts including semantic/similarity edges, hotspots, top symbols, architecture boundaries, dependency-cycle checks, recommendations, dead-code samples, review signals, and graph samples.
 
 Structural graph search:
 
@@ -292,6 +333,43 @@ node --experimental-sqlite dist/src/cli.js export-graph \
 
 Confirmed 1,000 nodes and 1,000 edges in the exported HTML graph. A matching JSON artifact was written to `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`.
 
+Graph package exchange:
+
+```bash
+node --experimental-sqlite dist/src/cli.js pack-graph \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --out /Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz \
+  --label testing-validation
+
+node --experimental-sqlite dist/src/cli.js unpack-graph \
+  /Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation-imported.db \
+  --overwrite
+```
+
+Confirmed the package exporter created a checksummed `.rlgz` artifact and the importer restored a graph with 816 files, 5,234 symbols, and 30,324 edges.
+
+Watch mode:
+
+```bash
+node --experimental-sqlite dist/src/cli.js watch /Users/sameer/Desktop/testing \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --max-file-bytes 750000 \
+  --interval-ms 250 \
+  --runs 2
+```
+
+Confirmed two watch-mode incremental passes over the large validation database preserved 5,234 symbols and 30,324 edges in 190 ms and 119 ms. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
+
+Index lock:
+
+```bash
+node --experimental-sqlite dist/src/cli.js index . --db .repolens/self-lock-check-2.db --max-file-bytes 750000
+node --experimental-sqlite dist/src/cli.js index . --db .repolens/self-lock-check-2.db --max-file-bytes 750000 --incremental
+```
+
+Confirmed overlapping index writers on a fresh database no longer interleave; one run completed and the other returned a clear RepoLens index-lock message.
+
 Dashboard routes:
 
 ```bash
@@ -301,6 +379,7 @@ node --experimental-sqlite dist/src/cli.js serve \
 
 curl --fail http://127.0.0.1:9750/api/schema
 curl --fail 'http://127.0.0.1:9750/api/search-graph?q=live-session&relationship=CALLS&limit=3'
+curl --fail 'http://127.0.0.1:9750/api/semantic?q=live%20session%20repository&limit=3'
 curl --fail 'http://127.0.0.1:9750/api/query-graph?q=MATCH%20(f%3AFunction)%20WHERE%20f.filePath%20CONTAINS%20%27live-session%27%20RETURN%20f.name%2Cf.filePath%20LIMIT%203'
 curl --fail 'http://127.0.0.1:9750/api/dead-code?limit=3'
 curl --fail 'http://127.0.0.1:9750/api/cycles?limit=5'
@@ -309,7 +388,7 @@ curl --fail 'http://127.0.0.1:9750/api/report?format=markdown&graphLimit=50'
 curl --fail http://127.0.0.1:9750/
 ```
 
-Confirmed the dashboard served the large validation database, returned the 816-file / 5,234-symbol / 29,013-edge schema, returned live-session graph matches, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated an 8,992-byte Markdown report response, and served the 17,168-byte HTML dashboard shell.
+Confirmed the dashboard served the large validation database, returned the 816-file / 5,234-symbol / 30,324-edge schema, returned live-session graph matches, returned semantic search rows, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated an 8,992-byte Markdown report response, and served the 18,342-byte HTML dashboard shell.
 
 Trace:
 
@@ -334,4 +413,4 @@ Confirmed modified files map back to indexed symbols and produced a medium risk 
 
 ## Conclusion
 
-The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, serves a local graph dashboard, and exposes graph schema, structural search, read-only graph queries, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, packages and imports SQLite graph snapshots, serves a local graph dashboard, and exposes graph schema, structural search, semantic search, generated similarity/semantic edges, read-only graph queries, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.

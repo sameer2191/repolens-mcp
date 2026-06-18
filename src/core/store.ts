@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { semanticScore, semanticTokens } from "./semantic.js";
 import type {
   ArchitectureSummary,
   ArchitectureRecommendation,
@@ -18,6 +19,7 @@ import type {
   GraphSearchOptions,
   IndexedFile,
   Language,
+  SemanticSearchMatch,
   SymbolNode
 } from "./types.js";
 
@@ -76,11 +78,13 @@ interface GraphReturnExpression {
 export class MemoryStore {
   readonly dbPath: string;
   private readonly db: DatabaseSync;
+  private readonly lockOwners = new Map<string, string>();
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-    this.db = new DatabaseSync(dbPath);
+    this.db = new DatabaseSync(dbPath, { timeout: 5000 });
+    this.db.exec("PRAGMA busy_timeout = 5000");
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA foreign_keys = ON");
     this.initSchema();
@@ -88,6 +92,43 @@ export class MemoryStore {
 
   close(): void {
     this.db.close();
+  }
+
+  snapshotTo(outPath: string): void {
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    if (fs.existsSync(outPath)) {
+      fs.unlinkSync(outPath);
+    }
+    this.db.exec(`VACUUM INTO ${sqlString(outPath)}`);
+  }
+
+  acquireLock(name: string, staleAfterMs = 10 * 60 * 1000): void {
+    const now = new Date();
+    const staleBefore = new Date(now.getTime() - staleAfterMs).toISOString();
+    const owner = `${process.pid}:${now.getTime()}:${Math.random().toString(36).slice(2)}`;
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.prepare("DELETE FROM locks WHERE name = ? AND locked_at < ?").run(name, staleBefore);
+      const existing = this.db.prepare("SELECT locked_at, owner FROM locks WHERE name = ?").get(name) as { locked_at: string; owner: string } | undefined;
+      if (existing) {
+        throw new Error(`RepoLens ${name} lock is already held by ${existing.owner} since ${existing.locked_at}`);
+      }
+      this.db.prepare("INSERT INTO locks(name, locked_at, owner) VALUES (?, ?, ?)").run(name, now.toISOString(), owner);
+      this.db.exec("COMMIT");
+      this.lockOwners.set(name, owner);
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  releaseLock(name: string): void {
+    const owner = this.lockOwners.get(name);
+    if (!owner) {
+      return;
+    }
+    this.db.prepare("DELETE FROM locks WHERE name = ? AND owner = ?").run(name, owner);
+    this.lockOwners.delete(name);
   }
 
   transaction<T>(fn: () => T): T {
@@ -239,6 +280,10 @@ export class MemoryStore {
     this.db.prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL')").run();
   }
 
+  deleteDerivedEdges(): void {
+    this.db.prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL', 'SIMILAR_TO', 'SEMANTICALLY_RELATED')").run();
+  }
+
   counts(): { symbols: number; edges: number } {
     return {
       symbols: getCount(this.db, "SELECT count(*) AS count FROM symbols"),
@@ -362,6 +407,18 @@ export class MemoryStore {
       symbol,
       lines
     };
+  }
+
+  private codeWindow(filePath: string, startLine: number, endLine: number): string {
+    const rows = this.db
+      .prepare(
+        `SELECT text
+         FROM code_lines
+         WHERE file_path = ? AND line BETWEEN ? AND ?
+         ORDER BY line ASC`
+      )
+      .all(filePath, startLine, Math.max(startLine, endLine)) as Array<{ text: string }>;
+    return rows.map((row) => row.text).join("\n");
   }
 
   traceSymbol(name: string, direction: "inbound" | "outbound", depth = 2): Edge[] {
@@ -511,6 +568,45 @@ export class MemoryStore {
       outbound: row.outbound,
       degree: row.degree
     }));
+  }
+
+  semanticSearch(query: string | string[], limit = 20): SemanticSearchMatch[] {
+    const queryText = Array.isArray(query) ? query.join(" ") : query;
+    const queryTokens = semanticTokens(queryText);
+    if (queryTokens.size === 0) {
+      return [];
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT *
+         FROM symbols
+         WHERE kind NOT IN ('file', 'dependency', 'package')
+         ORDER BY exported DESC, name ASC
+         LIMIT 8000`
+      )
+      .all() as unknown as SymbolRow[];
+
+    return rows
+      .map((row) => {
+        const symbol = rowToSymbol(row);
+        const body = this.codeWindow(symbol.filePath, symbol.startLine, symbol.endLine);
+        const targetTokens = semanticTokens([symbol.name, symbol.signature ?? "", symbol.filePath, body].join("\n"));
+        const scored = semanticScore(queryTokens, targetTokens);
+        const nameTokens = semanticTokens(symbol.name);
+        const nameHits = [...queryTokens].filter((token) => nameTokens.has(token));
+        const pathHits = [...queryTokens].filter((token) => symbol.filePath.toLowerCase().includes(token));
+        const boost = nameHits.length * 0.18 + pathHits.length * 0.08 + (symbol.exported ? 0.03 : 0);
+        const score = Number(Math.min(1, scored.score + boost).toFixed(4));
+        const reasons = [
+          ...(nameHits.length ? [`name matched ${nameHits.join(", ")}`] : []),
+          ...(pathHits.length ? [`path matched ${pathHits.join(", ")}`] : []),
+          ...(scored.matchedTokens.length ? [`semantic tokens ${scored.matchedTokens.slice(0, 8).join(", ")}`] : [])
+        ];
+        return { symbol, score, matchedTokens: scored.matchedTokens, reasons };
+      })
+      .filter((match) => match.score > 0)
+      .sort((a, b) => b.score - a.score || a.symbol.qualifiedName.localeCompare(b.symbol.qualifiedName))
+      .slice(0, clampPositive(limit, 1, 100));
   }
 
   queryGraph(query: string, limit = 100): GraphQueryResult {
@@ -1053,6 +1149,11 @@ export class MemoryStore {
         label TEXT,
         indexed_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS locks (
+        name TEXT PRIMARY KEY,
+        locked_at TEXT NOT NULL,
+        owner TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS files (
         path TEXT PRIMARY KEY,
         language TEXT NOT NULL,
@@ -1518,4 +1619,8 @@ function clusterName(filePath: string): string {
     return `src/${parts[1]}`;
   }
   return parts[0];
+}
+
+function sqlString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
 }

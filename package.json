@@ -1,7 +1,7 @@
 {
   "name": "repolens-mcp",
   "version": "1.0.0",
-  "description": "Local-first repository intelligence MCP server with incremental indexing, graph search, read-only graph queries, source snippets, dependency-cycle checks, architecture reports, recommendations, change impact, dead-code candidates, ADR memory, graph export, and a dashboard.",
+  "description": "Local-first repository intelligence MCP server with incremental indexing, watch mode, graph search, semantic search, read-only graph queries, source snippets, dependency-cycle checks, architecture reports, graph packages, ADR memory, graph export, and a dashboard.",
   "type": "module",
   "bin": {
     "repolens-mcp": "./dist/src/cli.js"

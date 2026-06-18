@@ -14,13 +14,17 @@ import {
   impactAnalysis,
   jsonBlock,
   listDecisions,
+  packGraph,
   queryGraph,
   rememberDecision,
   runIndex,
+  runWatch,
   searchCode,
   searchGraph,
+  semanticSearch,
   searchSymbols,
-  traceSymbol
+  traceSymbol,
+  unpackGraph
 } from "./core/api.js";
 import type { ReportFormat } from "./core/report.js";
 import { defaultDbPath } from "./core/store.js";
@@ -45,6 +49,23 @@ async function main(): Promise<void> {
         maxFileBytes: numberFlag(args, "max-file-bytes")
       });
       print(result);
+      break;
+    }
+    case "watch": {
+      const root = path.resolve(args.positional[0] ?? process.cwd());
+      const controller = new AbortController();
+      process.once("SIGINT", () => controller.abort());
+      process.once("SIGTERM", () => controller.abort());
+      const summary = await runWatch({
+        root,
+        dbPath: stringFlag(args, "db"),
+        intervalMs: numberFlag(args, "interval-ms"),
+        maxRuns: numberFlag(args, "runs"),
+        maxFileBytes: numberFlag(args, "max-file-bytes"),
+        signal: controller.signal,
+        onResult: (result) => process.stderr.write(`${jsonBlock({ event: "indexed", ...result })}\n`)
+      });
+      print(summary);
       break;
     }
     case "architecture":
@@ -94,6 +115,9 @@ async function main(): Promise<void> {
           stringFlag(args, "db")
         )
       );
+      break;
+    case "semantic":
+      print(semanticSearch(required(args.positional[0], "query"), numberFlag(args, "limit"), stringFlag(args, "db")));
       break;
     case "query-graph":
       print(queryGraph(required(args.positional[0], "query"), numberFlag(args, "limit"), stringFlag(args, "db")));
@@ -165,6 +189,12 @@ async function main(): Promise<void> {
       print({ out, nodes: graph.nodes.length, edges: graph.edges.length });
       break;
     }
+    case "pack-graph":
+      print(await packGraph(path.resolve(required(stringFlag(args, "out") ?? args.positional[0], "out")), stringFlag(args, "db"), stringFlag(args, "label")));
+      break;
+    case "unpack-graph":
+      print(await unpackGraph(path.resolve(required(args.positional[0] ?? stringFlag(args, "package"), "package")), stringFlag(args, "db"), booleanFlag(args, "overwrite")));
+      break;
     case "serve": {
       const port = numberFlag(args, "port") ?? 9749;
       const server = await serveDashboard({ dbPath: stringFlag(args, "db"), port });
@@ -273,7 +303,9 @@ Usage:
   repolens-mcp trace <symbol> [--direction inbound|outbound] [--depth n] [--db path]
   repolens-mcp impact <path-or-symbol...> [--db path]
   repolens-mcp schema [--db path]
+  repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--max-file-bytes n]
   repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern regex] [--file-pattern src/] [--min-degree n] [--db path]
+  repolens-mcp semantic "meaningful concept query" [--db path] [--limit n]
   repolens-mcp query-graph "MATCH (a)-[:CALLS]->(b) RETURN a.name,b.name LIMIT 5" [--db path]
   repolens-mcp dead-code [--db path] [--limit n]
   repolens-mcp cycles [--db path] [--limit n]
@@ -283,6 +315,8 @@ Usage:
   repolens-mcp graph [--db path]
   repolens-mcp report [--db path] [--format markdown|html] [--graph-limit n] [--out report.html]
   repolens-mcp export-graph --out graph.html [--db path] [--limit n]
+  repolens-mcp pack-graph --out graph.rlgz [--db path] [--label name]
+  repolens-mcp unpack-graph graph.rlgz [--db path] [--overwrite]
   repolens-mcp serve [--db path] [--port 9749]
   repolens-mcp mcp
   repolens-mcp demo

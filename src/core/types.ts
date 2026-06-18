@@ -143,6 +143,34 @@ export interface GraphQueryResult {
   limit: number;
 }
 
+export interface SemanticSearchMatch {
+  symbol: SymbolNode;
+  score: number;
+  matchedTokens: string[];
+  reasons: string[];
+}
+
+export interface GraphPackageExportResult {
+  outPath: string;
+  sourceDbPath: string;
+  label?: string;
+  createdAt: string;
+  sqliteBytes: number;
+  compressedBytes: number;
+  packageBytes: number;
+  sha256: string;
+}
+
+export interface GraphPackageImportResult {
+  packagePath: string;
+  dbPath: string;
+  label?: string;
+  createdAt: string;
+  sqliteBytes: number;
+  sha256: string;
+  totals: { files: number; symbols: number; edges: number };
+}
+
 export interface DeadCodeCandidate {
   symbol: SymbolNode;
   inbound: number;
@@ -194,4 +222,18 @@ export interface IndexResult {
   symbols: number;
   edges: number;
   elapsedMs: number;
+}
+
+export interface WatchIndexOptions extends IndexOptions {
+  intervalMs?: number;
+  maxRuns?: number;
+  signal?: AbortSignal;
+  onResult?: (result: IndexResult) => void;
+}
+
+export interface WatchIndexSummary {
+  root: string;
+  dbPath: string;
+  runs: IndexResult[];
+  stoppedAt: string;
 }

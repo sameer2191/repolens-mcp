@@ -3,9 +3,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { architectureReport } from "../src/core/api.js";
+import { architectureReport, packGraph, unpackGraph } from "../src/core/api.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
+import { watchRepository } from "../src/core/watcher.js";
 
 const fixture = path.join(process.cwd(), "tests", "fixtures", "sample-repo");
 
@@ -58,6 +59,10 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.equal(graphMatches[0]?.symbol.name, "createOrder");
     assert.ok(graphMatches[0]?.degree >= 1);
 
+    const semanticMatches = store.semanticSearch("create order total", 5);
+    assert.ok(semanticMatches.some((match) => match.symbol.name === "createOrder"));
+    assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "SEMANTICALLY_RELATED"));
+
     const nodeQuery = store.queryGraph("MATCH (f:Function) WHERE f.name = 'createOrder' RETURN f.name,f.filePath LIMIT 5");
     assert.equal(nodeQuery.rows[0]?.["f.name"], "createOrder");
     assert.equal(nodeQuery.rows[0]?.["f.filePath"], "src/orders.ts");
@@ -84,6 +89,68 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.match(htmlReport, /CheckoutViewModel/);
   } finally {
     store.close();
+  }
+});
+
+test("packs and imports a reusable graph package", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-package-"));
+  const dbPath = path.join(tmp, "memory.db");
+  await indexRepository({ root: fixture, dbPath });
+
+  const packagePath = path.join(tmp, "fixture.rlgz");
+  const exported = await packGraph(packagePath, dbPath, "fixture");
+  assert.equal(exported.outPath, packagePath);
+  assert.equal(exported.label, "fixture");
+  assert.ok(exported.sqliteBytes > exported.compressedBytes);
+  assert.ok(exported.sha256.length >= 64);
+
+  const importedDbPath = path.join(tmp, "imported.db");
+  const imported = await unpackGraph(packagePath, importedDbPath);
+  assert.equal(imported.label, "fixture");
+  assert.equal(imported.dbPath, importedDbPath);
+  assert.ok(imported.totals.files >= 5);
+  assert.ok(imported.totals.symbols >= 14);
+  assert.ok(imported.totals.edges >= 12);
+
+  const store = new MemoryStore(importedDbPath);
+  try {
+    assert.equal(store.searchSymbols("createOrder")[0]?.name, "createOrder");
+  } finally {
+    store.close();
+  }
+});
+
+test("watch mode keeps a repository indexed incrementally", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-watch-"));
+  const dbPath = path.join(tmp, "memory.db");
+  const observed: string[] = [];
+  const summary = await watchRepository({
+    root: fixture,
+    dbPath,
+    intervalMs: 250,
+    maxRuns: 2,
+    onResult: (result) => observed.push(result.mode)
+  });
+
+  assert.equal(summary.runs.length, 2);
+  assert.deepEqual(observed, ["full", "incremental"]);
+  assert.equal(summary.runs[1]?.filesUnchanged, summary.runs[0]?.filesDiscovered);
+});
+
+test("index lock prevents overlapping writers", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-lock-"));
+  const dbPath = path.join(tmp, "memory.db");
+  const first = new MemoryStore(dbPath);
+  const second = new MemoryStore(dbPath);
+  try {
+    first.acquireLock("index");
+    assert.throws(() => second.acquireLock("index"), /already held/);
+    first.releaseLock("index");
+    second.acquireLock("index");
+    second.releaseLock("index");
+  } finally {
+    first.close();
+    second.close();
   }
 });
 

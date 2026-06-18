@@ -1,12 +1,18 @@
 import path from "node:path";
+import { exportGraphPackage, importGraphPackage } from "./artifact.js";
 import { indexRepository } from "./indexer.js";
 import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
+import { watchRepository } from "./watcher.js";
 import type { ArchitectureReportOptions } from "./report.js";
-import type { DecisionRecord, GraphSearchOptions, IndexOptions } from "./types.js";
+import type { DecisionRecord, GraphSearchOptions, IndexOptions, WatchIndexOptions } from "./types.js";
 
 export async function runIndex(options: IndexOptions) {
   return indexRepository(options);
+}
+
+export async function runWatch(options: WatchIndexOptions) {
+  return watchRepository(options);
 }
 
 export function withStore<T>(rootOrDbPath: string | undefined, fn: (store: MemoryStore) => T): T {
@@ -52,6 +58,10 @@ export function searchGraph(options: GraphSearchOptions, dbPath?: string) {
   return withStore(dbPath, (store) => store.searchGraph(options));
 }
 
+export function semanticSearch(query: string | string[], limit?: number, dbPath?: string) {
+  return withStore(dbPath, (store) => store.semanticSearch(query, limit));
+}
+
 export function queryGraph(query: string, limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.queryGraph(query, limit));
 }
@@ -86,6 +96,14 @@ export function architectureReport(options: ArchitectureReportOptions = {}, dbPa
     const graph = store.graph(options.graphLimit);
     return buildArchitectureReport(architecture, graph, options);
   });
+}
+
+export async function packGraph(outPath: string, dbPath?: string, label?: string) {
+  return exportGraphPackage({ outPath, dbPath, label });
+}
+
+export async function unpackGraph(packagePath: string, dbPath?: string, overwrite?: boolean) {
+  return importGraphPackage({ packagePath, dbPath, overwrite });
 }
 
 export function jsonBlock(value: unknown): string {
