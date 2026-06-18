@@ -41,6 +41,9 @@ export function detectLanguage(filePath: string): Language {
   if (base === "dockerfile" || base.endsWith(".dockerfile")) {
     return "shell";
   }
+  if (base === "yarn.lock" || base === "cargo.lock" || base === "poetry.lock" || base === "gemfile.lock") {
+    return "unknown";
+  }
   if (base === "go.mod") {
     return "go";
   }
@@ -67,6 +70,15 @@ export function isTextCandidate(filePath: string): boolean {
     "dockerfile",
     "go.mod",
     "go.sum",
+    "yarn.lock",
+    "cargo.lock",
+    "poetry.lock",
+    "gemfile.lock",
+    "package-lock.json",
+    "npm-shrinkwrap.json",
+    "pnpm-lock.yaml",
+    "pnpm-lock.yml",
+    "composer.lock",
     "requirements.txt",
     "gemfile",
     "rakefile",

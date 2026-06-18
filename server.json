@@ -1,6 +1,6 @@
 {
   "name": "repolens-mcp",
-  "description": "Local-first MCP server that incrementally indexes repositories into SQLite and exposes architecture reports, graph search, cross-repo graphing, graph communities, semantic search, redacted secret scanning, route-call links, read-only graph queries, source snippets, dependency-cycle checks, recommendations, change impact, dead-code candidates, graph snapshots, graph package exchange, and ADR memory tools.",
+  "description": "Local-first MCP server that incrementally indexes repositories into SQLite and exposes architecture reports, graph search, cross-repo graphing, graph communities, semantic search, redacted secret scanning, manifest and lockfile dependency graphs, route-call links, read-only graph queries, source snippets, dependency-cycle checks, recommendations, change impact, dead-code candidates, graph snapshots, graph package exchange, and ADR memory tools.",
   "command": "npx",
   "args": ["-y", "repolens-mcp", "mcp"],
   "env": {

@@ -125,6 +125,14 @@ export function extractFromFile(filePath: string, language: Language, content: s
     edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
   }
 
+  const lockfile = extractLockfile(filePath, language, content);
+  for (const symbol of lockfile.symbols) {
+    symbols.push(symbol);
+  }
+  for (const edge of lockfile.edges) {
+    edges.push(edge);
+  }
+
   if (language === "markdown") {
     for (const heading of extractMarkdown(filePath, lines)) {
       symbols.push(heading);
@@ -1097,6 +1105,296 @@ function manifestSymbol(filePath: string, language: Language, kind: "package" | 
     ecosystem,
     ...(version ? { version } : {})
   });
+}
+
+interface LockedDependency {
+  name: string;
+  version?: string;
+  line: number;
+}
+
+function extractLockfile(filePath: string, language: Language, content: string): ExtractionResult {
+  const descriptor = lockfileDescriptor(filePath);
+  if (!descriptor) {
+    return { symbols: [], edges: [], imports: [] };
+  }
+
+  const dependencies = dedupeLockedDependencies(descriptor.extract(content));
+  if (dependencies.length === 0) {
+    return { symbols: [], edges: [], imports: [] };
+  }
+
+  const lockSymbol = makeSymbol(filePath, language, "lockfile", path.posix.basename(filePath), 1, Math.max(1, content.split(/\r?\n/).length), undefined, false, {
+    ecosystem: descriptor.ecosystem,
+    packageManager: descriptor.packageManager,
+    lockedDependencies: dependencies.length
+  });
+  const symbols: SymbolNode[] = [lockSymbol];
+  const edges: Edge[] = [{ source: fileQualifiedName(filePath), target: lockSymbol.qualifiedName, type: "DECLARES", weight: 1 }];
+
+  for (const dependency of dependencies) {
+    const symbol = makeSymbol(filePath, language, "locked_dependency", dependency.name, dependency.line, dependency.line, undefined, false, {
+      ecosystem: descriptor.ecosystem,
+      packageManager: descriptor.packageManager,
+      ...(dependency.version ? { version: dependency.version } : {})
+    });
+    symbols.push(symbol);
+    edges.push({
+      source: lockSymbol.qualifiedName,
+      target: symbol.qualifiedName,
+      type: "LOCKS",
+      weight: 0.8,
+      metadata: {
+        ecosystem: descriptor.ecosystem,
+        packageManager: descriptor.packageManager,
+        ...(dependency.version ? { version: dependency.version } : {})
+      }
+    });
+  }
+
+  return { symbols: dedupeSymbols(symbols), edges, imports: [] };
+}
+
+function lockfileDescriptor(filePath: string):
+  | {
+      ecosystem: string;
+      packageManager: string;
+      extract: (content: string) => LockedDependency[];
+    }
+  | null {
+  const base = path.posix.basename(filePath).toLowerCase();
+  if (base === "package-lock.json" || base === "npm-shrinkwrap.json") {
+    return { ecosystem: "npm", packageManager: "npm", extract: extractPackageLock };
+  }
+  if (base === "pnpm-lock.yaml" || base === "pnpm-lock.yml") {
+    return { ecosystem: "npm", packageManager: "pnpm", extract: extractPnpmLock };
+  }
+  if (base === "yarn.lock") {
+    return { ecosystem: "npm", packageManager: "yarn", extract: extractYarnLock };
+  }
+  if (base === "composer.lock") {
+    return { ecosystem: "composer", packageManager: "composer", extract: extractComposerLock };
+  }
+  if (base === "cargo.lock") {
+    return { ecosystem: "cargo", packageManager: "cargo", extract: extractCargoOrPoetryLock };
+  }
+  if (base === "poetry.lock") {
+    return { ecosystem: "python", packageManager: "poetry", extract: extractCargoOrPoetryLock };
+  }
+  if (base === "go.sum") {
+    return { ecosystem: "go", packageManager: "go", extract: extractGoSum };
+  }
+  if (base === "gemfile.lock") {
+    return { ecosystem: "ruby", packageManager: "bundler", extract: extractGemfileLock };
+  }
+  return null;
+}
+
+function extractPackageLock(content: string): LockedDependency[] {
+  try {
+    const parsed = JSON.parse(content) as {
+      packages?: Record<string, { name?: string; version?: string }>;
+      dependencies?: Record<string, { version?: string }>;
+    };
+    const dependencies: LockedDependency[] = [];
+    if (parsed.packages) {
+      for (const [packagePath, info] of Object.entries(parsed.packages)) {
+        if (!packagePath) {
+          continue;
+        }
+        const name = info.name ?? npmPackageNameFromPath(packagePath);
+        if (name) {
+          dependencies.push({ name, version: cleanVersion(info.version), line: jsonPropertyLine(content, name) });
+        }
+      }
+    }
+    if (dependencies.length === 0 && parsed.dependencies) {
+      for (const [name, info] of Object.entries(parsed.dependencies)) {
+        dependencies.push({ name, version: cleanVersion(info.version), line: jsonPropertyLine(content, name) });
+      }
+    }
+    return dependencies;
+  } catch {
+    return [];
+  }
+}
+
+function extractComposerLock(content: string): LockedDependency[] {
+  try {
+    const parsed = JSON.parse(content) as {
+      packages?: Array<{ name?: string; version?: string }>;
+      "packages-dev"?: Array<{ name?: string; version?: string }>;
+    };
+    return [...(parsed.packages ?? []), ...(parsed["packages-dev"] ?? [])].flatMap((item) =>
+      item.name ? [{ name: item.name, version: cleanVersion(item.version), line: jsonPropertyLine(content, item.name) }] : []
+    );
+  } catch {
+    return [];
+  }
+}
+
+function extractPnpmLock(content: string): LockedDependency[] {
+  const dependencies: LockedDependency[] = [];
+  const lines = content.split(/\r?\n/);
+  let inPackages = false;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^packages:\s*$/.test(line)) {
+      inPackages = true;
+      continue;
+    }
+    if (inPackages && /^\S/.test(line) && !/^packages:\s*$/.test(line)) {
+      break;
+    }
+    if (!inPackages) {
+      continue;
+    }
+    const match = /^\s{2}["']?([^"':]+(?:@|\/)[^"':]+)["']?\s*:/.exec(line);
+    const parsed = match ? parseLockKey(match[1]) : null;
+    if (parsed) {
+      dependencies.push({ ...parsed, line: index + 1 });
+    }
+  }
+
+  return dependencies;
+}
+
+function extractYarnLock(content: string): LockedDependency[] {
+  const dependencies: LockedDependency[] = [];
+  const lines = content.split(/\r?\n/);
+  let currentName: string | null = null;
+  let currentLine = 1;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const descriptor = /^("?[^#\s][^:]*"?):\s*$/.exec(line);
+    if (descriptor) {
+      currentName = yarnDescriptorName(descriptor[1]);
+      currentLine = index + 1;
+      continue;
+    }
+    if (!currentName) {
+      continue;
+    }
+    const version = /^\s+version\s+"([^"]+)"/.exec(line)?.[1];
+    if (version) {
+      dependencies.push({ name: currentName, version: cleanVersion(version), line: currentLine });
+      currentName = null;
+    }
+  }
+
+  return dependencies;
+}
+
+function extractCargoOrPoetryLock(content: string): LockedDependency[] {
+  const dependencies: LockedDependency[] = [];
+  for (const block of content.matchAll(/\[\[package\]\]([\s\S]*?)(?=\n\[\[package\]\]|\s*$)/g)) {
+    const name = /^\s*name\s*=\s*"([^"]+)"/m.exec(block[1])?.[1];
+    if (!name) {
+      continue;
+    }
+    const version = /^\s*version\s*=\s*"([^"]+)"/m.exec(block[1])?.[1];
+    dependencies.push({ name, version: cleanVersion(version), line: offsetToLine(content, block.index ?? 0) });
+  }
+  return dependencies;
+}
+
+function extractGoSum(content: string): LockedDependency[] {
+  const dependencies: LockedDependency[] = [];
+  for (const [index, line] of content.split(/\r?\n/).entries()) {
+    const match = /^(\S+)\s+(\S+)(?:\/go\.mod)?\s+h1:/.exec(line.trim());
+    if (match) {
+      dependencies.push({ name: match[1], version: cleanVersion(match[2].replace(/\/go\.mod$/, "")), line: index + 1 });
+    }
+  }
+  return dependencies;
+}
+
+function extractGemfileLock(content: string): LockedDependency[] {
+  const dependencies: LockedDependency[] = [];
+  const lines = content.split(/\r?\n/);
+  let inSpecs = false;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^\s{2}specs:\s*$/.test(line)) {
+      inSpecs = true;
+      continue;
+    }
+    if (inSpecs && /^\S/.test(line)) {
+      break;
+    }
+    const match = inSpecs ? /^\s{4}([A-Za-z0-9_.-]+)\s+\(([^)]+)\)/.exec(line) : null;
+    if (match) {
+      dependencies.push({ name: match[1], version: cleanVersion(match[2]), line: index + 1 });
+    }
+  }
+  return dependencies;
+}
+
+function npmPackageNameFromPath(packagePath: string): string | null {
+  const parts = packagePath.split("node_modules/");
+  const last = parts.at(-1)?.replace(/\/$/, "");
+  return last || null;
+}
+
+function parseLockKey(value: string): { name: string; version?: string } | null {
+  const normalized = value
+    .replace(/^["']|["']$/g, "")
+    .replace(/^\//, "")
+    .replace(/\(.+\)$/, "");
+  const slashVersion = /^(.+)\/([^/]+)$/.exec(normalized);
+  if (slashVersion && /^\d/.test(slashVersion[2])) {
+    return { name: slashVersion[1], version: cleanVersion(slashVersion[2]) };
+  }
+  const split = normalized.lastIndexOf("@");
+  if (split <= 0) {
+    return null;
+  }
+  return { name: normalized.slice(0, split), version: cleanVersion(normalized.slice(split + 1)) };
+}
+
+function yarnDescriptorName(value: string): string | null {
+  const descriptor = value
+    .replace(/^"|"$/g, "")
+    .split(/,\s*/)
+    .find(Boolean);
+  if (!descriptor) {
+    return null;
+  }
+  const split = descriptor.lastIndexOf("@");
+  if (split <= 0) {
+    return descriptor;
+  }
+  return descriptor.slice(0, split);
+}
+
+function cleanVersion(value: string | undefined): string | undefined {
+  const normalized = value?.trim().replace(/^v/, "").replace(/\(.+\)$/, "");
+  return normalized || undefined;
+}
+
+function jsonPropertyLine(content: string, property: string): number {
+  const escaped = escapeRegExp(JSON.stringify(property).slice(1, -1));
+  const index = content.search(new RegExp(`"(${escaped})"`));
+  return index >= 0 ? offsetToLine(content, index) : 1;
+}
+
+function dedupeLockedDependencies(dependencies: LockedDependency[]): LockedDependency[] {
+  const seen = new Set<string>();
+  const output: LockedDependency[] = [];
+  for (const dependency of dependencies) {
+    if (!dependency.name || dependency.name === "." || dependency.name.startsWith("file:") || dependency.name.startsWith("link:")) {
+      continue;
+    }
+    const key = `${dependency.name}@${dependency.version ?? ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    output.push(dependency);
+  }
+  return output;
 }
 
 function tomlSection(content: string, name: string): string {

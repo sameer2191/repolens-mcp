@@ -1171,13 +1171,16 @@ export class MemoryStore {
       )
       .all() as Array<{ path: string; language: Language; lines: number; symbols: number }>;
 
-    const hotspots = topFiles.slice(0, 8).map((file) => {
-      const reasons: string[] = [];
-      if (file.symbols > 20) reasons.push("high symbol density");
-      if (file.lines > 400) reasons.push("large file");
-      if (/controller|route|server|api|handler/i.test(file.path)) reasons.push("request entrypoint");
-      return { path: file.path, score: file.symbols * 2 + file.lines / 50, reasons };
-    });
+    const hotspots = topFiles
+      .filter((file) => !isDependencyMetadataFile(file.path))
+      .slice(0, 8)
+      .map((file) => {
+        const reasons: string[] = [];
+        if (file.symbols > 20) reasons.push("high symbol density");
+        if (file.lines > 400) reasons.push("large file");
+        if (/controller|route|server|api|handler/i.test(file.path)) reasons.push("request entrypoint");
+        return { path: file.path, score: file.symbols * 2 + file.lines / 50, reasons };
+      });
 
     const entrypoints = (this.db
       .prepare(
@@ -2567,6 +2570,24 @@ function clusterName(filePath: string): string {
   }
   return parts[0];
 }
+
+function isDependencyMetadataFile(filePath: string): boolean {
+  const base = path.posix.basename(filePath).toLowerCase();
+  return dependencyMetadataFiles.has(base);
+}
+
+const dependencyMetadataFiles = new Set([
+  "package-lock.json",
+  "npm-shrinkwrap.json",
+  "pnpm-lock.yaml",
+  "pnpm-lock.yml",
+  "yarn.lock",
+  "composer.lock",
+  "cargo.lock",
+  "poetry.lock",
+  "go.sum",
+  "gemfile.lock"
+]);
 
 function sqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;

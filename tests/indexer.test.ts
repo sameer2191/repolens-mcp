@@ -327,6 +327,111 @@ test("packs and imports a reusable graph package", async () => {
   }
 });
 
+test("indexes package-manager lockfiles as resolved dependency graph nodes", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-lockfiles-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(repo, { recursive: true });
+  await fs.writeFile(
+    path.join(repo, "package-lock.json"),
+    JSON.stringify(
+      {
+        name: "lock-demo",
+        lockfileVersion: 3,
+        packages: {
+          "": { name: "lock-demo", version: "1.0.0" },
+          "node_modules/express": { version: "4.18.3" },
+          "node_modules/@scope/toolkit": { version: "2.1.0" }
+        }
+      },
+      null,
+      2
+    )
+  );
+  await fs.writeFile(
+    path.join(repo, "pnpm-lock.yaml"),
+    [
+      "lockfileVersion: '9.0'",
+      "packages:",
+      "  express@4.18.3:",
+      "    resolution: {integrity: sha512-demo}",
+      "  /@scope/toolkit@2.1.0:",
+      "    resolution: {integrity: sha512-demo}"
+    ].join("\n")
+  );
+  await fs.writeFile(
+    path.join(repo, "yarn.lock"),
+    [
+      "# yarn lockfile v1",
+      '"left-pad@^1.3.0":',
+      '  version "1.3.0"',
+      '  resolved "https://registry.yarnpkg.com/left-pad/-/left-pad-1.3.0.tgz"'
+    ].join("\n")
+  );
+  await fs.writeFile(
+    path.join(repo, "Cargo.lock"),
+    [
+      "[[package]]",
+      'name = "serde"',
+      'version = "1.0.203"',
+      'source = "registry+https://github.com/rust-lang/crates.io-index"'
+    ].join("\n")
+  );
+  await fs.writeFile(path.join(repo, "go.sum"), "github.com/gin-gonic/gin v1.10.0 h1:abc\ngithub.com/gin-gonic/gin v1.10.0/go.mod h1:def\n");
+  await fs.writeFile(
+    path.join(repo, "Gemfile.lock"),
+    [
+      "GEM",
+      "  remote: https://rubygems.org/",
+      "  specs:",
+      "    rack (3.0.9)",
+      "      nio4r (~> 2.0)"
+    ].join("\n")
+  );
+  await fs.writeFile(
+    path.join(repo, "composer.lock"),
+    JSON.stringify(
+      {
+        packages: [{ name: "symfony/http-foundation", version: "v7.1.0" }],
+        "packages-dev": [{ name: "phpunit/phpunit", version: "11.1.3" }]
+      },
+      null,
+      2
+    )
+  );
+
+  const result = await indexRepository({ root: repo, dbPath });
+  assert.equal(result.filesIndexed, 7);
+
+  const store = new MemoryStore(dbPath);
+  try {
+    const schema = store.graphSchema();
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "lockfile"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "locked_dependency"));
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "LOCKS"));
+
+    const lockfiles = store.searchGraph({ kind: "lockfile", limit: 20 });
+    assert.equal(lockfiles.length, 7);
+    assert.ok(lockfiles.some((match) => match.symbol.metadata?.packageManager === "npm"));
+    assert.ok(lockfiles.some((match) => match.symbol.metadata?.packageManager === "bundler"));
+
+    const dependencies = store.searchGraph({ kind: "locked_dependency", limit: 50 });
+    const names = new Set(dependencies.map((match) => match.symbol.name));
+    assert.ok(names.has("express"));
+    assert.ok(names.has("@scope/toolkit"));
+    assert.ok(names.has("left-pad"));
+    assert.ok(names.has("serde"));
+    assert.ok(names.has("github.com/gin-gonic/gin"));
+    assert.ok(names.has("rack"));
+    assert.ok(names.has("symfony/http-foundation"));
+
+    const query = store.queryGraph("MATCH (a)-[r:LOCKS]->(b) WHERE b.name = 'express' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(query.rows.some((row) => row["a.name"] === "package-lock.json" && row["r.type"] === "LOCKS"));
+  } finally {
+    store.close();
+  }
+});
+
 test("scans indexed lines for redacted secret findings", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-secrets-"));
   const repo = path.join(tmp, "repo");

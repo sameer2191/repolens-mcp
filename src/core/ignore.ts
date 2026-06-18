@@ -29,9 +29,6 @@ const ignoredDirectories = new Set([
 ]);
 
 const ignoredFiles = new Set([
-  "package-lock.json",
-  "pnpm-lock.yaml",
-  "yarn.lock",
   "bun.lockb",
   "tsconfig.tsbuildinfo"
 ]);
