@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import {
   architectureReport,
+  deleteProject,
   detectChanges,
   findDeadCode,
   findCommunities,
@@ -10,9 +11,11 @@ import {
   getArchitecture,
   getCodeSnippet,
   getGraphSchema,
+  getProjectStatus,
   graphSnapshot,
   impactAnalysis,
   jsonBlock,
+  listProjects,
   listDecisions,
   packGraph,
   queryGraph,
@@ -70,6 +73,40 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ packagePath, dbPath, overwrite }) => text(await unpackGraph(packagePath, dbPath, overwrite))
+  );
+
+  server.registerTool(
+    "list_projects",
+    {
+      description: "List repositories indexed through RepoLens on this machine, with latest counts and database status.",
+      inputSchema: {
+        limit: z.number().int().positive().max(500).optional()
+      }
+    },
+    async ({ limit }) => text(await listProjects(limit))
+  );
+
+  server.registerTool(
+    "index_status",
+    {
+      description: "Return the latest indexed status for a repository root, database path, label, or the most recent project.",
+      inputSchema: {
+        identifier: z.string().optional().describe("Repository root, database path, run label, or project folder name.")
+      }
+    },
+    async ({ identifier }) => text(await getProjectStatus(identifier))
+  );
+
+  server.registerTool(
+    "delete_project",
+    {
+      description: "Remove a project from the local RepoLens catalog. Optionally deletes safe .repolens SQLite graph files.",
+      inputSchema: {
+        identifier: z.string().describe("Repository root, database path, run label, or project folder name."),
+        deleteDb: z.boolean().optional().describe("Also delete the project's .repolens SQLite database and sidecar files when the path is safe.")
+      }
+    },
+    async ({ identifier, deleteDb }) => text(await deleteProject(identifier, deleteDb))
   );
 
   server.registerTool(

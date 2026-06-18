@@ -248,6 +248,34 @@ export interface IndexResult {
   elapsedMs: number;
 }
 
+export interface ProjectRecord {
+  root: string;
+  dbPath: string;
+  label?: string;
+  indexedAt: string;
+  mode: "full" | "incremental";
+  filesDiscovered: number;
+  filesIndexed: number;
+  filesSkipped: number;
+  symbols: number;
+  edges: number;
+  elapsedMs: number;
+}
+
+export interface ProjectStatus extends ProjectRecord {
+  dbExists: boolean;
+  liveTotals?: { files: number; symbols: number; edges: number };
+  staleReason?: string;
+}
+
+export interface DeleteProjectResult {
+  identifier: string;
+  removed: number;
+  remaining: number;
+  deletedDbFiles: string[];
+  skippedDbFiles: string[];
+}
+
 export interface WatchIndexOptions extends IndexOptions {
   intervalMs?: number;
   maxRuns?: number;

@@ -118,6 +118,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const dependencyMatches = store.searchGraph({ kind: "dependency", query: "spring" });
     assert.ok(dependencyMatches.some((match) => match.symbol.name === "org.springframework.boot:spring-boot-starter-web"));
+    assert.equal(store.searchGraph({ kind: "dependency", query: "(" }).length, 0);
     assert.ok(store.searchGraph({ kind: "dependency", query: "fastapi" }).some((match) => match.symbol.name === "fastapi"));
     assert.ok(store.searchGraph({ kind: "dependency", query: "gin-gonic" }).some((match) => match.symbol.name === "github.com/gin-gonic/gin"));
     assert.ok(store.searchGraph({ kind: "dependency", query: "tokio" }).some((match) => match.symbol.name === "tokio"));

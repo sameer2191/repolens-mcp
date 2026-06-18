@@ -1,5 +1,6 @@
 import path from "node:path";
 import { exportGraphPackage, importGraphPackage } from "./artifact.js";
+import { deleteProject as deleteCatalogProject, getProjectStatus as getCatalogProjectStatus, listProjects as listCatalogProjects, recordProjectIndex } from "./catalog.js";
 import { indexRepository } from "./indexer.js";
 import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
@@ -8,11 +9,30 @@ import type { ArchitectureReportOptions } from "./report.js";
 import type { DecisionRecord, GraphSearchOptions, IndexOptions, WatchIndexOptions } from "./types.js";
 
 export async function runIndex(options: IndexOptions) {
-  return indexRepository(options);
+  const result = await indexRepository(options);
+  await recordProjectIndex(result, options.runLabel);
+  return result;
 }
 
 export async function runWatch(options: WatchIndexOptions) {
-  return watchRepository(options);
+  const summary = await watchRepository(options);
+  const lastRun = summary.runs.at(-1);
+  if (lastRun) {
+    await recordProjectIndex(lastRun, options.runLabel);
+  }
+  return summary;
+}
+
+export async function listProjects(limit?: number) {
+  return listCatalogProjects(limit);
+}
+
+export async function getProjectStatus(identifier?: string) {
+  return getCatalogProjectStatus(identifier);
+}
+
+export async function deleteProject(identifier: string, deleteDb?: boolean) {
+  return deleteCatalogProject(identifier, deleteDb);
 }
 
 export function withStore<T>(rootOrDbPath: string | undefined, fn: (store: MemoryStore) => T): T {

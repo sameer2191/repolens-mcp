@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   architectureReport,
+  deleteProject,
   detectChanges,
   findDeadCode,
   findCommunities,
@@ -11,9 +12,11 @@ import {
   getArchitecture,
   getCodeSnippet,
   getGraphSchema,
+  getProjectStatus,
   graphSnapshot,
   impactAnalysis,
   jsonBlock,
+  listProjects,
   listDecisions,
   packGraph,
   queryGraph,
@@ -70,6 +73,17 @@ async function main(): Promise<void> {
       print(summary);
       break;
     }
+    case "list-projects":
+    case "projects":
+      print(await listProjects(numberFlag(args, "limit")));
+      break;
+    case "project-status":
+    case "index-status":
+      print(await getProjectStatus(args.positional[0] ?? stringFlag(args, "project")));
+      break;
+    case "delete-project":
+      print(await deleteProject(required(args.positional[0] ?? stringFlag(args, "project"), "project"), booleanFlag(args, "delete-db")));
+      break;
     case "architecture":
       print(getArchitecture(stringFlag(args, "db")));
       break;
@@ -321,6 +335,9 @@ function help(): string {
 
 Usage:
   repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental]
+  repolens-mcp list-projects [--limit n]
+  repolens-mcp project-status [root-or-db-or-label]
+  repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
   repolens-mcp architecture [--db path]
   repolens-mcp search <query> [--db path] [--limit n]
   repolens-mcp symbols <query> [--kind function] [--db path]

@@ -600,7 +600,7 @@ function extractGoModManifest(filePath: string, language: Language, content: str
   if (moduleName) {
     symbols.push(manifestSymbol(filePath, language, "package", moduleName, 1, "go"));
   }
-  const requireLine = /^require\s+(\S+)\s+(\S+)/gm;
+  const requireLine = /^require[ \t]+([^\s()]+)[ \t]+(\S+)/gm;
   for (const match of content.matchAll(requireLine)) {
     symbols.push(manifestSymbol(filePath, language, "dependency", match[1], offsetToLine(content, match.index ?? 0), "go", match[2]));
   }
