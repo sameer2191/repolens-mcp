@@ -60,7 +60,10 @@ interface ParsedGraphQuery {
     | { kind: "edge"; leftAlias: string; leftLabel?: string; edgeAlias: string; edgeType?: string; rightAlias: string; rightLabel?: string; direction: "outbound" | "inbound" };
   where: GraphWhereCondition[];
   returns: GraphReturnExpression[];
+  orderBy: GraphOrderExpression[];
   limit: number;
+  skip: number;
+  distinct: boolean;
 }
 
 interface GraphWhereCondition {
@@ -74,6 +77,14 @@ interface GraphReturnExpression {
   alias: string;
   property: string;
   output: string;
+  aggregate?: "count";
+  distinct?: boolean;
+}
+
+interface GraphOrderExpression {
+  alias: string;
+  property: string;
+  direction: "ASC" | "DESC";
 }
 
 export class MemoryStore {
@@ -693,15 +704,20 @@ export class MemoryStore {
       where.push(whereSql(condition, aliasMap, params));
     }
 
-    const selectSql = parsed.returns.map((expr, index) => `${propertySql(expr.alias, expr.property, aliasMap)} AS c${index}`);
+    const selectSql = parsed.returns.map((expr, index) => `${returnSql(expr, aliasMap)} AS c${index}`);
     const fromSql =
       parsed.pattern.kind === "node"
         ? "symbols s"
         : parsed.pattern.direction === "outbound"
           ? "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.source JOIN symbols right_symbol ON right_symbol.qualified_name = edges.target"
           : "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.target JOIN symbols right_symbol ON right_symbol.qualified_name = edges.source";
-    const sql = `SELECT ${selectSql.join(", ")} FROM ${fromSql}${where.length ? ` WHERE ${where.join(" AND ")}` : ""} LIMIT ?`;
-    const rows = this.db.prepare(sql).all(...params, parsed.limit) as Array<Record<string, string | number | boolean | null>>;
+    const orderSql = parsed.orderBy.map((expr) => `${propertySql(expr.alias, expr.property, aliasMap)} ${expr.direction}`);
+    const sql =
+      `SELECT ${parsed.distinct ? "DISTINCT " : ""}${selectSql.join(", ")} FROM ${fromSql}` +
+      `${where.length ? ` WHERE ${where.join(" AND ")}` : ""}` +
+      `${orderSql.length ? ` ORDER BY ${orderSql.join(", ")}` : ""}` +
+      " LIMIT ? OFFSET ?";
+    const rows = this.db.prepare(sql).all(...params, parsed.limit, parsed.skip) as Array<Record<string, string | number | boolean | null>>;
     return {
       query,
       columns: parsed.returns.map((expr) => expr.output),
@@ -1573,16 +1589,26 @@ function parseGraphQuery(query: string, defaultLimit: number): ParsedGraphQuery 
   const limitMatch = /\s+LIMIT\s+(\d+)\s*$/i.exec(trimmed);
   const limit = limitMatch ? clampPositive(Number(limitMatch[1]), 1, 500) : defaultLimit;
   const withoutLimit = limitMatch ? trimmed.slice(0, limitMatch.index).trim() : trimmed;
-  const match = /^MATCH\s+(.+?)\s+(?:WHERE\s+(.+?)\s+)?RETURN\s+(.+)$/i.exec(withoutLimit);
+  const skipMatch = /\s+SKIP\s+(\d+)\s*$/i.exec(withoutLimit);
+  const skip = skipMatch ? Math.max(0, Number(skipMatch[1])) : 0;
+  const withoutSkip = skipMatch ? withoutLimit.slice(0, skipMatch.index).trim() : withoutLimit;
+  const orderMatch = /\s+ORDER\s+BY\s+(.+)$/i.exec(withoutSkip);
+  const orderBy = orderMatch ? parseOrderBy(orderMatch[1].trim()) : [];
+  const withoutOrder = orderMatch ? withoutSkip.slice(0, orderMatch.index).trim() : withoutSkip;
+  const match = /^MATCH\s+(.+?)\s+(?:WHERE\s+(.+?)\s+)?RETURN\s+(.+)$/i.exec(withoutOrder);
   if (!match) {
-    throw new Error("Supported query shape: MATCH (...) [WHERE alias.property OP 'value'] RETURN alias.property[, ...] [LIMIT n]");
+    throw new Error("Supported query shape: MATCH (...) [WHERE alias.property OP 'value'] RETURN [DISTINCT] alias.property[, ...] [ORDER BY alias.property] [SKIP n] [LIMIT n]");
   }
 
+  const parsedReturn = parseReturn(match[3].trim());
   return {
     pattern: parseMatchPattern(match[1].trim()),
     where: parseWhere(match[2]?.trim()),
-    returns: parseReturn(match[3].trim()),
-    limit
+    returns: parsedReturn.returns,
+    orderBy,
+    limit,
+    skip,
+    distinct: parsedReturn.distinct
   };
 }
 
@@ -1641,8 +1667,24 @@ function parseWhere(where: string | undefined): GraphWhereCondition[] {
   });
 }
 
-function parseReturn(returnText: string): GraphReturnExpression[] {
-  const expressions = returnText.split(",").map((part) => {
+function parseReturn(returnText: string): { returns: GraphReturnExpression[]; distinct: boolean } {
+  let text = returnText.trim();
+  let distinct = false;
+  if (/^DISTINCT\s+/i.test(text)) {
+    distinct = true;
+    text = text.replace(/^DISTINCT\s+/i, "");
+  }
+  const expressions = text.split(",").map((part) => {
+    const countMatch = /^count\(\s*(?:(DISTINCT)\s+)?(?:(\w+)(?:\.([A-Za-z_]\w*))?|\*)\s*\)(?:\s+AS\s+([A-Za-z_]\w*))?$/i.exec(part.trim());
+    if (countMatch) {
+      return {
+        alias: countMatch[2] ?? "*",
+        property: countMatch[3] ?? "qualifiedName",
+        output: countMatch[4] ?? "count",
+        aggregate: "count" as const,
+        distinct: Boolean(countMatch[1])
+      };
+    }
     const match = /^(\w+)(?:\.([A-Za-z_]\w*))?(?:\s+AS\s+([A-Za-z_]\w*))?$/i.exec(part.trim());
     if (!match) {
       throw new Error(`Unsupported RETURN expression: ${part}`);
@@ -1657,7 +1699,24 @@ function parseReturn(returnText: string): GraphReturnExpression[] {
   if (expressions.length === 0) {
     throw new Error("RETURN must include at least one expression");
   }
-  return expressions;
+  if (expressions.some((expr) => expr.aggregate) && expressions.some((expr) => !expr.aggregate)) {
+    throw new Error("Aggregate RETURN expressions cannot be mixed with property expressions");
+  }
+  return { returns: expressions, distinct };
+}
+
+function parseOrderBy(orderText: string): GraphOrderExpression[] {
+  return orderText.split(",").map((part) => {
+    const match = /^(\w+)\.([A-Za-z_]\w*)(?:\s+(ASC|DESC))?$/i.exec(part.trim());
+    if (!match) {
+      throw new Error(`Unsupported ORDER BY expression: ${part}`);
+    }
+    return {
+      alias: match[1],
+      property: match[2],
+      direction: (match[3]?.toUpperCase() as "ASC" | "DESC" | undefined) ?? "ASC"
+    };
+  });
 }
 
 function whereSql(condition: GraphWhereCondition, aliasMap: Map<string, string>, params: Array<string | number>): string {
@@ -1679,6 +1738,17 @@ function whereSql(condition: GraphWhereCondition, aliasMap: Map<string, string>,
       params.push(`%${condition.value.toLowerCase()}`);
       return `lower(CAST(${column} AS TEXT)) LIKE ?`;
   }
+}
+
+function returnSql(expression: GraphReturnExpression, aliasMap: Map<string, string>): string {
+  if (expression.aggregate === "count") {
+    if (expression.alias === "*") {
+      return "count(*)";
+    }
+    const column = propertySql(expression.alias, expression.property, aliasMap);
+    return expression.distinct ? `count(DISTINCT ${column})` : `count(${column})`;
+  }
+  return propertySql(expression.alias, expression.property, aliasMap);
 }
 
 function propertySql(alias: string, property: string, aliasMap: Map<string, string>): string {

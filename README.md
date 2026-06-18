@@ -117,9 +117,12 @@ The extractor is intentionally compact and extensible:
 MATCH (f:Function) WHERE f.name = 'main' RETURN f.name,f.filePath LIMIT 10
 MATCH (a)-[r:CALLS]->(b) WHERE b.name CONTAINS 'order' RETURN a.name,b.name,r.type LIMIT 10
 MATCH (a)<-[:CALLS]-(b) RETURN a.name,b.name LIMIT 10
+MATCH (f:Function) RETURN count(f) AS functions
+MATCH (f:Function) RETURN DISTINCT f.name ORDER BY f.name SKIP 10 LIMIT 10
 ```
 
 Supported `WHERE` operators are `=`, `<>`, `CONTAINS`, `STARTS WITH`, and `ENDS WITH`, joined with `AND`.
+Supported result clauses include `RETURN DISTINCT`, `count(...)`, `ORDER BY`, `SKIP`, and `LIMIT`.
 
 ## Validation
 

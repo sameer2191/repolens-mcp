@@ -97,6 +97,22 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.equal(nodeQuery.rows[0]?.["f.name"], "createOrder");
     assert.equal(nodeQuery.rows[0]?.["f.filePath"], "src/orders.ts");
 
+    const countQuery = store.queryGraph("MATCH (f:Function) RETURN count(f) AS functions LIMIT 5");
+    assert.ok(Number(countQuery.rows[0]?.functions) >= 5);
+
+    const distinctQuery = store.queryGraph("MATCH (f:Function) RETURN DISTINCT f.name ORDER BY f.name LIMIT 20");
+    const distinctNames = distinctQuery.rows.map((row) => String(row["f.name"]));
+    assert.equal(new Set(distinctNames).size, distinctNames.length);
+    assert.deepEqual(distinctNames, [...distinctNames].sort());
+
+    const orderedBaseline = store.queryGraph("MATCH (f:Function) RETURN f.name ORDER BY f.name LIMIT 4");
+    const orderedQuery = store.queryGraph("MATCH (f:Function) RETURN f.name ORDER BY f.name SKIP 1 LIMIT 3");
+    assert.equal(orderedQuery.rows.length, 3);
+    assert.deepEqual(
+      orderedQuery.rows.map((row) => row["f.name"]),
+      orderedBaseline.rows.slice(1).map((row) => row["f.name"])
+    );
+
     const callQuery = store.queryGraph("MATCH (a)-[r:CALLS]->(b:Function) WHERE b.name = 'createOrder' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(callQuery.rows.some((row) => row["b.name"] === "createOrder" && row["r.type"] === "CALLS"));
 
