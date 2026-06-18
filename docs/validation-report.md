@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 48 tests, 47 passing, 0 failures, 1 sandbox-only dashboard socket skip.
-- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, MCP startup auto-indexing from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, git-history hotspot extraction, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
+- Node test suite passed: 49 tests, 48 passing, 0 failures, 1 sandbox-only dashboard socket skip.
+- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, MCP startup auto-indexing from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, git-history hotspot extraction, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
 
 ## Package And Release
 
@@ -37,6 +37,7 @@ node --experimental-sqlite dist/src/cli.js uninstall-agents --target /tmp/repole
 node --experimental-sqlite dist/src/cli.js config set auto-index full --config /tmp/repolens-config-smoke.json
 node --experimental-sqlite dist/src/cli.js config get autoIndex --config /tmp/repolens-config-smoke.json
 node --experimental-sqlite dist/src/cli.js config reset auto-index --config /tmp/repolens-config-smoke.json
+node --experimental-sqlite dist/src/cli.js benchmark tests/fixtures/sample-repo --db /tmp/repolens-benchmark-smoke.db --max-file-bytes 750000 --label benchmark-smoke
 npm sbom --sbom-format cyclonedx --json
 ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].each { |file| YAML.load_file(file); puts file }'
 ```
@@ -44,13 +45,14 @@ ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].each { |file| YAML.load_
 Result:
 
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 156,325 bytes packed, 825,097 bytes unpacked, 71 runtime entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 157,856 bytes packed, 834,289 bytes unpacked, 71 runtime entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `package.json`, `server.json`, and `install.sh`; compiled tests and fixtures are excluded.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
 - `agent-setup` dry-run rendered the expected guide and instruction targets for Codex, Claude, and Gemini without writing files.
 - `config set/get/reset` persisted startup defaults in an isolated temp config file and removed the managed key cleanly.
 - `uninstall-codex --dry-run` detected the managed Codex block without writing, and `uninstall-agents` removed generated managed blocks from a temporary project target.
+- `benchmark` on the fixture repository ran a full index plus no-op incremental index, returned graph totals and throughput, and reported 0 medium/high secret findings.
 - Release workflow added for version tags and manual runs; it runs install, verification, demo indexing, `npm pack --json`, CycloneDX SBOM generation, SHA-256 checksum generation for the tarball and SBOM, artifact upload, and GitHub release asset publishing for tag builds.
 - Release workflow now also requests `id-token: write` and `attestations: write`, then calls `actions/attest-build-provenance@v2` for the tarball, SBOM, and checksum manifest before uploading release artifacts.
 - Release workflow runs `npm run release:codeql-gate` with `security-events: read` before packaging/publishing; live validation returned `CodeQL alert gate passed: 0 open CodeQL alerts.`
@@ -64,6 +66,7 @@ Command:
 ```bash
 node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000
 node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000 --incremental
+node --experimental-sqlite dist/src/cli.js benchmark . --db .repolens/benchmark.db --max-file-bytes 750000 --label self-benchmark
 node --experimental-sqlite dist/src/cli.js architecture --db .repolens/self.db
 node --experimental-sqlite dist/src/cli.js vector "local vector search" --db .repolens/self.db --limit 5
 node --experimental-sqlite dist/src/cli.js references vectorSearch --db .repolens/self.db --limit 5
@@ -78,22 +81,23 @@ Result:
 - Files discovered: 78
 - Files indexed: 77
 - Files skipped: 1
-- Symbols: 917
-- Edges: 3,966
-- Lines indexed: 15,439 source rows; architecture totals report 17,005 physical lines.
-- Full index elapsed: 2,423 ms
-- No-op incremental elapsed: 102 ms
+- Symbols: 921
+- Edges: 3,977
+- Lines indexed: 15,603 source rows; architecture totals report 17,177 physical lines.
+- Full index elapsed: 2,529 ms
+- No-op incremental elapsed: 108 ms
 - No-op incremental unchanged files: 78
-- Full-text code-search rows: 15,439 `code_lines` rows and 15,439 `code_fts` rows
-- Local vector rows: 705 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
+- Benchmark command: full index 77/78 files in 2,410 ms, no-op incremental in 14 ms, 31.95 files/s full throughput, 5,571.43 discovered files/s incremental throughput, and 0 medium/high secret findings across 13,425 scanned lines.
+- Full-text code-search rows: 15,603 `code_lines` rows and 15,603 `code_fts` rows
+- Local vector rows: 709 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
 - Reference lookup: `references vectorSearch` returned the API definition plus exact identifier references in `src/core/api.ts`, `src/cli.ts`, and docs.
-- MCP server tools registered: 36
+- MCP server tools registered: 37
 - Persistent config smoke test: `config set auto-index full`, `config get autoIndex`, and `config reset auto-index` worked against an isolated temp config file.
-- Redacted secret scan: 0 high/medium-confidence findings across 13,285 indexed non-test lines.
+- Redacted secret scan: 0 high/medium-confidence findings across 13,425 indexed non-test lines.
 - Channel graph rows: 11 `channel` nodes, 2 `EMITS` edges, and 15 `LISTENS_ON` edges
 - HTTP call graph rows: 14 `http_call` nodes, 14 `CALLS_HTTP_ENDPOINT` edges, and 4 generated `HTTP_CALLS` route edges
-- Type relationship rows: 421 `USES_TYPE` edges, 4 `INHERITS` edges, and 1 `IMPLEMENTS` edge.
-- Data-flow graph rows: 669 conservative `DATA_FLOWS` edges from unambiguous call arguments to callee parameters.
+- Type relationship rows: 425 `USES_TYPE` edges, 5 `INHERITS` edges, and 1 `IMPLEMENTS` edge.
+- Data-flow graph rows: 672 conservative `DATA_FLOWS` edges from unambiguous call arguments to callee parameters.
 - Import graph rows: 75 `IMPORTS_FILE` edges resolving local relative imports and package-local imports to file nodes.
 - Protocol graph rows: 2 `graphql_operation` nodes, 1 `graphql_type` node, 1 `grpc_service` node, 2 `trpc_procedure` nodes, 1 `trpc_call` node, and 8 `route` nodes across fixture and app routes
 - Manifest graph rows: 11 `package` nodes and 27 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
@@ -101,12 +105,12 @@ Result:
 - Git history hotspots: architecture summaries and reports rank high-churn files, including `src/core/store.ts` at 27 commits and 3,954 changed lines, and include a history-aware recommendation before risky edits.
 - MCP startup auto-index: `REPOLENS_AUTO_INDEX=1` performed an incremental startup refresh on the fixture repo, and `REPOLENS_AUTO_INDEX=full` performed a full startup rebuild through the same `runIndex` path.
 - Graph package bootstrap: a missing database imported `.repolens/graph.rlgz`, reported the `bootstrapPackage` metadata, then ran an incremental refresh with unchanged files instead of rebuilding from scratch; `bootstrapPackage: false` kept the full rebuild path.
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 77 files, 917 symbols, and 3,966 edges; the latest run discovered 78 files with 1 skipped by policy.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 77 files, 921 symbols, and 3,977 edges; the latest run discovered 78 files with 1 skipped by policy.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, agent setup helpers, and fixture route/client communities.
 - Graph package import: `.repolens/self.rlgz` restored the self graph snapshot successfully with checksum verification.
-- Graph package: `.repolens/self.rlgz` is 2,969,787 bytes from a 10,764,288-byte SQLite snapshot, SHA-256 `96772875aae490d6635bd8a49d6ed306f305549fa3ee8c9ee7a46ad78453ae3a`.
-- Imported package totals: 77 files, 917 symbols, 3,966 edges, plus 705 persisted vector rows at 384 dimensions.
+- Graph package: `.repolens/self.rlgz` is 3,266,716 bytes from a 11,354,112-byte SQLite snapshot, SHA-256 `68295db63a1627e5d95459226e759dfa87e6006faf86651fb46a9c347bd741dc`.
+- Imported package totals: 77 files, 921 symbols, 3,977 edges, plus 709 persisted vector rows at 384 dimensions.
 - Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, `tests/mcp-server.test.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -709,4 +713,4 @@ Confirmed modified files map back to indexed symbols and produced a medium risk 
 
 ## Conclusion
 
-The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, bootstraps missing databases from shared graph packages, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a lock-protected local catalog, summarizes indexed fleets across languages/routes/HTTP calls/dependencies with inferred service links, generates cross-repo fleet graphs for shared dependencies, route overlaps, and consumer/provider HTTP edges, runs redacted secret scans, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, renders and removes managed multi-agent MCP setup guidance, supports explicit MCP startup auto-indexing through env vars or persistent local config, and exposes graph schema, structural search, indexed reference lookup, typed inheritance/implementation/use relationships, semantic search, local vector search, generated similarity/semantic edges, read-only graph queries, focused trace modes for calls/data flow/cross-service edges, import-resolved dependency cycles, architecture recommendations, git-history hotspots, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. GitHub security posture now includes branch protection, private vulnerability reporting, CodeQL/Scorecard/Dependabot/secret scanning, property-based resolver fuzzing, MCP JSON-RPC robustness fuzzing, and a release gate that blocks publication on open CodeQL alerts. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, benchmarks full and no-op incremental graph creation, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, bootstraps missing databases from shared graph packages, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a lock-protected local catalog, summarizes indexed fleets across languages/routes/HTTP calls/dependencies with inferred service links, generates cross-repo fleet graphs for shared dependencies, route overlaps, and consumer/provider HTTP edges, runs redacted secret scans, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, renders and removes managed multi-agent MCP setup guidance, supports explicit MCP startup auto-indexing through env vars or persistent local config, and exposes graph schema, structural search, indexed reference lookup, typed inheritance/implementation/use relationships, semantic search, local vector search, generated similarity/semantic edges, read-only graph queries, focused trace modes for calls/data flow/cross-service edges, import-resolved dependency cycles, architecture recommendations, git-history hotspots, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. GitHub security posture now includes branch protection, private vulnerability reporting, CodeQL/Scorecard/Dependabot/secret scanning, property-based resolver fuzzing, MCP JSON-RPC robustness fuzzing, and a release gate that blocks publication on open CodeQL alerts. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.

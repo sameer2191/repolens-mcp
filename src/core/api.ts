@@ -14,7 +14,19 @@ import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
 import { watchRepository } from "./watcher.js";
 import type { ArchitectureReportOptions } from "./report.js";
-import type { ContextPack, DecisionRecord, GraphSearchOptions, IndexOptions, RuntimeTrace, SecretScanOptions, TraceDirection, TraceOptions, WatchIndexOptions } from "./types.js";
+import type {
+  BenchmarkOptions,
+  BenchmarkResult,
+  ContextPack,
+  DecisionRecord,
+  GraphSearchOptions,
+  IndexOptions,
+  RuntimeTrace,
+  SecretScanOptions,
+  TraceDirection,
+  TraceOptions,
+  WatchIndexOptions
+} from "./types.js";
 
 export async function runIndex(options: IndexOptions) {
   const result = await indexRepository(options);
@@ -29,6 +41,45 @@ export async function runWatch(options: WatchIndexOptions) {
     await recordProjectIndex(lastRun, options.runLabel);
   }
   return summary;
+}
+
+export async function benchmarkRepository(options: BenchmarkOptions): Promise<BenchmarkResult> {
+  const fullIndex = await runIndex({ ...options, incremental: false });
+  const incrementalIndex = await runIndex({ ...options, incremental: true });
+  const architecture = getArchitecture(fullIndex.dbPath);
+  const secretScanResult =
+    options.secretScan === false ? undefined : scanSecrets({ limit: options.secretScanLimit ?? 20, minConfidence: "medium" }, fullIndex.dbPath);
+
+  return {
+    root: fullIndex.root,
+    dbPath: fullIndex.dbPath,
+    generatedAt: new Date().toISOString(),
+    fullIndex,
+    incrementalIndex,
+    throughput: {
+      fullFilesPerSecond: rate(fullIndex.filesIndexed, fullIndex.elapsedMs),
+      fullSymbolsPerSecond: rate(fullIndex.symbols, fullIndex.elapsedMs),
+      incrementalFilesPerSecond: rate(incrementalIndex.filesDiscovered, incrementalIndex.elapsedMs)
+    },
+    architecture: {
+      totals: architecture.totals,
+      languages: architecture.languages.slice(0, 12),
+      nodeLabels: architecture.nodeLabels.slice(0, 20),
+      edgeTypes: architecture.edgeTypes.slice(0, 24),
+      entrypoints: architecture.entrypoints,
+      risks: architecture.risks
+    },
+    secretScan: secretScanResult
+      ? {
+          scannedLines: secretScanResult.scannedLines,
+          findings: secretScanResult.totals.findings,
+          high: secretScanResult.totals.high,
+          medium: secretScanResult.totals.medium,
+          low: secretScanResult.totals.low,
+          risks: secretScanResult.risks
+        }
+      : undefined
+  };
 }
 
 export async function listProjects(limit?: number) {
@@ -214,4 +265,11 @@ export async function unpackGraph(packagePath: string, dbPath?: string, overwrit
 
 export function jsonBlock(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+function rate(count: number, elapsedMs: number): number {
+  if (elapsedMs <= 0) {
+    return count;
+  }
+  return Number((count / (elapsedMs / 1000)).toFixed(2));
 }

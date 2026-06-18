@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { architectureReport, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
+import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
 import { addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
@@ -470,6 +470,31 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
   } finally {
     store.close();
   }
+});
+
+test("benchmarks full and incremental indexing with graph evidence", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-benchmark-"));
+  const dbPath = path.join(tmp, "memory.db");
+  const result = await benchmarkRepository({
+    root: fixture,
+    dbPath,
+    maxFileBytes: 750000,
+    runLabel: "benchmark-fixture"
+  });
+
+  assert.equal(result.root, fixture);
+  assert.equal(result.dbPath, dbPath);
+  assert.equal(result.fullIndex.mode, "full");
+  assert.equal(result.incrementalIndex.mode, "incremental");
+  assert.equal(result.fullIndex.filesIndexed, 22);
+  assert.equal(result.incrementalIndex.filesUnchanged, 22);
+  assert.ok(result.fullIndex.symbols > 0);
+  assert.ok(result.fullIndex.edges > 0);
+  assert.equal(result.architecture.totals.symbols, result.fullIndex.symbols);
+  assert.ok(result.architecture.languages.some((item) => item.language === "typescript"));
+  assert.ok(result.throughput.fullFilesPerSecond > 0);
+  assert.ok(result.throughput.incrementalFilesPerSecond > 0);
+  assert.equal(result.secretScan?.findings, 0);
 });
 
 test("packs and imports a reusable graph package", async () => {

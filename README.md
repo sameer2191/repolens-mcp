@@ -12,7 +12,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 36 tools for indexing, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 37 tools for indexing, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
@@ -76,6 +76,7 @@ From a local clone, the installer runs the same build and Codex checks:
 ```bash
 repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name]
 repolens-mcp index [repo] [--bootstrap-package .repolens/graph.rlgz] [--no-bootstrap]
+repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--no-secret-scan]
 repolens-mcp list-projects [--limit n]
 repolens-mcp project-status [root-or-db-or-label]
 repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
@@ -124,6 +125,7 @@ repolens-mcp mcp
 | Tool | Purpose |
 | --- | --- |
 | `index_repository` | Build or refresh the local SQLite memory, optionally bootstrapping from a `.rlgz` graph package when the database is missing. |
+| `benchmark_repository` | Run full and no-op incremental indexing, graph totals, throughput, and optional redacted secret-scan summary for repeatable performance evidence. |
 | `export_graph_package` | Create a compressed, checksummed `.rlgz` package from an indexed graph database. |
 | `import_graph_package` | Import a compressed `.rlgz` package into a local graph database. |
 | `manage_config` | Read or update persistent RepoLens defaults for startup auto-indexing and graph paths. |
@@ -204,6 +206,7 @@ Supported result clauses include `RETURN DISTINCT`, `count(...)`, `ORDER BY`, `S
 ```bash
 npm run verify
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js benchmark /path/to/big/repo --db /tmp/benchmark.db
 node --experimental-sqlite dist/src/cli.js list-projects
 node --experimental-sqlite dist/src/cli.js project-status /path/to/big/repo
 node --experimental-sqlite dist/src/cli.js fleet-summary
