@@ -40,7 +40,7 @@ npm sbom --sbom-format cyclonedx --json
 Result:
 
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 111,530 bytes packed, 565,602 bytes unpacked, 62 runtime entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 111,545 bytes packed, 565,629 bytes unpacked, 62 runtime entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `package.json`, `server.json`, and `install.sh`; compiled tests and fixtures are excluded.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
