@@ -77,3 +77,40 @@ test("installCodexConfig writes a managed block with force or dry run", async ()
   assert.equal(hasMcpServer(content, "repolens"), true);
   assert.match(content, /REPOLENS_DB = "memory\.db"/);
 });
+
+test("installCodexConfig force replaces unmanaged repolens sections", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-codex-"));
+  const configPath = path.join(tmp, "config.toml");
+  await fs.writeFile(
+    configPath,
+    [
+      'model = "gpt-5"',
+      "",
+      "[mcp_servers.repolens]",
+      'command = "old-node"',
+      'args = ["old.js"]',
+      "",
+      "[mcp_servers.repolens.env]",
+      'REPOLENS_DB = "old.db"',
+      "",
+      "[mcp_servers.other]",
+      'command = "other"'
+    ].join("\n")
+  );
+
+  await installCodexConfig({
+    configPath,
+    command: "node",
+    cliPath: "/repo/cli.js",
+    dbPath: "memory.db",
+    force: true
+  });
+  const content = await fs.readFile(configPath, "utf8");
+
+  assert.equal((content.match(/\[mcp_servers\.repolens\]/g) ?? []).length, 1);
+  assert.equal((content.match(/\[mcp_servers\.repolens\.env\]/g) ?? []).length, 1);
+  assert.ok(!content.includes("old-node"));
+  assert.ok(!content.includes("old.db"));
+  assert.match(content, /\[mcp_servers\.other\]/);
+  assert.match(content, /REPOLENS_DB = "memory\.db"/);
+});

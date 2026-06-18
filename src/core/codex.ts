@@ -60,7 +60,8 @@ export async function installCodexConfig(options: CodexInstallOptions): Promise<
     };
   }
 
-  const next = upsertManagedBlock(existing, block);
+  const base = removeMcpServerSections(stripManagedBlock(existing), serverName);
+  const next = upsertManagedBlock(base, block);
   if (options.dryRun) {
     return {
       configPath,
@@ -121,6 +122,31 @@ export function upsertManagedBlock(config: string, block: string): string {
   }
   const trimmed = config.trimEnd();
   return trimmed ? `${trimmed}\n\n${normalizedBlock}` : normalizedBlock;
+}
+
+function stripManagedBlock(config: string): string {
+  const pattern = new RegExp(`${escapeRegExp(MANAGED_START)}[\\s\\S]*?${escapeRegExp(MANAGED_END)}\\n?`, "g");
+  return config.replace(pattern, "");
+}
+
+function removeMcpServerSections(config: string, serverName: string): string {
+  const table = `mcp_servers.${serverName}`;
+  const lines = config.split(/\r?\n/);
+  const kept: string[] = [];
+  let skipping = false;
+
+  for (const line of lines) {
+    const match = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (match) {
+      const section = match[1]?.trim() ?? "";
+      skipping = section === table || section.startsWith(`${table}.`);
+    }
+    if (!skipping) {
+      kept.push(line);
+    }
+  }
+
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
 }
 
 export function hasMcpServer(config: string, serverName: string): boolean {
