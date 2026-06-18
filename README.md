@@ -41,6 +41,13 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
 - **No frontend build required**: the dashboard is served by the CLI.
 
+## Security And Quality
+
+- **Protected mainline**: `main` requires PR review, CODEOWNERS review, fresh branch checks, resolved conversations, linear history, `verify`, and CodeQL `Analyze`; force pushes and branch deletion are blocked.
+- **GitHub security coverage**: CodeQL, OpenSSF Scorecard, Dependabot security updates, secret scanning with push protection, private vulnerability reporting, pinned workflow actions, and least-privilege workflow tokens.
+- **Property-based fuzzing**: `fast-check` fuzzes import resolver traversal boundaries and safe alias/source-root/workspace-package resolution in `tests/security-fixes.test.ts`.
+- **Release integrity**: npm provenance, GitHub build-provenance attestations, CycloneDX SBOM generation, lockfile dependency graphing, and dry-run package validation.
+
 ## Quick Start
 
 ```bash
