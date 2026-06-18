@@ -21,7 +21,7 @@ Result:
 
 - TypeScript build passed.
 - Node test suite passed: 8 tests, 0 failures.
-- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, symbol search, code search, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, symbol search, code search, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -31,6 +31,7 @@ Command:
 node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000
 node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000 --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db .repolens/self.db
+node --experimental-sqlite dist/src/cli.js communities --db .repolens/self.db --limit 5 --min-size 4
 node --experimental-sqlite dist/src/cli.js pack-graph --db .repolens/self.db --out .repolens/self.rlgz --label self-validation
 node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db .repolens/self-imported.db --overwrite
 ```
@@ -40,14 +41,15 @@ Result:
 - Files discovered: 36
 - Files indexed: 36
 - Files skipped: 0
-- Symbols: 275
-- Edges: 933
-- Lines indexed: 5,901
-- Full index elapsed: 174 ms
-- No-op incremental elapsed: 25 ms
+- Symbols: 282
+- Edges: 957
+- Lines indexed: 6,167
+- Full index elapsed: 227 ms
+- No-op incremental elapsed: 34 ms
 - No-op incremental unchanged files: 36
-- Graph package: `.repolens/self.rlgz` (262,374 bytes from a 1,163,264-byte SQLite snapshot)
-- Imported package totals: 36 files, 275 symbols, 933 edges
+- Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, and fixture route/client communities.
+- Graph package: `.repolens/self.rlgz` (270,738 bytes from a 1,208,320-byte SQLite snapshot)
+- Imported package totals: 36 files, 282 symbols, 957 edges
 - Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -77,6 +79,11 @@ node --experimental-sqlite dist/src/cli.js schema \
 node --experimental-sqlite dist/src/cli.js semantic "live session repository" \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
   --limit 8
+
+node --experimental-sqlite dist/src/cli.js communities \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 8 \
+  --min-size 8
 
 node --experimental-sqlite dist/src/cli.js cycles \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
@@ -128,6 +135,7 @@ Result:
 - Graph JSON: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`
 - Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (4,847,389 bytes from a 40,464,384-byte SQLite snapshot)
 - Imported graph package totals: 816 files, 5,234 symbols, 30,324 edges
+- Graph communities sampled: order repository, iOS load flows, access/cart clearing, auth/request helpers, address book, live-session tests, cart, and menu management communities.
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
 - Import-resolved dependency cycles: 0
 
@@ -288,6 +296,17 @@ node --experimental-sqlite dist/src/cli.js query-graph \
 
 Confirmed `loadOrders -> GET /orders` and `submitOrder -> POST /orders` edges in the self-validation fixture graph.
 
+Graph communities:
+
+```bash
+node --experimental-sqlite dist/src/cli.js communities \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --limit 8 \
+  --min-size 8
+```
+
+Confirmed weighted community detection on the large validation database. The largest sampled communities had actionable labels and representative symbols such as `APIOrderRepository`, `APIAddressBookRepository`, `makeSession`, `addItem`, and `listMenuItems`, with cohesion and boundary-edge counts.
+
 Dependency cycles:
 
 ```bash
@@ -388,6 +407,7 @@ node --experimental-sqlite dist/src/cli.js serve \
   --port 9750
 
 curl --fail http://127.0.0.1:9750/api/schema
+curl --fail 'http://127.0.0.1:9750/api/communities?limit=2&minSize=4'
 curl --fail 'http://127.0.0.1:9750/api/search-graph?q=live-session&relationship=CALLS&limit=3'
 curl --fail 'http://127.0.0.1:9750/api/semantic?q=live%20session%20repository&limit=3'
 curl --fail 'http://127.0.0.1:9750/api/query-graph?q=MATCH%20(f%3AFunction)%20WHERE%20f.filePath%20CONTAINS%20%27live-session%27%20RETURN%20f.name%2Cf.filePath%20LIMIT%203'
@@ -398,7 +418,7 @@ curl --fail 'http://127.0.0.1:9750/api/report?format=markdown&graphLimit=50'
 curl --fail http://127.0.0.1:9750/
 ```
 
-Confirmed the dashboard served the large validation database, returned the 816-file / 5,234-symbol / 30,324-edge schema, returned live-session graph matches, returned semantic search rows, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated an 8,992-byte Markdown report response, and served the 18,342-byte HTML dashboard shell.
+Confirmed the dashboard served the validation database, returned graph-community rows, returned the 816-file / 5,234-symbol / 30,324-edge schema, returned live-session graph matches, returned semantic search rows, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated an 8,992-byte Markdown report response, and served the 19,109-byte HTML dashboard shell.
 
 Trace:
 

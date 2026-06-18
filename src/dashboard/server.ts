@@ -1,5 +1,5 @@
 import http from "node:http";
-import { architectureReport, findDeadCode, findDependencyCycles, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols } from "../core/api.js";
+import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols } from "../core/api.js";
 
 export interface DashboardOptions {
   dbPath?: string;
@@ -41,6 +41,8 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
       } else if (url.pathname === "/api/semantic") {
         const query = url.searchParams.get("q") ?? "";
         sendJson(response, query ? semanticSearch(query, numberParam(url, "limit") ?? 25, options.dbPath) : []);
+      } else if (url.pathname === "/api/communities") {
+        sendJson(response, findCommunities(numberParam(url, "limit") ?? 12, numberParam(url, "minSize") ?? 4, options.dbPath));
       } else if (url.pathname === "/api/dead-code") {
         sendJson(response, findDeadCode(numberParam(url, "limit") ?? 25, options.dbPath));
       } else if (url.pathname === "/api/cycles") {
@@ -233,6 +235,10 @@ function dashboardHtml(): string {
         <div class="list" id="cycles"></div>
       </section>
       <section>
+        <h2>Communities</h2>
+        <div class="list" id="communities"></div>
+      </section>
+      <section>
         <h2>Results</h2>
         <div class="list" id="results"><div class="sub">Use code search or graph search.</div></div>
       </section>
@@ -248,6 +254,7 @@ function dashboardHtml(): string {
     const hotspots = document.querySelector('#hotspots');
     const boundaries = document.querySelector('#boundaries');
     const cycles = document.querySelector('#cycles');
+    const communities = document.querySelector('#communities');
     const results = document.querySelector('#results');
     const indexed = document.querySelector('#indexed');
     const search = document.querySelector('#search');
@@ -279,11 +286,12 @@ function dashboardHtml(): string {
       return url.toString();
     }
     async function load() {
-      const [arch, schema, graph, dead] = await Promise.all([
+      const [arch, schema, graph, dead, communityRows] = await Promise.all([
         fetch('/api/architecture').then(r => r.json()),
         fetch('/api/schema').then(r => r.json()),
         fetch('/api/graph?limit=500').then(r => r.json()),
-        fetch('/api/dead-code?limit=8').then(r => r.json())
+        fetch('/api/dead-code?limit=8').then(r => r.json()),
+        fetch('/api/communities?limit=8&minSize=4').then(r => r.json())
       ]);
       indexed.textContent = 'Indexed ' + new Date(arch.indexedAt).toLocaleString();
       metrics.innerHTML = metric('files', arch.totals.files) + metric('symbols', arch.totals.symbols) + metric('edges', arch.totals.edges) + metric('lines', arch.totals.lines);
@@ -296,6 +304,7 @@ function dashboardHtml(): string {
       hotspots.innerHTML = arch.hotspots.map(h => item('<div class="path">' + escapeHtml(h.path) + '</div><div class="sub">score ' + h.score.toFixed(1) + ' - ' + escapeHtml(h.reasons.join(', ') || 'symbol dense') + '</div>')).join('');
       boundaries.innerHTML = arch.boundaries.length ? arch.boundaries.map(b => item('<b>' + escapeHtml(b.source) + ' -> ' + escapeHtml(b.target) + '</b><div class="sub">' + fmt.format(b.edges) + ' edges - ' + escapeHtml(b.sampleTypes.join(', ')) + '</div>')).join('') : item('No cross-boundary graph edges found.');
       cycles.innerHTML = arch.dependencyCycles.length ? arch.dependencyCycles.map(c => item('<b>' + escapeHtml(c.clusters.join(' -> ')) + '</b><div class="sub">' + fmt.format(c.edges) + ' internal cycle edges</div><div class="path">' + escapeHtml(c.recommendation) + '</div>')).join('') : item('No cross-cluster dependency cycles found.');
+      communities.innerHTML = communityRows.length ? communityRows.map(c => item('<b>' + escapeHtml(c.label) + '</b><div class="sub">' + fmt.format(c.members) + ' members - cohesion ' + c.cohesion.toFixed(2) + ' - ' + fmt.format(c.internalEdges) + ' internal edges</div><div class="path">' + escapeHtml(c.files.slice(0, 4).join(' | ')) + '</div><div class="sub">' + escapeHtml(c.representativeSymbols.slice(0, 4).map(s => s.name).join(', ')) + '</div>')).join('') : item('No graph communities found.');
       graphState = prepareGraph(graph);
       resizeGraph();
       drawGraph();

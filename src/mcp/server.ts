@@ -5,6 +5,7 @@ import {
   architectureReport,
   detectChanges,
   findDeadCode,
+  findCommunities,
   findDependencyCycles,
   getArchitecture,
   getCodeSnippet,
@@ -158,6 +159,19 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ dbPath }) => text(getGraphSchema(dbPath))
+  );
+
+  server.registerTool(
+    "find_communities",
+    {
+      description: "Detect graph communities from weighted code relationships and return representative symbols, files, languages, cohesion, and boundary counts.",
+      inputSchema: {
+        limit: z.number().int().positive().max(100).optional(),
+        minMembers: z.number().int().positive().max(200).optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ limit, minMembers, dbPath }) => text(findCommunities(limit, minMembers, dbPath))
   );
 
   server.registerTool(

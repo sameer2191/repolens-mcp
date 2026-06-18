@@ -60,6 +60,10 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.equal(graphMatches[0]?.symbol.name, "createOrder");
     assert.ok(graphMatches[0]?.degree >= 1);
 
+    const communities = store.communities(5, 3);
+    assert.ok(communities.length > 0);
+    assert.ok(communities.some((community) => community.representativeSymbols.some((symbol) => symbol.name === "createOrder" || symbol.name === "listOrders")));
+
     const semanticMatches = store.semanticSearch("create order total", 5);
     assert.ok(semanticMatches.some((match) => match.symbol.name === "createOrder"));
     assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "SEMANTICALLY_RELATED"));

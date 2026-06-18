@@ -143,6 +143,25 @@ export interface GraphQueryResult {
   limit: number;
 }
 
+export interface GraphCommunity {
+  id: string;
+  label: string;
+  members: number;
+  files: string[];
+  languages: Array<{ language: Language; symbols: number }>;
+  representativeSymbols: Array<{
+    name: string;
+    qualifiedName: string;
+    kind: string;
+    filePath: string;
+    degree: number;
+  }>;
+  internalEdges: number;
+  externalEdges: number;
+  cohesion: number;
+  reasons: string[];
+}
+
 export interface SemanticSearchMatch {
   symbol: SymbolNode;
   score: number;

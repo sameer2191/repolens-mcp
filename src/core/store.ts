@@ -14,6 +14,7 @@ import type {
   DecisionRecord,
   Edge,
   GraphQueryResult,
+  GraphCommunity,
   GraphSchema,
   GraphSearchMatch,
   GraphSearchOptions,
@@ -664,6 +665,95 @@ export class MemoryStore {
     };
   }
 
+  communities(limit = 20, minMembers = 4): GraphCommunity[] {
+    const nodeRows = this.db
+      .prepare(
+        `SELECT *
+         FROM symbols
+         WHERE kind NOT IN ('dependency', 'package')
+         ORDER BY file_path ASC, start_line ASC
+         LIMIT 15000`
+      )
+      .all() as unknown as SymbolRow[];
+    const symbols = new Map(nodeRows.map((row) => [row.qualified_name, rowToSymbol(row)]));
+    if (symbols.size === 0) {
+      return [];
+    }
+
+    const edgeRows = this.db
+      .prepare(
+        `SELECT source, target, type, weight
+         FROM edges
+         WHERE type IN ('CALLS', 'CALLS_LOCAL', 'HTTP_CALLS', 'IMPORTS', 'DEFINES', 'DECLARES', 'SIMILAR_TO', 'SEMANTICALLY_RELATED')
+         LIMIT 60000`
+      )
+      .all() as Array<{ source: string; target: string; type: string; weight: number }>;
+
+    const adjacency = new Map<string, Map<string, number>>();
+    const degree = new Map<string, number>();
+    const graphEdges: Array<{ source: string; target: string; type: string; weight: number }> = [];
+    for (const row of edgeRows) {
+      if (!symbols.has(row.source) || !symbols.has(row.target) || row.source === row.target) {
+        continue;
+      }
+      const weight = communityEdgeWeight(row.type, row.weight);
+      degree.set(row.source, (degree.get(row.source) ?? 0) + 1);
+      degree.set(row.target, (degree.get(row.target) ?? 0) + 1);
+      graphEdges.push({ ...row, weight });
+    }
+    for (const edge of graphEdges) {
+      const normalizedWeight = edge.weight / Math.sqrt(Math.max(1, degree.get(edge.source) ?? 1) * Math.max(1, degree.get(edge.target) ?? 1));
+      addWeightedNeighbor(adjacency, edge.source, edge.target, normalizedWeight);
+      addWeightedNeighbor(adjacency, edge.target, edge.source, normalizedWeight);
+    }
+
+    const labels = new Map([...symbols.keys()].map((id) => [id, id]));
+    const orderedNodes = [...symbols.keys()].sort((a, b) => (degree.get(b) ?? 0) - (degree.get(a) ?? 0) || a.localeCompare(b));
+    for (let iteration = 0; iteration < 8; iteration += 1) {
+      let changed = 0;
+      for (const node of orderedNodes) {
+        const neighbors = adjacency.get(node);
+        if (!neighbors || neighbors.size === 0) {
+          continue;
+        }
+        const scores = new Map<string, number>();
+        for (const [neighbor, weight] of neighbors) {
+          const label = labels.get(neighbor) ?? neighbor;
+          scores.set(label, (scores.get(label) ?? 0) + weight);
+        }
+        const current = labels.get(node) ?? node;
+        scores.set(current, (scores.get(current) ?? 0) + 0.1);
+        const best = [...scores.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? current;
+        if (best !== current) {
+          labels.set(node, best);
+          changed += 1;
+        }
+      }
+      if (changed === 0) {
+        break;
+      }
+    }
+
+    const membersByLabel = new Map<string, string[]>();
+    for (const [node, label] of labels) {
+      const members = membersByLabel.get(label) ?? [];
+      members.push(node);
+      membersByLabel.set(label, members);
+    }
+
+    const communities = [];
+    for (const [label, members] of membersByLabel) {
+      for (const [suffix, groupedMembers] of splitLargeCommunity(members, symbols)) {
+        communities.push(communityFromMembers(`${label}:${suffix}`, groupedMembers, symbols, graphEdges, degree));
+      }
+    }
+
+    return communities
+      .filter((community) => community.members >= clampPositive(minMembers, 2, 200))
+      .sort((a, b) => b.internalEdges - a.internalEdges || b.members - a.members || a.label.localeCompare(b.label))
+      .slice(0, clampPositive(limit, 1, 100));
+  }
+
   findDeadCode(limit = 50): DeadCodeCandidate[] {
     const rows = this.db
       .prepare(
@@ -1259,6 +1349,113 @@ function clampPositive(value: number, min: number, max: number): number {
     return min;
   }
   return Math.min(max, Math.max(min, Math.floor(value)));
+}
+
+function communityEdgeWeight(type: string, weight: number): number {
+  const multiplier: Record<string, number> = {
+    HTTP_CALLS: 2.4,
+    CALLS_LOCAL: 2,
+    CALLS: 1.6,
+    IMPORTS: 1.1,
+    DEFINES: 0.9,
+    DECLARES: 0.8,
+    SIMILAR_TO: 0.65,
+    SEMANTICALLY_RELATED: 0.55
+  };
+  return Math.max(0.1, weight) * (multiplier[type] ?? 1);
+}
+
+function addWeightedNeighbor(graph: Map<string, Map<string, number>>, source: string, target: string, weight: number): void {
+  const neighbors = graph.get(source) ?? new Map<string, number>();
+  neighbors.set(target, (neighbors.get(target) ?? 0) + weight);
+  graph.set(source, neighbors);
+}
+
+function splitLargeCommunity(members: string[], symbols: Map<string, SymbolNode>): Array<[string, string[]]> {
+  if (members.length <= 500) {
+    return [["all", members]];
+  }
+  const byCluster = new Map<string, string[]>();
+  for (const member of members) {
+    const symbol = symbols.get(member);
+    const key = symbol ? clusterName(symbol.filePath) : "unknown";
+    const group = byCluster.get(key) ?? [];
+    group.push(member);
+    byCluster.set(key, group);
+  }
+  return [...byCluster.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+}
+
+function communityFromMembers(
+  label: string,
+  members: string[],
+  symbols: Map<string, SymbolNode>,
+  edges: Array<{ source: string; target: string; type: string; weight: number }>,
+  degree: Map<string, number>
+): GraphCommunity {
+  const memberSet = new Set(members);
+  const memberSymbols = members.map((member) => symbols.get(member)).filter((symbol): symbol is SymbolNode => Boolean(symbol));
+  const codeSymbols = memberSymbols.filter((symbol) => symbol.kind !== "file");
+  const files = [...new Set(memberSymbols.map((symbol) => symbol.filePath))].sort();
+  const languages = new Map<Language, number>();
+  for (const symbol of codeSymbols.length > 0 ? codeSymbols : memberSymbols) {
+    languages.set(symbol.language, (languages.get(symbol.language) ?? 0) + 1);
+  }
+
+  let internalEdges = 0;
+  let externalEdges = 0;
+  const edgeTypes = new Map<string, number>();
+  for (const edge of edges) {
+    const sourceInside = memberSet.has(edge.source);
+    const targetInside = memberSet.has(edge.target);
+    if (sourceInside && targetInside) {
+      internalEdges += 1;
+      edgeTypes.set(edge.type, (edgeTypes.get(edge.type) ?? 0) + 1);
+    } else if (sourceInside || targetInside) {
+      externalEdges += 1;
+    }
+  }
+
+  const representativeSymbols = (codeSymbols.length > 0 ? codeSymbols : memberSymbols)
+    .map((symbol) => ({
+      name: symbol.name,
+      qualifiedName: symbol.qualifiedName,
+      kind: symbol.kind,
+      filePath: symbol.filePath,
+      degree: degree.get(symbol.qualifiedName) ?? 0
+    }))
+    .sort((a, b) => b.degree - a.degree || a.filePath.localeCompare(b.filePath) || a.name.localeCompare(b.name))
+    .slice(0, 8);
+  const labelSource = representativeSymbols[0]?.name ?? symbols.get(label)?.name ?? label.split(":").pop() ?? "community";
+  const strongestEdgeTypes = [...edgeTypes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const cohesion = Number((internalEdges / Math.max(1, internalEdges + externalEdges)).toFixed(4));
+
+  return {
+    id: stableCommunityId(label, members),
+    label: labelSource,
+    members: memberSymbols.length,
+    files: files.slice(0, 12),
+    languages: [...languages.entries()]
+      .map(([language, symbols]) => ({ language, symbols }))
+      .sort((a, b) => b.symbols - a.symbols || a.language.localeCompare(b.language)),
+    representativeSymbols,
+    internalEdges,
+    externalEdges,
+    cohesion,
+    reasons: [
+      `${internalEdges} internal edges`,
+      `${externalEdges} boundary edges`,
+      ...(strongestEdgeTypes.length ? [`dominant relationships ${strongestEdgeTypes.map(([type, count]) => `${type}:${count}`).join(", ")}`] : [])
+    ]
+  };
+}
+
+function stableCommunityId(label: string, members: string[]): string {
+  let hash = 0;
+  for (const char of [label, ...members.slice(0, 20)].join("|")) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+  return `community-${hash.toString(16).padStart(8, "0")}`;
 }
 
 function parseGraphQuery(query: string, defaultLimit: number): ParsedGraphQuery {

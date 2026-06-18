@@ -6,12 +6,13 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 20 tools for indexing, code search, symbol search, semantic search, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, route-call links, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 21 tools for indexing, code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI.
 - **Operational dashboard**: browse graph previews, structural filters, schema counts, dead-code candidates, review signals, and report links without a frontend build.
+- **Graph communities**: detects functional modules from weighted relationships, not just folder names.
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
 - **Route-call edges**: connects literal `fetch`/Axios/Node HTTP calls to indexed route nodes with `HTTP_CALLS` edges.
 - **Architecture recommendations**: turns hotspots, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
@@ -45,6 +46,7 @@ repolens-mcp snippet <symbol-or-path:line> [--context n]
 repolens-mcp trace <symbol> [--direction inbound|outbound]
 repolens-mcp impact <path-or-symbol...>
 repolens-mcp schema [--db path]
+repolens-mcp communities [--db path] [--limit n] [--min-size n]
 repolens-mcp watch [repo] [--db path] [--interval-ms n]
 repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--min-degree n]
 repolens-mcp semantic "live session repository" [--limit n]
@@ -75,6 +77,7 @@ repolens-mcp mcp
 | `trace_symbol` | Trace inbound or outbound graph edges around a symbol. |
 | `impact_analysis` | Find adjacent symbols for changed files or symbols. |
 | `get_graph_schema` | Return node labels, edge types, language coverage, and totals. |
+| `find_communities` | Detect weighted graph communities with representative symbols, cohesion, and boundary counts. |
 | `search_graph` | Search structurally by query, kind, regex, relationship, file scope, or degree. |
 | `semantic_search` | Search symbols by local semantic token overlap across names, paths, signatures, and bodies. |
 | `query_graph` | Run a read-only Cypher-like query over symbols and one-hop edges. |
@@ -120,6 +123,7 @@ node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/mem
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js communities --db /tmp/memory.db --limit 12
 node --experimental-sqlite dist/src/cli.js snippet createOrder --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js semantic "order checkout flow" --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js cycles --db /tmp/memory.db

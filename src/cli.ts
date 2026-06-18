@@ -6,6 +6,7 @@ import {
   architectureReport,
   detectChanges,
   findDeadCode,
+  findCommunities,
   findDependencyCycles,
   getArchitecture,
   getCodeSnippet,
@@ -98,6 +99,9 @@ async function main(): Promise<void> {
       break;
     case "schema":
       print(getGraphSchema(stringFlag(args, "db")));
+      break;
+    case "communities":
+      print(findCommunities(numberFlag(args, "limit"), numberFlag(args, "min-size"), stringFlag(args, "db")));
       break;
     case "search-graph":
       print(
@@ -303,6 +307,7 @@ Usage:
   repolens-mcp trace <symbol> [--direction inbound|outbound] [--depth n] [--db path]
   repolens-mcp impact <path-or-symbol...> [--db path]
   repolens-mcp schema [--db path]
+  repolens-mcp communities [--db path] [--limit n] [--min-size n]
   repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--max-file-bytes n]
   repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern regex] [--file-pattern src/] [--min-degree n] [--db path]
   repolens-mcp semantic "meaningful concept query" [--db path] [--limit n]

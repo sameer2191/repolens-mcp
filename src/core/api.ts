@@ -54,6 +54,10 @@ export function getGraphSchema(dbPath?: string) {
   return withStore(dbPath, (store) => store.graphSchema());
 }
 
+export function findCommunities(limit?: number, minMembers?: number, dbPath?: string) {
+  return withStore(dbPath, (store) => store.communities(limit, minMembers));
+}
+
 export function searchGraph(options: GraphSearchOptions, dbPath?: string) {
   return withStore(dbPath, (store) => store.searchGraph(options));
 }
