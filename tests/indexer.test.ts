@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -743,6 +744,53 @@ test("indexes resolved local import file edges for aliases and workspace package
     assert.equal(cycles.length, 1);
     assert.deepEqual(cycles[0].clusters, ["packages/api", "packages/domain"]);
     assert.ok(cycles[0].sampleEdges.some((edge) => edge.type === "IMPORTS_FILE"));
+  } finally {
+    store.close();
+  }
+});
+
+test("adds git history hotspots to architecture summaries", async (t) => {
+  const git = spawnSync("git", ["--version"], { encoding: "utf8" });
+  if (git.status !== 0) {
+    t.skip("git is not available");
+    return;
+  }
+
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-git-history-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  const runGit = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  };
+
+  spawnSync("git", ["init", repo], { encoding: "utf8" });
+  runGit("config", "user.email", "repolens@example.test");
+  runGit("config", "user.name", "RepoLens Test");
+  await fs.writeFile(path.join(repo, "src", "orders.ts"), "export function createOrder() { return 1; }\n");
+  await fs.writeFile(path.join(repo, "src", "checkout.ts"), "export function checkout() { return true; }\n");
+  runGit("add", ".");
+  runGit("commit", "-m", "initial graph");
+  await fs.appendFile(path.join(repo, "src", "orders.ts"), "export function cancelOrder() { return 0; }\n");
+  runGit("add", ".");
+  runGit("commit", "-m", "expand orders");
+
+  await indexRepository({ root: repo, dbPath });
+  const store = new MemoryStore(dbPath);
+  try {
+    const arch = store.architecture(repo);
+    const history = arch.gitHistory.find((item) => item.path === "src/orders.ts");
+    assert.ok(history);
+    assert.equal(history.commits, 2);
+    assert.equal(history.authors, 1);
+    assert.ok(history.churn >= 2);
+    assert.equal(history.lastSubject, "expand orders");
+    assert.ok(arch.recommendations.some((item) => item.title === "Inspect high-churn files before risky edits"));
+
+    const markdownReport = architectureReport({ graphLimit: 20 }, dbPath);
+    assert.match(markdownReport, /## Git History Hotspots/);
+    assert.match(markdownReport, /src\/orders\.ts/);
   } finally {
     store.close();
   }

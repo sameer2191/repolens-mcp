@@ -18,6 +18,7 @@ import type {
   GraphSchema,
   GraphSearchMatch,
   GraphSearchOptions,
+  GitHistoryFile,
   IndexedFile,
   Language,
   SemanticSearchMatch,
@@ -1161,6 +1162,7 @@ export class MemoryStore {
     const boundaryData = this.boundariesAndClusters();
     const dependencyCycles = this.dependencyCycles(8);
     const deadCode = this.findDeadCode(5);
+    const gitHistory = gitHistoryHotspots(root, 12);
 
     const topFiles = this.db
       .prepare(
@@ -1235,6 +1237,7 @@ export class MemoryStore {
     const recommendations = architectureRecommendations({
       dependencyCycles,
       hotspots,
+      gitHistory,
       deadCode,
       skippedFiles,
       taskCount,
@@ -1258,6 +1261,7 @@ export class MemoryStore {
       edgeTypes,
       topFiles,
       topSymbols,
+      gitHistory,
       hotspots,
       boundaries: boundaryData.boundaries,
       clusters: boundaryData.clusters,
@@ -2437,6 +2441,7 @@ function stronglyConnectedComponents(graph: Map<string, Set<string>>): string[][
 function architectureRecommendations(input: {
   dependencyCycles: DependencyCycle[];
   hotspots: Array<{ path: string; score: number; reasons: string[] }>;
+  gitHistory: GitHistoryFile[];
   deadCode: DeadCodeCandidate[];
   skippedFiles: number;
   taskCount: number;
@@ -2460,6 +2465,20 @@ function architectureRecommendations(input: {
       title: "Review the densest hotspot",
       detail: "High symbol density or file size often means several responsibilities are sharing one file. Split only when the surrounding call graph shows separable behavior.",
       evidence: [`${hotspot.path} scored ${hotspot.score.toFixed(1)}`, ...hotspot.reasons]
+    });
+  }
+
+  const historyHotspot = input.gitHistory[0];
+  if (historyHotspot && (historyHotspot.commits > 1 || historyHotspot.churn >= 100)) {
+    const latest = historyHotspot.lastSubject ? [`latest change: ${historyHotspot.lastSubject}`] : [];
+    recommendations.push({
+      priority: "medium",
+      title: "Inspect high-churn files before risky edits",
+      detail: "Files with repeated churn often contain unsettled behavior or shared responsibilities. Review the change history alongside static graph edges before refactoring them.",
+      evidence: [
+        `${historyHotspot.path}: ${historyHotspot.commits} commits, ${historyHotspot.churn} changed lines`,
+        ...latest
+      ]
     });
   }
 
@@ -2522,6 +2541,93 @@ function dependencyCyclesFromGraph(
       };
     })
     .sort((a, b) => b.edges - a.edges)
+    .slice(0, clampPositive(limit, 1, 100));
+}
+
+function gitHistoryHotspots(root: string, limit: number): GitHistoryFile[] {
+  const result = spawnSync(
+    "git",
+    [
+      "-C",
+      root,
+      "log",
+      "--max-count=200",
+      "--date=short",
+      "--pretty=format:--REPOLENS-COMMIT--%x09%H%x09%ad%x09%an%x09%s",
+      "--numstat"
+    ],
+    { encoding: "utf8", maxBuffer: 8 * 1024 * 1024 }
+  );
+  if (result.status !== 0 || !result.stdout.trim()) {
+    return [];
+  }
+
+  const byPath = new Map<
+    string,
+    GitHistoryFile & {
+      authorSet: Set<string>;
+      seenCommits: Set<string>;
+    }
+  >();
+  let current: { hash: string; date: string; author: string; subject: string } | null = null;
+  const normalizePath = (value: string) => value.replace(/^"|"$/g, "").replace(/\\/g, "/");
+
+  for (const line of result.stdout.split(/\r?\n/)) {
+    if (!line.trim()) {
+      continue;
+    }
+    if (line.startsWith("--REPOLENS-COMMIT--\t")) {
+      const [, hash = "", date = "", author = "", subject = ""] = line.split("\t");
+      current = { hash, date, author, subject };
+      continue;
+    }
+    if (!current) {
+      continue;
+    }
+    const parts = line.split("\t");
+    if (parts.length < 3 || parts[0] === "-" || parts[1] === "-") {
+      continue;
+    }
+    const additions = Number(parts[0]);
+    const deletions = Number(parts[1]);
+    if (!Number.isFinite(additions) || !Number.isFinite(deletions)) {
+      continue;
+    }
+    const filePath = normalizePath(parts.slice(2).join("\t"));
+    if (!filePath || isDependencyMetadataFile(filePath)) {
+      continue;
+    }
+    const item =
+      byPath.get(filePath) ??
+      {
+        path: filePath,
+        commits: 0,
+        churn: 0,
+        additions: 0,
+        deletions: 0,
+        authors: 0,
+        authorSet: new Set<string>(),
+        seenCommits: new Set<string>()
+      };
+    item.additions += additions;
+    item.deletions += deletions;
+    item.churn += additions + deletions;
+    item.authorSet.add(current.author);
+    if (!item.seenCommits.has(current.hash)) {
+      item.seenCommits.add(current.hash);
+      item.commits += 1;
+    }
+    item.lastCommit ??= current.hash.slice(0, 12);
+    item.lastDate ??= current.date;
+    item.lastAuthor ??= current.author;
+    item.lastSubject ??= current.subject;
+    item.authors = item.authorSet.size;
+    byPath.set(filePath, item);
+  }
+
+  return [...byPath.values()]
+    .map(({ authorSet: _authorSet, seenCommits: _seenCommits, ...item }) => item)
+    .sort((a, b) => b.churn - a.churn || b.commits - a.commits || a.path.localeCompare(b.path))
     .slice(0, clampPositive(limit, 1, 100));
 }
 

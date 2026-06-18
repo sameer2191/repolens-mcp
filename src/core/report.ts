@@ -66,6 +66,21 @@ function markdownReport(title: string, architecture: ArchitectureSummary, graph:
     "",
     ...architecture.hotspots.map((item) => `- ${item.path} - score ${item.score.toFixed(1)}${item.reasons.length ? ` (${item.reasons.join(", ")})` : ""}`),
     "",
+    "## Git History Hotspots",
+    "",
+    ...(architecture.gitHistory.length > 0
+      ? [
+          "| File | Commits | Churn | Authors | Latest |",
+          "| --- | ---: | ---: | ---: | --- |",
+          ...architecture.gitHistory.map(
+            (item) =>
+              `| ${markdownCell(item.path)} | ${formatNumber(item.commits)} | ${formatNumber(item.churn)} | ${formatNumber(item.authors)} | ${markdownCell(
+                [item.lastDate, item.lastSubject].filter(Boolean).join(" ")
+              )} |`
+          )
+        ]
+      : ["- No git history available."]),
+    "",
     "## Top Symbols",
     "",
     "| Symbol | Kind | File | Degree | In | Out |",
@@ -195,6 +210,23 @@ function htmlReport(title: string, architecture: ArchitectureSummary, graph: Gra
         ${list(architecture.hotspots.map((item) => `${item.path} - ${item.score.toFixed(1)}${item.reasons.length ? ` (${item.reasons.join(", ")})` : ""}`))}
       </section>
       <section>
+        <h2>Git History</h2>
+        ${
+          architecture.gitHistory.length
+            ? table(
+                ["File", "Commits", "Churn", "Authors", "Latest"],
+                architecture.gitHistory.map((item) => [
+                  item.path,
+                  item.commits,
+                  item.churn,
+                  item.authors,
+                  [item.lastDate, item.lastSubject].filter(Boolean).join(" ")
+                ])
+              )
+            : list([])
+        }
+      </section>
+      <section>
         <h2>Boundaries</h2>
         ${table(["Source", "Target", "Edges"], architecture.boundaries.map((item) => [item.source, item.target, item.edges]))}
       </section>
@@ -282,6 +314,10 @@ function list(items: string[]): string {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
+}
+
+function markdownCell(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("|", "\\|").replaceAll("\n", " ");
 }
 
 function escapeHtml(value: string): string {

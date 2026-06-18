@@ -173,6 +173,7 @@ export interface ArchitectureSummary {
     inbound: number;
     outbound: number;
   }>;
+  gitHistory: GitHistoryFile[];
   hotspots: Array<{ path: string; score: number; reasons: string[] }>;
   boundaries: Array<{ source: string; target: string; edges: number; sampleTypes: string[] }>;
   clusters: Array<{ name: string; files: number; symbols: number; edges: number }>;
@@ -182,6 +183,19 @@ export interface ArchitectureSummary {
   packages: string[];
   deadCode: { candidates: number; samples: DeadCodeCandidate[] };
   risks: string[];
+}
+
+export interface GitHistoryFile {
+  path: string;
+  commits: number;
+  churn: number;
+  additions: number;
+  deletions: number;
+  authors: number;
+  lastCommit?: string;
+  lastDate?: string;
+  lastAuthor?: string;
+  lastSubject?: string;
 }
 
 export interface GraphSchema {

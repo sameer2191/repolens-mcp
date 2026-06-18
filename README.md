@@ -11,11 +11,11 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 30 tools for indexing, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, BM25 code search, redacted secret scanning, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 30 tools for indexing, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
-- **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
+- **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, and optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI.
 - **Operational dashboard**: browse graph previews, structural filters, schema counts, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
@@ -31,7 +31,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Protocol surfaces**: extracts GraphQL operations/types, gRPC services/RPC routes from protobuf, OpenAPI routes, and common tRPC procedures/calls.
 - **Manifest and lockfile dependency graph**: extracts declared package/dependency nodes from npm, Composer, Python, Go, Cargo, Maven, Gradle, Dart, Elixir, Ruby, and `requirements.txt` manifests, plus pinned `lockfile` and `locked_dependency` nodes from common package-manager locks.
 - **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
-- **Architecture recommendations**: turns hotspots, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
+- **Architecture recommendations**: turns structural hotspots, git-history churn, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
 - **Validation evidence**: tests, CI, CodeQL, CycloneDX SBOM generation, docs, local dashboard, and a big-repo validation workflow.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
@@ -49,7 +49,7 @@ node --experimental-sqlite dist/src/cli.js serve
 
 Then open `http://127.0.0.1:9749`.
 
-The dashboard includes code search, graph search, graph schema tables, fleet service links, hotspot and boundary summaries, dead-code candidates, and one-click Markdown/HTML architecture reports.
+The dashboard includes code search, graph search, graph schema tables, fleet service links, hotspot and boundary summaries, git-history signals, dead-code candidates, and one-click Markdown/HTML architecture reports.
 
 From a local clone, the installer runs the same build and Codex checks:
 
@@ -119,7 +119,7 @@ repolens-mcp mcp
 | `scan_secrets` | Scan indexed source/config lines for redacted secret, token, credential, and sensitive environment patterns. |
 | `search_symbols` | Search functions, classes, routes, resources, headings, and package nodes. |
 | `get_code_snippet` | Return source lines around a symbol, qualified name, file path, or `path:line` target. |
-| `get_architecture` | Return language mix, hotspots, entrypoints, packages, and risk markers. |
+| `get_architecture` | Return language mix, hotspots, git-history churn, entrypoints, packages, and risk markers. |
 | `trace_symbol` | Trace inbound or outbound graph edges around a symbol. |
 | `impact_analysis` | Find adjacent symbols for changed files or symbols. |
 | `get_graph_schema` | Return node labels, edge types, language coverage, and totals. |
@@ -132,7 +132,7 @@ repolens-mcp mcp
 | `find_dependency_cycles` | Find import-resolved dependency cycles between architecture clusters. |
 | `ingest_traces` | Add observed runtime HTTP, event, or symbol edges as `OBSERVED_*` relationships. |
 | `detect_changes` | Map uncommitted git changes to indexed graph impact. |
-| `architecture_report` | Generate a markdown or HTML architecture report from the indexed graph. |
+| `architecture_report` | Generate a markdown or HTML architecture report with graph, hotspot, history, risk, and recommendation sections. |
 | `remember_decision` | Persist an ADR-style architecture decision. |
 | `list_decisions` | Retrieve saved decisions. |
 | `graph_snapshot` | Export compact graph data for dashboards or reviews. |
@@ -215,6 +215,18 @@ repolens-mcp uninstall-codex --dry-run
 
 `install-codex` refuses to replace an existing unmanaged `mcp_servers.repolens` entry unless `--force` is passed. `uninstall-codex` removes only the RepoLens managed block and leaves unmanaged MCP entries untouched.
 
+Optional startup indexing for MCP sessions:
+
+```toml
+[mcp_servers.repolens.env]
+REPOLENS_DB = ".repolens/memory.db"
+REPOLENS_AUTO_INDEX = "1"          # incremental startup refresh
+REPOLENS_ROOT = "."                # optional, defaults to process cwd
+REPOLENS_MAX_FILE_BYTES = "750000" # optional
+```
+
+Set `REPOLENS_AUTO_INDEX=full` to force a full rebuild on startup. Leave it unset for the default manual-index behavior.
+
 Project teams can generate agent guidance and config snippets for the broader agent set:
 
 ```bash
@@ -255,6 +267,6 @@ flowchart LR
 
 ## Roadmap
 
-- Tree-sitter adapters for deeper language parsing.
-- Import resolver for monorepos and workspace packages.
+- Deeper tree-sitter adapters for language-specific call/use precision.
+- Optional local vector-embedding adapter for deeper semantic search.
 - Host-aware service-link inference from config, environment variables, and trace data.

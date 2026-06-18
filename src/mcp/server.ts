@@ -1,3 +1,4 @@
+import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -34,8 +35,14 @@ import {
   unpackGraph
 } from "../core/api.js";
 import { agentProfiles, installAgentSetup, type AgentId } from "../core/agents.js";
+import type { IndexResult } from "../core/types.js";
 
 export async function startMcpServer(): Promise<void> {
+  await maybeAutoIndexOnStartup().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`RepoLens auto-index failed: ${message}\n`);
+  });
+
   const server = new McpServer({
     name: "repolens-mcp",
     version: "1.0.0"
@@ -460,6 +467,50 @@ export async function startMcpServer(): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+}
+
+export async function maybeAutoIndexOnStartup(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): Promise<IndexResult | undefined> {
+  const mode = parseAutoIndexMode(env.REPOLENS_AUTO_INDEX);
+  if (!mode) {
+    return undefined;
+  }
+  const root = path.resolve(cwd, env.REPOLENS_ROOT ?? ".");
+  const result = await runIndex({
+    root,
+    dbPath: env.REPOLENS_DB,
+    incremental: mode.incremental,
+    maxFileBytes: parsePositiveIntEnv(env.REPOLENS_MAX_FILE_BYTES, "REPOLENS_MAX_FILE_BYTES"),
+    runLabel: env.REPOLENS_AUTO_INDEX_LABEL ?? "mcp-startup"
+  });
+  process.stderr.write(
+    `RepoLens auto-index: ${result.mode} ${result.filesIndexed}/${result.filesDiscovered} files, ${result.symbols} symbols, ${result.edges} edges\n`
+  );
+  return result;
+}
+
+function parseAutoIndexMode(value: string | undefined): { incremental: boolean } | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized || normalized === "0" || normalized === "false" || normalized === "off" || normalized === "no") {
+    return undefined;
+  }
+  if (normalized === "full") {
+    return { incremental: false };
+  }
+  if (normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes" || normalized === "incremental") {
+    return { incremental: true };
+  }
+  throw new Error("Invalid REPOLENS_AUTO_INDEX. Use 1, true, incremental, full, or 0.");
+}
+
+function parsePositiveIntEnv(value: string | undefined, name: string): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
 }
 
 function text(value: unknown) {
