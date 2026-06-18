@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 16 tests, 0 failures.
-- Covered Codex MCP config rendering/install safeguards, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, concurrent catalog writes, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, release/package dry-run checks, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, multi-ecosystem manifest extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Node test suite passed: 19 tests, 0 failures.
+- Covered multi-agent MCP setup rendering/dry-run/write behavior, Codex MCP config rendering/install safeguards, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, concurrent catalog writes, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, release/package dry-run checks, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, multi-ecosystem manifest extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Package And Release
 
@@ -31,14 +31,16 @@ Commands:
 npm pack --dry-run --json
 node --experimental-sqlite dist/src/cli.js demo
 bash -n install.sh
+node --experimental-sqlite dist/src/cli.js agent-setup --target /tmp/repolens-agent-smoke --agents codex,claude,gemini --db .repolens/memory.db
 ```
 
 Result:
 
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 104,618 bytes packed, 531,087 bytes unpacked, 59 runtime entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 110,221 bytes packed, 555,302 bytes unpacked, 62 runtime entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `package.json`, `server.json`, and `install.sh`; compiled tests and fixtures are excluded.
-- Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, and can apply `install-codex` with `--dry-run`/`--force` controls.
+- Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
+- `agent-setup` dry-run rendered the expected guide and instruction targets for Codex, Claude, and Gemini without writing files.
 - Release workflow added for version tags and manual runs; it runs install, verification, demo indexing, `npm pack --json`, SHA-256 checksum generation, artifact upload, and GitHub release asset publishing for tag builds.
 - CI now also checks `npm pack --dry-run --json` and self-indexes into `.repolens/ci.db`.
 
@@ -57,25 +59,25 @@ node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db
 
 Result:
 
-- Files discovered: 58
-- Files indexed: 58
+- Files discovered: 60
+- Files indexed: 60
 - Files skipped: 0
-- Symbols: 513
-- Edges: 1,608
-- Lines indexed: 9,569
-- Full index elapsed: 424 ms
-- No-op incremental elapsed: 39 ms
-- No-op incremental unchanged files: 58
-- Full-text code-search rows: 8,615 `code_lines` rows and 8,615 `code_fts` rows
+- Symbols: 531
+- Edges: 1,689
+- Lines indexed: 10,031
+- Full index elapsed: 586 ms
+- No-op incremental elapsed: 19 ms
+- No-op incremental unchanged files: 60
+- Full-text code-search rows: 9,020 `code_lines` rows and 9,020 `code_fts` rows
 - Channel graph rows: 8 `channel` nodes, 2 `EMITS` edges, and 11 `LISTENS_ON` edges
 - HTTP call graph rows: 12 `http_call` nodes, 12 `CALLS_HTTP_ENDPOINT` edges, and 4 generated `HTTP_CALLS` route edges
 - Protocol graph rows: 2 `graphql_operation` nodes, 1 `graphql_type` node, 1 `grpc_service` node, 2 `trpc_procedure` nodes, 1 `trpc_call` node, and 3 OpenAPI `route` nodes
 - Manifest graph rows: 11 `package` nodes and 26 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 58 files, 513 symbols, and 1,608 edges.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 60 files, 531 symbols, and 1,689 edges.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
-- Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, and fixture route/client communities.
-- Graph package: `.repolens/self.rlgz` (1,757,792 bytes from a 6,139,904-byte SQLite snapshot)
-- Imported package totals: 58 files, 513 symbols, 1,608 edges
+- Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, agent setup helpers, and fixture route/client communities.
+- Graph package: `.repolens/self.rlgz` (1,550,629 bytes from a 5,808,128-byte SQLite snapshot)
+- Imported package totals: 60 files, 531 symbols, 1,689 edges
 - Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -152,7 +154,7 @@ Result:
 - Edges: 30,571
 - Lines indexed: 96,337
 - Full index elapsed: 15,525 ms
-- No-op incremental elapsed: 210 ms
+- No-op incremental elapsed: 611 ms
 - No-op incremental unchanged files: 852
 - No-op incremental removed files: 0
 - Full-text code-search rows: 82,090 `code_lines` rows and 82,090 `code_fts` rows
@@ -161,7 +163,7 @@ Result:
 - Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (339,469 bytes)
 - Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (9,268 bytes)
 - Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html` (1,000 nodes, 1,000 edges, 348,985 bytes)
-- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (14,455,419 bytes from a 74,768,384-byte SQLite snapshot)
+- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (14,455,399 bytes from a 74,768,384-byte SQLite snapshot)
 - Imported graph package totals: 817 files, 5,423 symbols, 30,571 edges
 - Graph communities sampled: order repository, iOS load flows, access/cart clearing, auth/request helpers, address book, live-session tests, cart, and menu management communities.
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
@@ -232,7 +234,7 @@ Review signals:
 
 - 83 task markers.
 - 436 sensitive-key-like text matches to review.
-- 36 files skipped by size, binary, or ignore policy.
+- 35 files skipped by size, binary, or ignore policy.
 - 5 dead-code candidates sampled.
 
 The review-signal counts are intentionally conservative; they are meant to route a human to candidate files rather than claim confirmed issues.
@@ -298,14 +300,18 @@ node --experimental-sqlite dist/src/cli.js query-graph \
 
 Confirmed the fixture graph exposes `order.created` and `checkoutSubmitted` channel nodes, an `EMITS` edge from `notifyOrderCreated`, a `LISTENS_ON` edge from `onOrderCreated`, and Swift NotificationCenter `EMITS`/`LISTENS_ON` edges for checkout submission.
 
-Codex setup:
+Agent and Codex setup:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js doctor
 node --experimental-sqlite dist/src/cli.js install-codex --dry-run --db .repolens/memory.db
+node --experimental-sqlite dist/src/cli.js agent-setup \
+  --target /tmp/repolens-agent-smoke \
+  --agents codex,claude,gemini \
+  --db .repolens/memory.db
 ```
 
-Confirmed `doctor` detected the local `~/.codex/config.toml`, reported `repolensConfigured: true` on this machine, and `install-codex --dry-run` refused to replace the existing unmanaged `mcp_servers.repolens` entry without `--force`.
+Confirmed `doctor` detected the local `~/.codex/config.toml`, reported `repolensConfigured: true` on this machine, and `install-codex --dry-run` refused to replace the existing unmanaged `mcp_servers.repolens` entry without `--force`. Confirmed `agent-setup` dry-run rendered the shared guide plus Codex, Claude, and Gemini instruction files without writing to the target directory.
 
 Symbol lookup:
 
@@ -591,4 +597,4 @@ Confirmed modified files map back to indexed symbols and produced a medium risk 
 
 ## Conclusion
 
-The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a lock-protected local catalog, summarizes indexed fleets across languages/routes/HTTP calls/dependencies with inferred service links, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, and exposes graph schema, structural search, semantic search, generated similarity/semantic edges, read-only graph queries, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a lock-protected local catalog, summarizes indexed fleets across languages/routes/HTTP calls/dependencies with inferred service links, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, renders multi-agent MCP setup guidance, and exposes graph schema, structural search, semantic search, generated similarity/semantic edges, read-only graph queries, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.

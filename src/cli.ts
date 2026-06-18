@@ -33,6 +33,7 @@ import {
   traceSymbol,
   unpackGraph
 } from "./core/api.js";
+import { agentProfiles, installAgentSetup, type AgentId } from "./core/agents.js";
 import type { ReportFormat } from "./core/report.js";
 import { codexDoctor, installCodexConfig } from "./core/codex.js";
 import { defaultDbPath } from "./core/store.js";
@@ -253,6 +254,32 @@ async function main(): Promise<void> {
         })
       );
       break;
+    case "agent-setup":
+      print(
+        await installAgentSetup({
+          targetDir: stringFlag(args, "target") ?? process.cwd(),
+          agents: agentList(stringFlag(args, "agents")),
+          command: stringFlag(args, "command") ?? process.execPath,
+          cliPath: stringFlag(args, "cli") ?? currentCliPath(),
+          dbPath: stringFlag(args, "db"),
+          serverName: stringFlag(args, "name") ?? "repolens",
+          dryRun: true
+        })
+      );
+      break;
+    case "install-agents":
+      print(
+        await installAgentSetup({
+          targetDir: stringFlag(args, "target") ?? process.cwd(),
+          agents: agentList(stringFlag(args, "agents")),
+          command: stringFlag(args, "command") ?? process.execPath,
+          cliPath: stringFlag(args, "cli") ?? currentCliPath(),
+          dbPath: stringFlag(args, "db"),
+          serverName: stringFlag(args, "name") ?? "repolens",
+          dryRun: booleanFlag(args, "dry-run")
+        })
+      );
+      break;
     case "mcp":
       await startMcpServer();
       break;
@@ -309,6 +336,20 @@ function numberFlag(args: ParsedArgs, name: string): number | undefined {
 
 function booleanFlag(args: ParsedArgs, name: string): boolean {
   return args.flags.get(name) === true;
+}
+
+function agentList(value: string | undefined): AgentId[] | undefined {
+  if (!value || value === "all") {
+    return undefined;
+  }
+  const known = new Set(agentProfiles.map((profile) => profile.id));
+  return value.split(",").map((item) => {
+    const agent = item.trim() as AgentId;
+    if (!known.has(agent)) {
+      throw new Error(`Unknown agent '${item}'. Use one of: all, ${[...known].join(", ")}`);
+    }
+    return agent;
+  });
 }
 
 function required(value: string | undefined, name: string): string {
@@ -393,6 +434,8 @@ Usage:
   repolens-mcp serve [--db path] [--port 9749]
   repolens-mcp doctor [--config ~/.codex/config.toml] [--name repolens]
   repolens-mcp install-codex [--db .repolens/memory.db] [--dry-run] [--force] [--config ~/.codex/config.toml]
+  repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini] [--db .repolens/memory.db]
+  repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
   repolens-mcp mcp
   repolens-mcp demo
 `;

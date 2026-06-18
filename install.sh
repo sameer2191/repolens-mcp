@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DB_PATH="${REPOLENS_DB:-.repolens/memory.db}"
 INSTALL_CODEX=0
+INSTALL_AGENTS=0
+AGENTS="all"
+TARGET_DIR="$ROOT_DIR"
 DRY_RUN=0
 FORCE=0
 SKIP_NPM=0
@@ -13,13 +16,16 @@ usage() {
 RepoLens MCP local installer
 
 Usage:
-  ./install.sh [--install-codex] [--dry-run] [--force] [--db path] [--skip-npm]
+  ./install.sh [--install-codex] [--install-agents] [--dry-run] [--force] [--db path] [--agents list] [--target dir] [--skip-npm]
 
 Options:
   --install-codex  Add or update the managed Codex MCP config block after build.
-  --dry-run        Show the Codex config change without writing it.
+  --install-agents Generate project-local RepoLens guidance for supported coding agents.
+  --dry-run        Show setup changes without writing them where supported.
   --force          Replace an existing unmanaged Codex server entry.
-  --db path        MCP database path to place in the Codex config.
+  --db path        MCP database path to place in generated setup.
+  --agents list    Comma-separated agents for --install-agents, or "all".
+  --target dir     Project directory for --install-agents output. Defaults to this repo.
   --skip-npm       Skip npm ci and only run the build/doctor steps.
   -h, --help       Show this help.
 USAGE
@@ -29,6 +35,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --install-codex)
       INSTALL_CODEX=1
+      shift
+      ;;
+    --install-agents)
+      INSTALL_AGENTS=1
       shift
       ;;
     --dry-run)
@@ -43,6 +53,22 @@ while [[ $# -gt 0 ]]; do
       DB_PATH="${2:-}"
       if [[ -z "$DB_PATH" ]]; then
         echo "Missing value for --db" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    --agents)
+      AGENTS="${2:-}"
+      if [[ -z "$AGENTS" ]]; then
+        echo "Missing value for --agents" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    --target)
+      TARGET_DIR="${2:-}"
+      if [[ -z "$TARGET_DIR" ]]; then
+        echo "Missing value for --target" >&2
         exit 2
       fi
       shift 2
@@ -96,7 +122,17 @@ if [[ "$INSTALL_CODEX" -eq 1 ]]; then
     args+=(--force)
   fi
   node --experimental-sqlite "$CLI_PATH" install-codex "${args[@]}"
-else
+fi
+
+if [[ "$INSTALL_AGENTS" -eq 1 ]]; then
+  args=(--target "$TARGET_DIR" --agents "$AGENTS" --db "$DB_PATH")
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    args+=(--dry-run)
+  fi
+  node --experimental-sqlite "$CLI_PATH" install-agents "${args[@]}"
+fi
+
+if [[ "$INSTALL_CODEX" -eq 0 && "$INSTALL_AGENTS" -eq 0 ]]; then
   cat <<EOF
 
 RepoLens MCP built successfully.
@@ -104,7 +140,10 @@ RepoLens MCP built successfully.
 Next steps:
   ./install.sh --install-codex --dry-run
   ./install.sh --install-codex
+  ./install.sh --install-agents --dry-run
   node --experimental-sqlite "$CLI_PATH" index .
   node --experimental-sqlite "$CLI_PATH" serve
 EOF
+else
+  echo "RepoLens MCP setup finished."
 fi

@@ -31,6 +31,7 @@ import {
   traceSymbol,
   unpackGraph
 } from "../core/api.js";
+import { agentProfiles, installAgentSetup, type AgentId } from "../core/agents.js";
 
 export async function startMcpServer(): Promise<void> {
   const server = new McpServer({
@@ -121,6 +122,32 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ limit }) => text(await fleetSummary(limit))
+  );
+
+  server.registerTool(
+    "agent_setup",
+    {
+      description: "Render or write project-local RepoLens MCP setup guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.",
+      inputSchema: {
+        targetDir: z.string().optional().describe("Project directory where setup guidance should be generated. Defaults to current working directory."),
+        agents: z.array(z.enum(agentProfiles.map((profile) => profile.id) as [AgentId, ...AgentId[]])).optional().describe("Agent ids to include. Defaults to all supported agents."),
+        dbPath: z.string().optional().describe("Recommended RepoLens database path in generated instructions."),
+        serverName: z.string().optional().describe("MCP server name to use in snippets."),
+        write: z.boolean().optional().describe("Actually write files when true. Defaults to false/dry-run.")
+      }
+    },
+    async ({ targetDir, agents, dbPath, serverName, write }) =>
+      text(
+        await installAgentSetup({
+          targetDir: targetDir ?? process.cwd(),
+          agents,
+          command: process.execPath,
+          cliPath: currentCliPath(),
+          dbPath,
+          serverName,
+          dryRun: !write
+        })
+      )
   );
 
   server.registerTool(
@@ -415,4 +442,8 @@ function text(value: unknown) {
       }
     ]
   };
+}
+
+function currentCliPath(): string {
+  return process.argv[1] ?? "repolens-mcp";
 }
