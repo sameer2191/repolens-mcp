@@ -49,6 +49,29 @@ test("tsconfig JSON comments do not corrupt comment markers inside strings", () 
   );
 });
 
+test("path alias wildcards reject traversal fragments", () => {
+  const symbols = [fileSymbol("src/consumer.ts"), fileSymbol("secret.ts")];
+  const fileContents = new Map([
+    [
+      "tsconfig.json",
+      JSON.stringify({
+        compilerOptions: {
+          baseUrl: ".",
+          paths: {
+            "@/*": ["src/*"]
+          }
+        }
+      })
+    ],
+    ["src/consumer.ts", `import { secret } from "@/../secret";\nsecret();`],
+    ["secret.ts", `export function secret() { return "hidden"; }`]
+  ]);
+
+  const edges = buildResolvedImportEdges(symbols, fileContents);
+
+  assert.ok(!edges.some((edge) => edge.target === "secret.ts:file"));
+});
+
 test("graph search name patterns are bounded wildcards, not raw regexes", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-name-pattern-"));
   const store = new MemoryStore(path.join(tmp, "memory.db"));

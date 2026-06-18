@@ -87,7 +87,10 @@ export function resolveImportFile(
     if (specifier !== packageRoot.name && !specifier.startsWith(`${packageRoot.name}/`)) {
       continue;
     }
-    const subpath = specifier.slice(packageRoot.name.length).replace(/^\//, "");
+    const subpath = stripLeadingSlash(specifier.slice(packageRoot.name.length));
+    if (subpath && !isSafeImportSubpath(subpath)) {
+      return null;
+    }
     const base = subpath ? path.posix.join(packageRoot.root, subpath) : path.posix.join(packageRoot.root, "src", "index");
     const targetFile = resolveCandidate(base, filePaths);
     if (targetFile) {
@@ -96,13 +99,20 @@ export function resolveImportFile(
   }
 
   if (specifier.startsWith("@/")) {
-    const targetFile = resolveCandidate(path.posix.join("src", specifier.slice(2)), filePaths);
+    const subpath = specifier.slice(2);
+    if (!isSafeImportSubpath(subpath)) {
+      return null;
+    }
+    const targetFile = resolveCandidate(path.posix.join("src", subpath), filePaths);
     if (targetFile) {
       return { targetFile, resolver: "source-root" };
     }
   }
 
   if (specifier.startsWith("src/") || specifier.startsWith("apps/") || specifier.startsWith("packages/") || specifier.startsWith("services/")) {
+    if (!isSafeImportSubpath(specifier)) {
+      return null;
+    }
     const targetFile = resolveCandidate(path.posix.normalize(specifier), filePaths);
     if (targetFile) {
       return { targetFile, resolver: "source-root" };
@@ -168,12 +178,45 @@ function resolveAlias(specifier: string, alias: AliasMapping, filePaths: Set<str
   }
   const wildcard = specifier.slice(prefix.length, specifier.length - suffix.length);
   for (const target of alias.targets) {
-    const resolved = resolveCandidate(target.replace("*", wildcard), filePaths);
+    const expandedTarget = expandAliasTarget(target, wildcard);
+    if (!expandedTarget) {
+      continue;
+    }
+    const resolved = resolveCandidate(expandedTarget, filePaths);
     if (resolved) {
       return resolved;
     }
   }
   return null;
+}
+
+function expandAliasTarget(target: string, wildcard: string): string | null {
+  if (!isSafeAliasWildcard(wildcard)) {
+    return null;
+  }
+  const star = target.indexOf("*");
+  const expanded = star < 0 ? target : `${target.slice(0, star)}${wildcard}${target.slice(star + 1)}`;
+  const normalized = path.posix.normalize(expanded);
+  return isSafeRelativePath(normalized) ? normalized : null;
+}
+
+function isSafeAliasWildcard(value: string): boolean {
+  if (value.includes("\\") || value.includes("\0") || value.startsWith("/")) {
+    return false;
+  }
+  return value.split("/").every((segment) => segment !== "." && segment !== "..");
+}
+
+function isSafeImportSubpath(value: string): boolean {
+  return isSafeAliasWildcard(value);
+}
+
+function isSafeRelativePath(value: string): boolean {
+  return !value.includes("\\") && !value.includes("\0") && !value.startsWith("/") && value.split("/").every((segment) => segment !== "..");
+}
+
+function stripLeadingSlash(value: string): string {
+  return value.startsWith("/") ? value.slice(1) : value;
 }
 
 function resolveCandidate(base: string, filePaths: Set<string>): string | null {
