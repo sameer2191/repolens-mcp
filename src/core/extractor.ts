@@ -14,6 +14,13 @@ interface Pattern {
   exported?: (match: RegExpExecArray) => boolean;
 }
 
+interface ChannelOccurrence {
+  channel: string;
+  type: "EMITS" | "LISTENS_ON";
+  line: number;
+  pattern: string;
+}
+
 const ignoredCallableNames = new Set([
   "get",
   "post",
@@ -153,6 +160,14 @@ export function extractFromFile(filePath: string, language: Language, content: s
     }
   }
 
+  const channels = extractChannelLinks(filePath, language, content, symbols);
+  for (const symbol of channels.symbols) {
+    symbols.push(symbol);
+  }
+  for (const edge of channels.edges) {
+    edges.push(edge);
+  }
+
   return { symbols: dedupeSymbols(symbols), edges, imports };
 }
 
@@ -276,6 +291,10 @@ function fileQualifiedName(filePath: string): string {
   return `${filePath}:file`;
 }
 
+function channelQualifiedName(channel: string): string {
+  return `channel:${channel}`;
+}
+
 function extractImports(language: Language, content: string): string[] {
   const imports = new Set<string>();
   const patternsByLanguage: Partial<Record<Language, RegExp[]>> = {
@@ -320,6 +339,118 @@ function extractRoutes(filePath: string, language: Language, content: string): S
     }
   }
   return routes;
+}
+
+function extractChannelLinks(filePath: string, language: Language, content: string, symbols: SymbolNode[]): ExtractionResult {
+  if (!["typescript", "javascript", "python", "swift"].includes(language)) {
+    return { symbols: [], edges: [], imports: [] };
+  }
+  const occurrences = extractChannelOccurrences(language, content);
+  if (occurrences.length === 0) {
+    return { symbols: [], edges: [], imports: [] };
+  }
+
+  const channelSymbols = new Map<string, SymbolNode>();
+  const edges: Edge[] = [];
+  for (const occurrence of occurrences) {
+    const channel = normalizeChannelName(occurrence.channel);
+    if (!channel) {
+      continue;
+    }
+    const qualifiedName = channelQualifiedName(channel);
+    if (!channelSymbols.has(qualifiedName)) {
+      channelSymbols.set(qualifiedName, {
+        filePath: "__channels__",
+        language: "unknown",
+        kind: "channel",
+        name: channel,
+        qualifiedName,
+        startLine: 1,
+        endLine: 1,
+        exported: false,
+        metadata: { channel }
+      });
+    }
+    const source = sourceSymbolForLine(symbols, occurrence.line)?.qualifiedName ?? fileQualifiedName(filePath);
+    edges.push({
+      source,
+      target: qualifiedName,
+      type: occurrence.type,
+      weight: occurrence.type === "EMITS" ? 0.85 : 0.75,
+      metadata: {
+        channel,
+        line: occurrence.line,
+        pattern: occurrence.pattern
+      }
+    });
+  }
+
+  return { symbols: [...channelSymbols.values()], edges, imports: [] };
+}
+
+function extractChannelOccurrences(language: Language, content: string): ChannelOccurrence[] {
+  if (language === "swift") {
+    return extractSwiftChannelOccurrences(content);
+  }
+
+  const occurrences: ChannelOccurrence[] = [];
+  const emitRegexes: Array<{ regex: RegExp; group: number; pattern: string }> = [
+    { regex: /\b(?:[\w$]+\.)?(?:emit|publish)\(\s*["'`]([^"'`]+)["'`]/g, group: 1, pattern: "emit" },
+    { regex: /\bdispatchEvent\(\s*new\s+CustomEvent\(\s*["'`]([^"'`]+)["'`]/g, group: 1, pattern: "custom-event" }
+  ];
+  const listenRegexes: Array<{ regex: RegExp; group: number; pattern: string }> = [
+    { regex: /\b(?:[\w$]+\.)?(?:on|once|addListener|subscribe)\(\s*["'`]([^"'`]+)["'`]/g, group: 1, pattern: "listener" },
+    { regex: /\baddEventListener\(\s*["'`]([^"'`]+)["'`]/g, group: 1, pattern: "dom-listener" },
+    { regex: /@(?:[\w.]+\.)?on\(\s*["'`]([^"'`]+)["'`]\s*\)/g, group: 1, pattern: "decorator-listener" }
+  ];
+
+  for (const { regex, group, pattern } of emitRegexes) {
+    for (const match of content.matchAll(regex)) {
+      occurrences.push({ channel: match[group], type: "EMITS", line: offsetToLine(content, match.index ?? 0), pattern });
+    }
+  }
+  for (const { regex, group, pattern } of listenRegexes) {
+    for (const match of content.matchAll(regex)) {
+      occurrences.push({ channel: match[group], type: "LISTENS_ON", line: offsetToLine(content, match.index ?? 0), pattern });
+    }
+  }
+  return occurrences;
+}
+
+function extractSwiftChannelOccurrences(content: string): ChannelOccurrence[] {
+  const occurrences: ChannelOccurrence[] = [];
+  const emitRegexes = [
+    /NotificationCenter\.default\.post\([\s\S]{0,180}?\bname\s*:\s*(?:\.([A-Za-z_]\w*)|(?:Notification|NSNotification)\.Name\(\s*"([^"]+)"\s*\))/g
+  ];
+  const listenRegexes = [
+    /NotificationCenter\.default\.addObserver\([\s\S]{0,220}?\b(?:name|forName)\s*:\s*(?:\.([A-Za-z_]\w*)|(?:Notification|NSNotification)\.Name\(\s*"([^"]+)"\s*\))/g
+  ];
+  for (const regex of emitRegexes) {
+    for (const match of content.matchAll(regex)) {
+      occurrences.push({ channel: match[1] ?? match[2], type: "EMITS", line: offsetToLine(content, match.index ?? 0), pattern: "notification-post" });
+    }
+  }
+  for (const regex of listenRegexes) {
+    for (const match of content.matchAll(regex)) {
+      occurrences.push({ channel: match[1] ?? match[2], type: "LISTENS_ON", line: offsetToLine(content, match.index ?? 0), pattern: "notification-listener" });
+    }
+  }
+  return occurrences;
+}
+
+function sourceSymbolForLine(symbols: SymbolNode[], line: number): SymbolNode | null {
+  const candidates = symbols
+    .filter((symbol) => ["function", "method", "class", "route"].includes(symbol.kind) && symbol.startLine <= line && symbol.endLine >= line)
+    .sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine));
+  return candidates[0] ?? null;
+}
+
+function normalizeChannelName(channel: string | undefined): string | null {
+  const trimmed = channel?.trim();
+  if (!trimmed || trimmed.length > 160) {
+    return null;
+  }
+  return trimmed.replace(/\s+/g, " ");
 }
 
 function extractHttpCalls(content: string, startLine: number): Array<{ method: string; path: string; line: number }> {

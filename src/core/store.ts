@@ -296,6 +296,7 @@ export class MemoryStore {
     this.db.prepare("DELETE FROM code_lines WHERE file_path = ?").run(filePath);
     this.deleteSearchRows(filePath);
     this.db.prepare("DELETE FROM files WHERE path = ?").run(filePath);
+    this.deleteOrphanChannels();
   }
 
   deleteCallEdges(): void {
@@ -1417,6 +1418,20 @@ export class MemoryStore {
     } catch {
       this.codeFtsAvailable = false;
     }
+  }
+
+  private deleteOrphanChannels(): void {
+    this.db
+      .prepare(
+        `DELETE FROM symbols
+         WHERE kind = 'channel'
+           AND qualified_name NOT IN (
+             SELECT target FROM edges WHERE type IN ('EMITS', 'LISTENS_ON')
+             UNION
+             SELECT source FROM edges WHERE type IN ('EMITS', 'LISTENS_ON')
+           )`
+      )
+      .run();
   }
 }
 

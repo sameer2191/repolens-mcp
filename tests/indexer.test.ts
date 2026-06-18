@@ -49,6 +49,8 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(arch.nodeLabels.some((label) => label.kind === "function"));
     assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "CALLS"));
     assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "HTTP_CALLS"));
+    assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "EMITS"));
+    assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "LISTENS_ON"));
     assert.ok(arch.topSymbols.some((symbol) => symbol.name === "createOrder"));
     assert.ok(Array.isArray(arch.dependencyCycles));
     assert.ok(Array.isArray(arch.recommendations));
@@ -62,8 +64,11 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(schema.nodeLabels.some((label) => label.kind === "container_image"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "stage"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "module"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "channel"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "DEFINES"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CONFIGURES"));
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "EMITS"));
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "LISTENS_ON"));
 
     const graphMatches = store.searchGraph({ query: "createOrder", minDegree: 1 });
     assert.equal(graphMatches[0]?.symbol.name, "createOrder");
@@ -84,6 +89,18 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const kustomizeQuery = store.queryGraph("MATCH (a)-[r:IMPORTS]->(b) WHERE a.name STARTS WITH 'Kustomization' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(kustomizeQuery.rows.some((row) => row["b.name"] === "deployment.yaml" && row["r.type"] === "IMPORTS"));
+
+    const channelMatches = store.searchGraph({ kind: "channel", query: "order.created" });
+    assert.ok(channelMatches.some((match) => match.symbol.name === "order.created"));
+
+    const emitsQuery = store.queryGraph("MATCH (a)-[r:EMITS]->(b:Channel) WHERE b.name = 'order.created' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(emitsQuery.rows.some((row) => row["a.name"] === "notifyOrderCreated" && row["r.type"] === "EMITS"));
+
+    const listensQuery = store.queryGraph("MATCH (a)-[r:LISTENS_ON]->(b:Channel) WHERE b.name = 'order.created' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(listensQuery.rows.some((row) => row["a.name"] === "onOrderCreated" && row["r.type"] === "LISTENS_ON"));
+
+    const swiftChannel = store.searchGraph({ kind: "channel", query: "checkoutSubmitted" });
+    assert.ok(swiftChannel.some((match) => match.symbol.name === "checkoutSubmitted"));
 
     const communities = store.communities(5, 3);
     assert.ok(communities.length > 0);
@@ -382,6 +399,18 @@ test("incremental indexing skips unchanged files and prunes removed files", asyn
   store = new MemoryStore(dbPath);
   try {
     assert.equal(store.searchCode("fixture exposes").length, 0);
+  } finally {
+    store.close();
+  }
+
+  await fs.rm(path.join(repo, "src", "client.ts"));
+  const removedClient = await indexRepository({ root: repo, dbPath, incremental: true });
+  assert.equal(removedClient.filesRemoved, 1);
+
+  store = new MemoryStore(dbPath);
+  try {
+    assert.equal(store.searchGraph({ kind: "channel", query: "order.created" }).length, 0);
+    assert.equal(store.searchSymbols("notifyOrderCreated").length, 0);
   } finally {
     store.close();
   }

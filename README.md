@@ -6,7 +6,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 21 tools for indexing, BM25 code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 21 tools for indexing, BM25 code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, channel/event edges, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Codex-ready setup**: `doctor` inspects the local Codex MCP configuration, and `install-codex` can add a managed MCP block with dry-run and force safeguards.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
@@ -17,6 +17,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
 - **Route-call edges**: connects literal `fetch`/Axios/Node HTTP calls to indexed route nodes with `HTTP_CALLS` edges.
+- **Channel/event edges**: detects EventEmitter, Socket.IO-style, DOM custom event, Python decorator/call, and Swift `NotificationCenter` channels with `EMITS` and `LISTENS_ON` edges.
 - **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
 - **Architecture recommendations**: turns hotspots, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
@@ -100,6 +101,7 @@ The extractor is intentionally compact and extensible:
 
 - TypeScript and JavaScript: classes, interfaces, types, functions, const functions, imports, Express-style routes.
 - HTTP call linking: literal `fetch`, Axios, and Node `http` calls are linked to matching route nodes as `HTTP_CALLS`.
+- Channel/event linking: EventEmitter/Socket.IO-style `emit`, `on`, `once`, `addListener`, `subscribe`, DOM `CustomEvent`, Python `@*.on`, and Swift `NotificationCenter` patterns become `channel` nodes with `EMITS` and `LISTENS_ON` edges.
 - Swift: classes, structs, enums, protocols, actors, functions, and imports.
 - Python: classes, functions, imports, route decorators.
 - Go, Java, Rust: common functions, types, classes, traits, structs, imports.
