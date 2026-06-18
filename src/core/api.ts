@@ -7,6 +7,7 @@ import {
   listProjects as listCatalogProjects,
   recordProjectIndex
 } from "./catalog.js";
+import { getRepoLensConfigValue, readRepoLensConfig, resetRepoLensConfigValue, setRepoLensConfigValue } from "./config.js";
 import { buildFleetGraph, type FleetGraphOptions } from "./fleet-graph.js";
 import { indexRepository } from "./indexer.js";
 import { buildArchitectureReport } from "./report.js";
@@ -48,6 +49,22 @@ export async function fleetSummary(limit?: number) {
 
 export async function fleetGraph(options: FleetGraphOptions = {}) {
   return buildFleetGraph(await catalogFleetSummary(options.limit), options);
+}
+
+export function configList(configPath?: string) {
+  return readRepoLensConfig(configPath);
+}
+
+export function configGet(key: string, configPath?: string) {
+  return getRepoLensConfigValue(key, configPath);
+}
+
+export function configSet(key: string, value: string, configPath?: string) {
+  return setRepoLensConfigValue(key, value, configPath);
+}
+
+export function configReset(key?: string, configPath?: string) {
+  return resetRepoLensConfigValue(key, configPath);
 }
 
 export function withStore<T>(rootOrDbPath: string | undefined, fn: (store: MemoryStore) => T): T {

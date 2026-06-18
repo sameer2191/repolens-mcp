@@ -4,6 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import {
   architectureReport,
+  configGet,
+  configList,
+  configReset,
+  configSet,
   contextPack,
   deleteProject,
   detectChanges,
@@ -108,6 +112,9 @@ async function main(): Promise<void> {
           maxEdges: numberFlag(args, "max-edges")
         })
       );
+      break;
+    case "config":
+      print(handleConfigCommand(args));
       break;
     case "architecture":
       print(getArchitecture(stringFlag(args, "db")));
@@ -418,6 +425,27 @@ function agentList(value: string | undefined): AgentId[] | undefined {
   });
 }
 
+function handleConfigCommand(args: ParsedArgs): unknown {
+  const action = args.positional[0] ?? "list";
+  const configPath = stringFlag(args, "config");
+  if (action === "list") {
+    return configList(configPath);
+  }
+  if (action === "path") {
+    return configList(configPath).path;
+  }
+  if (action === "get") {
+    return configGet(required(args.positional[1], "config key"), configPath);
+  }
+  if (action === "set") {
+    return configSet(required(args.positional[1], "config key"), required(args.positional[2], "config value"), configPath);
+  }
+  if (action === "reset") {
+    return configReset(args.positional[1], configPath);
+  }
+  throw new Error("Unknown config action. Use list, path, get, set, or reset.");
+}
+
 function required(value: string | undefined, name: string): string {
   if (!value) {
     throw new Error(`Missing required ${name}`);
@@ -474,6 +502,7 @@ Usage:
   repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
   repolens-mcp fleet-summary [--limit n]
   repolens-mcp fleet-graph [--limit n] [--max-nodes n] [--max-edges n]
+  repolens-mcp config list|get|set|reset|path [key] [value] [--config path]
   repolens-mcp architecture [--db path]
   repolens-mcp search <query> [--db path] [--limit n]
   repolens-mcp scan-secrets [--db path] [--limit n] [--min-confidence low|medium|high] [--include-tests]

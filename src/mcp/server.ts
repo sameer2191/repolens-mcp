@@ -4,6 +4,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import {
   architectureReport,
+  configGet,
+  configList,
+  configReset,
+  configSet,
   contextPack,
   deleteProject,
   detectChanges,
@@ -37,6 +41,7 @@ import {
   vectorSearch
 } from "../core/api.js";
 import { agentProfiles, installAgentSetup, type AgentId } from "../core/agents.js";
+import { configValueFromEnvOrConfig, loadRepoLensConfig } from "../core/config.js";
 import type { IndexResult } from "../core/types.js";
 
 export async function startMcpServer(): Promise<void> {
@@ -113,6 +118,25 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ identifier }) => text(await getProjectStatus(identifier))
+  );
+
+  server.registerTool(
+    "manage_config",
+    {
+      description: "Read or update the persistent RepoLens config used for defaults such as MCP startup auto-indexing.",
+      inputSchema: {
+        action: z.enum(["list", "get", "set", "reset"]).default("list"),
+        key: z.string().optional().describe("Config key, such as autoIndex, root, dbPath, maxFileBytes, autoIndexLabel, or bootstrapPackage."),
+        value: z.string().optional().describe("Value for set actions."),
+        configPath: z.string().optional().describe("Optional alternate config file path.")
+      }
+    },
+    async ({ action, key, value, configPath }) => {
+      if (action === "list") return text(configList(configPath));
+      if (action === "get") return text(configGet(requiredToolString(key, "key"), configPath));
+      if (action === "set") return text(configSet(requiredToolString(key, "key"), requiredToolString(value, "value"), configPath));
+      return text(configReset(key, configPath));
+    }
   );
 
   server.registerTool(
@@ -501,17 +525,19 @@ export async function startMcpServer(): Promise<void> {
 }
 
 export async function maybeAutoIndexOnStartup(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): Promise<IndexResult | undefined> {
-  const mode = parseAutoIndexMode(env.REPOLENS_AUTO_INDEX);
+  const config = loadRepoLensConfig(env.REPOLENS_CONFIG);
+  const mode = parseAutoIndexMode(configValueFromEnvOrConfig(env.REPOLENS_AUTO_INDEX, config.autoIndex));
   if (!mode) {
     return undefined;
   }
-  const root = path.resolve(cwd, env.REPOLENS_ROOT ?? ".");
+  const root = path.resolve(cwd, env.REPOLENS_ROOT ?? config.root ?? ".");
   const result = await runIndex({
     root,
-    dbPath: env.REPOLENS_DB,
+    dbPath: env.REPOLENS_DB ?? config.dbPath,
     incremental: mode.incremental,
-    maxFileBytes: parsePositiveIntEnv(env.REPOLENS_MAX_FILE_BYTES, "REPOLENS_MAX_FILE_BYTES"),
-    runLabel: env.REPOLENS_AUTO_INDEX_LABEL ?? "mcp-startup"
+    maxFileBytes: parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_MAX_FILE_BYTES, config.maxFileBytes), "REPOLENS_MAX_FILE_BYTES"),
+    runLabel: env.REPOLENS_AUTO_INDEX_LABEL ?? config.autoIndexLabel ?? "mcp-startup",
+    bootstrapPackage: bootstrapPackageFromConfig(env.REPOLENS_BOOTSTRAP_PACKAGE, config.bootstrapPackage)
   });
   process.stderr.write(
     `RepoLens auto-index: ${result.mode} ${result.filesIndexed}/${result.filesDiscovered} files, ${result.symbols} symbols, ${result.edges} edges\n`
@@ -542,6 +568,24 @@ function parsePositiveIntEnv(value: string | undefined, name: string): number | 
     throw new Error(`${name} must be a positive integer`);
   }
   return parsed;
+}
+
+function bootstrapPackageFromConfig(envValue: string | undefined, configValue: string | false | undefined): string | false | undefined {
+  if (envValue === undefined) {
+    return configValue;
+  }
+  const normalized = envValue.trim().toLowerCase();
+  if (normalized === "0" || normalized === "false" || normalized === "off" || normalized === "no") {
+    return false;
+  }
+  return envValue;
+}
+
+function requiredToolString(value: string | undefined, name: string): string {
+  if (!value) {
+    throw new Error(`Missing required ${name}`);
+  }
+  return value;
 }
 
 function text(value: unknown) {

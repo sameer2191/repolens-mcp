@@ -1,0 +1,37 @@
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { getRepoLensConfigValue, readRepoLensConfig, resetRepoLensConfigValue, setRepoLensConfigValue } from "../src/core/config.js";
+
+test("persists RepoLens config values with aliases and reset support", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-config-"));
+  const configPath = path.join(tmp, "config.json");
+
+  let result = setRepoLensConfigValue("auto-index", "true", configPath);
+  assert.equal(result.config.autoIndex, "incremental");
+
+  result = setRepoLensConfigValue("max-file-bytes", "750000", configPath);
+  assert.equal(result.config.maxFileBytes, 750000);
+
+  result = setRepoLensConfigValue("bootstrap-package", "off", configPath);
+  assert.equal(result.config.bootstrapPackage, false);
+
+  const loaded = readRepoLensConfig(configPath);
+  assert.equal(loaded.path, configPath);
+  assert.equal(loaded.config.autoIndex, "incremental");
+  assert.equal(loaded.config.maxFileBytes, 750000);
+  assert.equal(loaded.config.bootstrapPackage, false);
+
+  const value = getRepoLensConfigValue("autoIndex", configPath);
+  assert.equal(value.key, "autoIndex");
+  assert.equal(value.value, "incremental");
+
+  const resetOne = resetRepoLensConfigValue("max_file_bytes", configPath);
+  assert.equal(resetOne.config.maxFileBytes, undefined);
+  assert.equal(resetOne.config.autoIndex, "incremental");
+
+  const resetAll = resetRepoLensConfigValue(undefined, configPath);
+  assert.deepEqual(resetAll.config, {});
+});

@@ -39,3 +39,30 @@ test("MCP startup auto-index indexes the configured repository", async () => {
   );
   assert.equal(fullResult?.mode, "full");
 });
+
+test("MCP startup auto-index reads persistent RepoLens config", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-mcp-config-auto-index-"));
+  const dbPath = path.join(tmp, "memory.db");
+  const configPath = path.join(tmp, "config.json");
+  await fs.writeFile(
+    configPath,
+    JSON.stringify(
+      {
+        autoIndex: "incremental",
+        root: fixture,
+        dbPath,
+        maxFileBytes: 750000,
+        autoIndexLabel: "config-startup-test"
+      },
+      null,
+      2
+    )
+  );
+
+  const result = await maybeAutoIndexOnStartup({ REPOLENS_CONFIG: configPath }, process.cwd());
+
+  assert.equal(result?.mode, "incremental");
+  assert.equal(result?.root, fixture);
+  assert.equal(result?.dbPath, dbPath);
+  assert.ok((result?.symbols ?? 0) > 0);
+});

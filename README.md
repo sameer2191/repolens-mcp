@@ -12,11 +12,12 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 32 tools for indexing, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 33 tools for indexing, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
 - **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, and optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`.
+- **Persistent local config**: `config set auto-index incremental` stores defaults for MCP startup auto-indexing, root, database path, max file size, labels, and graph-package bootstrap without requiring shell env vars.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI; first index can bootstrap a missing database from `.repolens/graph.rlgz`.
 - **Operational dashboard**: browse graph previews, structural filters, references, semantic/vector search, schema counts, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
@@ -73,6 +74,7 @@ repolens-mcp project-status [root-or-db-or-label]
 repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
 repolens-mcp fleet-summary [--limit n]
 repolens-mcp fleet-graph [--limit n] [--max-nodes n] [--max-edges n]
+repolens-mcp config list|get|set|reset|path [key] [value]
 repolens-mcp architecture [--db path]
 repolens-mcp search <query> [--db path]
 repolens-mcp scan-secrets [--db path] [--limit n] [--min-confidence low|medium|high] [--include-tests]
@@ -115,6 +117,7 @@ repolens-mcp mcp
 | `index_repository` | Build or refresh the local SQLite memory, optionally bootstrapping from a `.rlgz` graph package when the database is missing. |
 | `export_graph_package` | Create a compressed, checksummed `.rlgz` package from an indexed graph database. |
 | `import_graph_package` | Import a compressed `.rlgz` package into a local graph database. |
+| `manage_config` | Read or update persistent RepoLens defaults for startup auto-indexing and graph paths. |
 | `list_projects` | List repositories indexed through RepoLens on this machine. |
 | `index_status` | Return the latest indexed status for a root, database path, label, or project folder name. |
 | `delete_project` | Remove a project from the local catalog, with optional safe `.repolens` DB cleanup. |
@@ -205,6 +208,8 @@ node --experimental-sqlite dist/src/cli.js export-graph --db /tmp/memory.db --ou
 node --experimental-sqlite dist/src/cli.js pack-graph --db /tmp/memory.db --out graph.rlgz --label validation
 node --experimental-sqlite dist/src/cli.js unpack-graph graph.rlgz --db /tmp/imported-memory.db
 node --experimental-sqlite dist/src/cli.js watch /path/to/big/repo --db /tmp/memory.db --interval-ms 2500
+node --experimental-sqlite dist/src/cli.js config set auto-index incremental
+node --experimental-sqlite dist/src/cli.js config set root /path/to/big/repo
 node --experimental-sqlite dist/src/cli.js serve --db /tmp/memory.db --port 9749
 node --experimental-sqlite dist/src/cli.js agent-setup --target /tmp/project --agents all
 ```
@@ -253,6 +258,14 @@ REPOLENS_MAX_FILE_BYTES = "750000" # optional
 ```
 
 Set `REPOLENS_AUTO_INDEX=full` to force a full rebuild on startup. Leave it unset for the default manual-index behavior.
+
+You can also persist those defaults without shell env vars:
+
+```bash
+node --experimental-sqlite dist/src/cli.js config set auto-index incremental
+node --experimental-sqlite dist/src/cli.js config set root /path/to/repo
+node --experimental-sqlite dist/src/cli.js config set db-path /path/to/repo/.repolens/memory.db
+```
 
 Project teams can generate agent guidance and config snippets for the broader agent set:
 
