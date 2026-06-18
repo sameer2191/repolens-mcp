@@ -45,6 +45,7 @@ import {
 } from "./core/api.js";
 import { agentProfiles, installAgentSetup, uninstallAgentSetup, type AgentId } from "./core/agents.js";
 import type { ReportFormat } from "./core/report.js";
+import type { TraceDirection, TraceMode } from "./core/types.js";
 import { codexDoctor, installCodexConfig, uninstallCodexConfig } from "./core/codex.js";
 import { defaultDbPath } from "./core/store.js";
 import { serveDashboard } from "./dashboard/server.js";
@@ -154,9 +155,15 @@ async function main(): Promise<void> {
       print(
         traceSymbol(
           required(args.positional[0], "symbol"),
-          (stringFlag(args, "direction") as "inbound" | "outbound" | undefined) ?? "outbound",
+          traceDirectionFlag(args),
           numberFlag(args, "depth"),
-          stringFlag(args, "db")
+          stringFlag(args, "db"),
+          {
+            mode: traceModeFlag(args),
+            edgeTypes: commaListFlag(args, "edge-types"),
+            includeTests: args.flags.has("include-tests") ? true : args.flags.has("exclude-tests") ? false : undefined,
+            parameterName: stringFlag(args, "parameter")
+          }
         )
       );
       break;
@@ -410,6 +417,11 @@ function booleanFlag(args: ParsedArgs, name: string): boolean {
   return args.flags.get(name) === true;
 }
 
+function commaListFlag(args: ParsedArgs, name: string): string[] | undefined {
+  const value = stringFlag(args, name);
+  return value?.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
 function secretConfidenceFlag(args: ParsedArgs): "low" | "medium" | "high" | undefined {
   const value = stringFlag(args, "min-confidence");
   if (!value) {
@@ -419,6 +431,25 @@ function secretConfidenceFlag(args: ParsedArgs): "low" | "medium" | "high" | und
     return value;
   }
   throw new Error("Invalid --min-confidence. Use one of: low, medium, high.");
+}
+
+function traceDirectionFlag(args: ParsedArgs): TraceDirection {
+  const value = stringFlag(args, "direction") ?? "outbound";
+  if (value === "inbound" || value === "outbound" || value === "both") {
+    return value;
+  }
+  throw new Error("Invalid --direction. Use one of: inbound, outbound, both.");
+}
+
+function traceModeFlag(args: ParsedArgs): TraceMode | undefined {
+  const value = stringFlag(args, "mode");
+  if (!value) {
+    return undefined;
+  }
+  if (value === "all" || value === "calls" || value === "data_flow" || value === "cross_service") {
+    return value;
+  }
+  throw new Error("Invalid --mode. Use one of: all, calls, data_flow, cross_service.");
 }
 
 function decisionStatusFlag(args: ParsedArgs): "proposed" | "accepted" | "superseded" | undefined {

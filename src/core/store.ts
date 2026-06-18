@@ -29,7 +29,9 @@ import type {
   SecretFinding,
   SecretScanOptions,
   SecretScanResult,
+  TraceDirection,
   TraceIngestResult,
+  TraceOptions,
   VectorIndexStats,
   VectorSearchMatch
 } from "./types.js";
@@ -633,7 +635,7 @@ export class MemoryStore {
     ].join("\n");
   }
 
-  traceSymbol(name: string, direction: "inbound" | "outbound", depth = 2): Edge[] {
+  traceSymbol(name: string, direction: TraceDirection = "outbound", depth = 2, options: TraceOptions = {}): Edge[] {
     const start = this.getSymbol(name);
     if (!start) {
       return [];
@@ -641,36 +643,71 @@ export class MemoryStore {
     const seen = new Set<string>();
     const frontier = [start.qualifiedName];
     const result: Edge[] = [];
+    const edgeTypes = traceEdgeTypes(options);
     for (let level = 0; level < depth && frontier.length > 0; level += 1) {
       const next: string[] = [];
       while (frontier.length > 0) {
         const current = frontier.shift() as string;
-        const rows = this.db
-          .prepare(
-            direction === "outbound"
-              ? "SELECT * FROM edges WHERE source = ? ORDER BY weight DESC LIMIT 100"
-              : "SELECT * FROM edges WHERE target = ? ORDER BY weight DESC LIMIT 100"
-          )
-          .all(current) as Array<{ source: string; target: string; type: string; weight: number; metadata: string }>;
+        const rows = this.traceRows(current, direction, edgeTypes);
         for (const row of rows) {
           const key = `${row.source}:${row.type}:${row.target}`;
           if (seen.has(key)) {
             continue;
           }
           seen.add(key);
+          const metadata = parseMetadata(row.metadata);
+          if (!shouldIncludeTraceEdge(row, metadata, options)) {
+            continue;
+          }
           result.push({
             source: row.source,
             target: row.target,
             type: row.type,
             weight: row.weight,
-            metadata: parseMetadata(row.metadata)
+            metadata
           });
-          next.push(direction === "outbound" ? row.target : row.source);
+          if (direction === "both") {
+            next.push(row.source === current ? row.target : row.source);
+          } else {
+            next.push(direction === "outbound" ? row.target : row.source);
+          }
         }
       }
       frontier.push(...next);
     }
     return result;
+  }
+
+  private traceRows(current: string, direction: TraceDirection, edgeTypes: string[]): Array<{ source: string; target: string; type: string; weight: number; metadata: string }> {
+    const filters = edgeTypes.length > 0 ? ` AND type IN (${edgeTypes.map(() => "?").join(", ")})` : "";
+    const params = edgeTypes.length > 0 ? [current, ...edgeTypes] : [current];
+    if (direction === "outbound") {
+      return this.db.prepare(`SELECT * FROM edges WHERE source = ?${filters} ORDER BY weight DESC LIMIT 100`).all(...params) as Array<{
+        source: string;
+        target: string;
+        type: string;
+        weight: number;
+        metadata: string;
+      }>;
+    }
+    if (direction === "inbound") {
+      return this.db.prepare(`SELECT * FROM edges WHERE target = ?${filters} ORDER BY weight DESC LIMIT 100`).all(...params) as Array<{
+        source: string;
+        target: string;
+        type: string;
+        weight: number;
+        metadata: string;
+      }>;
+    }
+    const bothParams = edgeTypes.length > 0 ? [current, current, ...edgeTypes] : [current, current];
+    const bothFilters = edgeTypes.length > 0 ? ` AND type IN (${edgeTypes.map(() => "?").join(", ")})` : "";
+    return this.db.prepare(`SELECT * FROM edges WHERE (source = ? OR target = ?)${bothFilters} ORDER BY weight DESC LIMIT 100`).all(...bothParams) as Array<{
+      source: string;
+      target: string;
+      type: string;
+      weight: number;
+      metadata: string;
+    }>;
   }
 
   impactedBy(pathsOrSymbols: string[], limit = 50): Array<{ item: string; reason: string; score: number }> {
@@ -2002,6 +2039,52 @@ function parseMetadata(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function traceEdgeTypes(options: TraceOptions): string[] {
+  const explicit = options.edgeTypes?.map((edgeType) => edgeType.trim().toUpperCase()).filter(Boolean);
+  if (explicit?.length) {
+    return [...new Set(explicit)];
+  }
+  switch (options.mode ?? "all") {
+    case "calls":
+      return ["CALLS", "CALLS_LOCAL"];
+    case "data_flow":
+      return ["CALLS", "CALLS_LOCAL", "DATA_FLOWS"];
+    case "cross_service":
+      return ["HTTP_CALLS", "CALLS_HTTP_ENDPOINT", "OBSERVED_HTTP_CALLS", "EMITS", "LISTENS_ON", "OBSERVED_EMITS", "OBSERVED_LISTENS_ON"];
+    case "all":
+      return [];
+  }
+}
+
+function shouldIncludeTraceEdge(row: { source: string; target: string; type: string }, metadata: Record<string, unknown>, options: TraceOptions): boolean {
+  if (options.includeTests === false && (isTestLikePath(edgeEndpointPath(row.source)) || isTestLikePath(edgeEndpointPath(row.target)))) {
+    return false;
+  }
+  const parameterName = options.parameterName?.trim();
+  if (!parameterName) {
+    return true;
+  }
+  if (row.type !== "DATA_FLOWS") {
+    return false;
+  }
+  const mappings = metadata.mappings;
+  return (
+    Array.isArray(mappings) &&
+    mappings.some(
+      (mapping) =>
+        mapping &&
+        typeof mapping === "object" &&
+        ("parameter" in mapping || "argument" in mapping) &&
+        (String((mapping as { parameter?: unknown }).parameter ?? "") === parameterName || String((mapping as { argument?: unknown }).argument ?? "") === parameterName)
+    )
+  );
+}
+
+function edgeEndpointPath(qualifiedName: string): string {
+  const index = qualifiedName.lastIndexOf(":");
+  return index > 0 ? qualifiedName.slice(0, index) : qualifiedName;
 }
 
 function decisionFromRow(row: { id: number; title: string; status: DecisionRecord["status"]; body: string; tags: string; created_at: string }): DecisionRecord {

@@ -14,7 +14,7 @@ import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
 import { watchRepository } from "./watcher.js";
 import type { ArchitectureReportOptions } from "./report.js";
-import type { ContextPack, DecisionRecord, GraphSearchOptions, IndexOptions, RuntimeTrace, SecretScanOptions, WatchIndexOptions } from "./types.js";
+import type { ContextPack, DecisionRecord, GraphSearchOptions, IndexOptions, RuntimeTrace, SecretScanOptions, TraceDirection, TraceOptions, WatchIndexOptions } from "./types.js";
 
 export async function runIndex(options: IndexOptions) {
   const result = await indexRepository(options);
@@ -102,8 +102,8 @@ export function findReferences(identifier: string, limit?: number, dbPath?: stri
   return withStore(dbPath, (store) => store.findReferences(identifier, limit));
 }
 
-export function traceSymbol(name: string, direction: "inbound" | "outbound", depth?: number, dbPath?: string) {
-  return withStore(dbPath, (store) => store.traceSymbol(name, direction, depth));
+export function traceSymbol(name: string, direction: TraceDirection = "outbound", depth?: number, dbPath?: string, options: TraceOptions = {}) {
+  return withStore(dbPath, (store) => store.traceSymbol(name, direction, depth, options));
 }
 
 export function impactAnalysis(items: string[], limit?: number, dbPath?: string) {

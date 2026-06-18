@@ -284,29 +284,39 @@ export async function startMcpServer(): Promise<void> {
   server.registerTool(
     "trace_symbol",
     {
-      description: "Trace inbound or outbound graph edges for a symbol.",
+      description: "Trace graph edges for a symbol. Modes: all, calls, data_flow, or cross_service.",
       inputSchema: {
         name: z.string(),
-        direction: z.enum(["inbound", "outbound"]).default("outbound"),
+        direction: z.enum(["inbound", "outbound", "both"]).default("outbound"),
         depth: z.number().int().positive().max(5).optional(),
+        mode: z.enum(["all", "calls", "data_flow", "cross_service"]).optional(),
+        edgeTypes: z.array(z.string()).optional().describe("Optional explicit edge type allowlist, overriding mode."),
+        includeTests: z.boolean().optional().describe("Set false to hide test/spec/fixture/mock paths."),
+        parameterName: z.string().optional().describe("For data_flow mode, keep DATA_FLOWS edges matching this argument or parameter name."),
         dbPath: z.string().optional()
       }
     },
-    async ({ name, direction, depth, dbPath }) => text(traceSymbol(name, direction, depth, dbPath))
+    async ({ name, direction, depth, mode, edgeTypes, includeTests, parameterName, dbPath }) =>
+      text(traceSymbol(name, direction, depth, dbPath, { mode, edgeTypes, includeTests, parameterName }))
   );
 
   server.registerTool(
     "trace_path",
     {
-      description: "Compatibility alias for trace_symbol. Trace inbound or outbound graph edges for a symbol.",
+      description: "Trace paths through the graph. Modes: calls for call paths, data_flow for value propagation, cross_service for HTTP/event edges, or all for unfiltered traversal.",
       inputSchema: {
         name: z.string(),
-        direction: z.enum(["inbound", "outbound"]).default("outbound"),
+        direction: z.enum(["inbound", "outbound", "both"]).default("outbound"),
         depth: z.number().int().positive().max(5).optional(),
+        mode: z.enum(["all", "calls", "data_flow", "cross_service"]).optional(),
+        edgeTypes: z.array(z.string()).optional().describe("Optional explicit edge type allowlist, overriding mode."),
+        includeTests: z.boolean().optional().describe("Set false to hide test/spec/fixture/mock paths."),
+        parameterName: z.string().optional().describe("For data_flow mode, keep DATA_FLOWS edges matching this argument or parameter name."),
         dbPath: z.string().optional()
       }
     },
-    async ({ name, direction, depth, dbPath }) => text(traceSymbol(name, direction, depth, dbPath))
+    async ({ name, direction, depth, mode, edgeTypes, includeTests, parameterName, dbPath }) =>
+      text(traceSymbol(name, direction, depth, dbPath, { mode, edgeTypes, includeTests, parameterName }))
   );
 
   server.registerTool(

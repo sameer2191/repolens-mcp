@@ -44,7 +44,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 ## Security And Quality
 
 - **Protected mainline**: `main` requires PR review, CODEOWNERS review, fresh branch checks, resolved conversations, linear history, `verify`, and CodeQL `Analyze`; force pushes and branch deletion are blocked.
-- **GitHub security coverage**: CodeQL, OpenSSF Scorecard, Dependabot security updates, secret scanning with push protection, private vulnerability reporting, pinned workflow actions, and least-privilege workflow tokens.
+- **GitHub security coverage**: CodeQL, OpenSSF Scorecard, Dependabot security updates, secret scanning with push protection, private vulnerability reporting, pinned workflow actions, least-privilege workflow tokens, and a release gate that blocks publishing when CodeQL has open alerts.
 - **Property-based fuzzing**: `fast-check` fuzzes import resolver traversal boundaries and safe alias/source-root/workspace-package resolution in `tests/security-fixes.test.ts`.
 - **Release integrity**: npm provenance, GitHub build-provenance attestations, CycloneDX SBOM generation, lockfile dependency graphing, and dry-run package validation.
 
@@ -88,7 +88,7 @@ repolens-mcp scan-secrets [--db path] [--limit n] [--min-confidence low|medium|h
 repolens-mcp symbols <query> [--kind function]
 repolens-mcp snippet <symbol-or-path:line> [--context n]
 repolens-mcp references <symbol> [--db path] [--limit n]
-repolens-mcp trace <symbol> [--direction inbound|outbound]
+repolens-mcp trace <symbol> [--direction inbound|outbound|both] [--mode all|calls|data_flow|cross_service] [--parameter name]
 repolens-mcp impact <path-or-symbol...>
 repolens-mcp schema [--db path]
 repolens-mcp communities [--db path] [--limit n] [--min-size n]
@@ -139,7 +139,7 @@ repolens-mcp mcp
 | `get_code_snippet` | Return source lines around a symbol, qualified name, file path, or `path:line` target. |
 | `find_references` | Find indexed definition and reference lines for a symbol or identifier. |
 | `get_architecture` | Return language mix, hotspots, git-history churn, entrypoints, packages, and risk markers. |
-| `trace_symbol` / `trace_path` | Trace inbound or outbound graph edges around a symbol. |
+| `trace_symbol` / `trace_path` | Trace inbound, outbound, or bidirectional paths around a symbol; modes include calls, data flow, cross-service HTTP/event edges, and unfiltered graph traversal. |
 | `impact_analysis` | Find adjacent symbols for changed files or symbols. |
 | `get_graph_schema` | Return node labels, edge types, language coverage, and totals. |
 | `find_communities` | Detect weighted graph communities with representative symbols, cohesion, and boundary counts. |
@@ -165,6 +165,7 @@ The extractor is intentionally compact and extensible:
 
 - TypeScript and JavaScript: classes, interfaces, types, functions, const functions, imports, resolved local import edges, Express-style routes, and Next.js App Router `app/api/**/route.ts` handlers.
 - Conservative data-flow edges: maps meaningful call arguments to target parameters when the callee can be resolved without ambiguous duplicate names, and prunes stale `DATA_FLOWS` edges during incremental refreshes.
+- Trace modes: `trace_path` can focus on call paths, value propagation through `DATA_FLOWS`, cross-service HTTP/event paths, or all nearby edges.
 - HTTP call linking: literal `fetch`, Axios, and Node `http` calls become `http_call` nodes with `CALLS_HTTP_ENDPOINT`; matching route nodes also receive `HTTP_CALLS`.
 - GraphQL, gRPC, and OpenAPI: `.graphql`, `.gql`, `.proto`, OpenAPI JSON, and OpenAPI YAML files produce protocol nodes; protobuf `rpc` methods become route nodes using `/Service/Method` paths, and OpenAPI `{id}` path params normalize to `:id`.
 - tRPC: common procedure declarations and client calls become `trpc_procedure` and `trpc_call` nodes.
