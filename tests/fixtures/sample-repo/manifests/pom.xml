@@ -1,0 +1,11 @@
+<project>
+  <groupId>com.example</groupId>
+  <artifactId>orders-java</artifactId>
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+      <version>3.3.0</version>
+    </dependency>
+  </dependencies>
+</project>

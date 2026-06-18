@@ -1,0 +1,9 @@
+[project]
+name = "sample-python-service"
+dependencies = [
+  "fastapi>=0.110",
+  "pydantic>=2"
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]

@@ -21,7 +21,7 @@ Result:
 
 - TypeScript build passed.
 - Node test suite passed: 12 tests, 0 failures.
-- Covered Codex MCP config rendering/install safeguards, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Covered Codex MCP config rendering/install safeguards, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, multi-ecosystem manifest extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -38,22 +38,23 @@ node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db
 
 Result:
 
-- Files discovered: 41
-- Files indexed: 41
+- Files discovered: 51
+- Files indexed: 51
 - Files skipped: 0
-- Symbols: 348
-- Edges: 1,137
-- Lines indexed: 7,258
-- Full index elapsed: 324 ms
-- No-op incremental elapsed: 32 ms
-- No-op incremental unchanged files: 41
-- Full-text code-search rows: 6,531 `code_lines` rows and 6,531 `code_fts` rows
+- Symbols: 408
+- Edges: 1,249
+- Lines indexed: 7,681
+- Full index elapsed: 385 ms
+- No-op incremental elapsed: 22 ms
+- No-op incremental unchanged files: 51
+- Full-text code-search rows: 6,915 `code_lines` rows and 6,915 `code_fts` rows
 - Channel graph rows: 8 `channel` nodes, 2 `EMITS` edges, and 11 `LISTENS_ON` edges
+- Manifest graph rows: 11 `package` nodes and 27 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, and fixture route/client communities.
-- Graph package: `.repolens/self.rlgz` (890,997 bytes from a 3,379,200-byte SQLite snapshot)
-- Imported package totals: 41 files, 348 symbols, 1,137 edges
-- Language mix: TypeScript, Markdown, JSON, YAML, Dockerfile/shell fixture, Swift fixture, and unknown text files.
+- Graph package: `.repolens/self.rlgz` (987,458 bytes from a 3,686,400-byte SQLite snapshot)
+- Imported package totals: 51 files, 408 symbols, 1,249 edges
+- Language mix: TypeScript, Markdown, JSON, YAML, TOML, XML, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
 
@@ -123,22 +124,22 @@ node --experimental-sqlite dist/src/cli.js unpack-graph \
 Result:
 
 - Files discovered: 852
-- Files indexed: 816
-- Files skipped: 36
-- Symbols: 5,239
+- Files indexed: 817
+- Files skipped: 35
+- Symbols: 5,240
 - Edges: 30,337
 - Lines indexed: 96,330
-- Full index elapsed: 15,853 ms
-- No-op incremental elapsed: 183 ms
+- Full index elapsed: 16,276 ms
+- No-op incremental elapsed: 301 ms
 - No-op incremental unchanged files: 852
 - No-op incremental removed files: 0
-- Full-text code-search rows: 82,084 `code_lines` rows and 82,084 `code_fts` rows
+- Full-text code-search rows: 82,090 `code_lines` rows and 82,090 `code_fts` rows
 - Channel graph rows: 5 `channel` nodes, 6 `EMITS` edges, and 7 `LISTENS_ON` edges
 - Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (339,475 bytes)
 - Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (8.8 KB)
 - Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html` (1,000 nodes, 1,000 edges, 349,365 bytes)
-- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (11,001,260 bytes from a 66,854,912-byte SQLite snapshot)
-- Imported graph package totals: 816 files, 5,239 symbols, 30,337 edges
+- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (12,394,224 bytes from a 69,996,544-byte SQLite snapshot)
+- Imported graph package totals: 817 files, 5,240 symbols, 30,337 edges
 - Graph communities sampled: order repository, iOS load flows, access/cart clearing, auth/request helpers, address book, live-session tests, cart, and menu management communities.
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
 - Import-resolved dependency cycles: 0
@@ -240,6 +241,17 @@ node --experimental-sqlite dist/src/cli.js query-graph \
 ```
 
 Confirmed the fixture graph exposes `Deployment/orders-api`, `Service/orders-api`, Dockerfile container images, a `CONFIGURES` edge from the deployment to `ghcr.io/example/orders-api:1.2.3`, and a Kustomization `IMPORTS` edge to `deployment.yaml`.
+
+Manifest dependency graph checks:
+
+```bash
+node --experimental-sqlite dist/src/cli.js search-graph orders --kind package --db /tmp/repolens-manifest-smoke.db --limit 30
+node --experimental-sqlite dist/src/cli.js search-graph fastapi --kind dependency --db /tmp/repolens-manifest-smoke.db --limit 5
+node --experimental-sqlite dist/src/cli.js search-graph spring --kind dependency --db /tmp/repolens-manifest-smoke.db --limit 5
+node --experimental-sqlite dist/src/cli.js search-graph tokio --kind dependency --db /tmp/repolens-manifest-smoke.db --limit 5
+```
+
+Confirmed npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures produce `package` and `dependency` nodes, including `fastapi`, `github.com/gin-gonic/gin`, `tokio`, `laravel/framework`, `org.springframework.boot:spring-boot-starter-web`, `com.squareup.okhttp3:okhttp`, `json_annotation`, `phoenix`, and `rack`.
 
 Channel/event graph checks:
 
@@ -441,7 +453,7 @@ node --experimental-sqlite dist/src/cli.js unpack-graph \
   --overwrite
 ```
 
-Confirmed the package exporter created a checksummed `.rlgz` artifact and the importer restored a graph with 816 files, 5,234 symbols, and 30,324 edges.
+Confirmed the package exporter created a checksummed `.rlgz` artifact and the importer restored a graph with 817 files, 5,240 symbols, and 30,337 edges.
 
 Watch mode:
 
@@ -453,7 +465,7 @@ node --experimental-sqlite dist/src/cli.js watch /Users/sameer/Desktop/testing \
   --runs 2
 ```
 
-Confirmed two watch-mode incremental passes over the large validation database preserved 5,234 symbols and 30,324 edges in 120 ms and 115 ms. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
+Confirmed two watch-mode incremental passes over the large validation database preserved 5,240 symbols and 30,337 edges. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
 
 Index lock:
 
@@ -483,7 +495,7 @@ curl --fail 'http://127.0.0.1:9750/api/report?format=markdown&graphLimit=50'
 curl --fail http://127.0.0.1:9750/
 ```
 
-Confirmed the dashboard served the validation database, returned graph-community rows, returned the 816-file / 5,234-symbol / 30,324-edge schema, returned live-session graph matches, returned semantic search rows, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated an 8,992-byte Markdown report response, and served the 19,109-byte HTML dashboard shell.
+Confirmed the dashboard served the validation database, returned graph-community rows, returned the 817-file / 5,240-symbol / 30,337-edge schema, returned live-session graph matches, returned semantic search rows, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated an 8,992-byte Markdown report response, and served the 19,109-byte HTML dashboard shell.
 
 Trace:
 

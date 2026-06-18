@@ -22,6 +22,12 @@ const byExtension = new Map<string, Language>([
   [".mdx", "markdown"],
   [".json", "json"],
   [".jsonc", "json"],
+  [".toml", "toml"],
+  [".xml", "xml"],
+  [".gradle", "gradle"],
+  [".kts", "gradle"],
+  [".gemspec", "ruby"],
+  [".exs", "elixir"],
   [".sh", "shell"],
   [".bash", "shell"],
   [".zsh", "shell"]
@@ -31,6 +37,15 @@ export function detectLanguage(filePath: string): Language {
   const base = path.basename(filePath).toLowerCase();
   if (base === "dockerfile" || base.endsWith(".dockerfile")) {
     return "shell";
+  }
+  if (base === "go.mod") {
+    return "go";
+  }
+  if (base === "build.gradle" || base === "build.gradle.kts") {
+    return "gradle";
+  }
+  if (base === "mix.exs") {
+    return "elixir";
   }
   return byExtension.get(path.extname(base)) ?? "unknown";
 }
@@ -47,6 +62,11 @@ export function isTextCandidate(filePath: string): boolean {
     "contributing",
     "security",
     "dockerfile",
+    "go.mod",
+    "go.sum",
+    "requirements.txt",
+    "gemfile",
+    "rakefile",
     ".gitignore",
     ".gitattributes"
   ].includes(base);

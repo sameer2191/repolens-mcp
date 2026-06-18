@@ -16,7 +16,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
   const result = await indexRepository({ root: fixture, dbPath });
 
   assert.equal(result.mode, "full");
-  assert.equal(result.filesIndexed, 9);
+  assert.equal(result.filesIndexed, 19);
   assert.equal(result.filesUnchanged, 0);
   assert.equal(result.filesRemoved, 0);
   assert.ok(result.symbols >= 14);
@@ -65,6 +65,8 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(schema.nodeLabels.some((label) => label.kind === "stage"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "module"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "channel"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "package"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "dependency"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "DEFINES"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CONFIGURES"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "EMITS"));
@@ -101,6 +103,29 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const swiftChannel = store.searchGraph({ kind: "channel", query: "checkoutSubmitted" });
     assert.ok(swiftChannel.some((match) => match.symbol.name === "checkoutSubmitted"));
+
+    const packageMatches = store.searchGraph({ kind: "package", limit: 50 });
+    assert.ok(packageMatches.some((match) => match.symbol.name === "sample-memory-target"));
+    assert.ok(packageMatches.some((match) => match.symbol.name === "sample-python-service"));
+    assert.ok(packageMatches.some((match) => match.symbol.name === "github.com/example/orders"));
+    assert.ok(packageMatches.some((match) => match.symbol.name === "orders-rust"));
+    assert.ok(packageMatches.some((match) => match.symbol.name === "example/orders-php"));
+    assert.ok(packageMatches.some((match) => match.symbol.name === "com.example:orders-java"));
+    assert.ok(packageMatches.some((match) => match.symbol.name === "orders-gradle"));
+    assert.ok(packageMatches.some((match) => match.symbol.name === "orders_dart"));
+    assert.ok(packageMatches.some((match) => match.symbol.name === "orders_elixir"));
+    assert.ok(packageMatches.some((match) => match.symbol.name === "orders-ruby"));
+
+    const dependencyMatches = store.searchGraph({ kind: "dependency", query: "spring" });
+    assert.ok(dependencyMatches.some((match) => match.symbol.name === "org.springframework.boot:spring-boot-starter-web"));
+    assert.ok(store.searchGraph({ kind: "dependency", query: "fastapi" }).some((match) => match.symbol.name === "fastapi"));
+    assert.ok(store.searchGraph({ kind: "dependency", query: "gin-gonic" }).some((match) => match.symbol.name === "github.com/gin-gonic/gin"));
+    assert.ok(store.searchGraph({ kind: "dependency", query: "tokio" }).some((match) => match.symbol.name === "tokio"));
+    assert.ok(store.searchGraph({ kind: "dependency", query: "laravel" }).some((match) => match.symbol.name === "laravel/framework"));
+    assert.ok(store.searchGraph({ kind: "dependency", query: "okhttp" }).some((match) => match.symbol.name === "com.squareup.okhttp3:okhttp"));
+    assert.ok(store.searchGraph({ kind: "dependency", query: "json_annotation" }).some((match) => match.symbol.name === "json_annotation"));
+    assert.ok(store.searchGraph({ kind: "dependency", query: "phoenix" }).some((match) => match.symbol.name === "phoenix"));
+    assert.ok(store.searchGraph({ kind: "dependency", query: "rack" }).some((match) => match.symbol.name === "rack"));
 
     const communities = store.communities(5, 3);
     assert.ok(communities.length > 0);

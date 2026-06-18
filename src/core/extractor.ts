@@ -109,15 +109,15 @@ export function extractFromFile(filePath: string, language: Language, content: s
     edges.push({ source: fileNode, target: route.qualifiedName, type: "DEFINES", weight: 1 });
   }
 
+  for (const symbol of extractManifestSymbols(filePath, language, content)) {
+    symbols.push(symbol);
+    edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
+  }
+
   if (language === "markdown") {
     for (const heading of extractMarkdown(filePath, lines)) {
       symbols.push(heading);
       edges.push({ source: fileNode, target: heading.qualifiedName, type: "DEFINES", weight: 1 });
-    }
-  } else if (language === "json") {
-    for (const symbol of extractJsonManifest(filePath, content)) {
-      symbols.push(symbol);
-      edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
     }
   } else if (language === "yaml") {
     const yaml = extractYamlInfrastructure(filePath, content);
@@ -495,23 +495,310 @@ function extractMarkdown(filePath: string, lines: string[]): SymbolNode[] {
   });
 }
 
-function extractJsonManifest(filePath: string, content: string): SymbolNode[] {
-  if (!filePath.endsWith("package.json")) {
-    return [];
+function extractManifestSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  const base = path.posix.basename(filePath).toLowerCase();
+  if (base === "package.json" || base === "composer.json") {
+    return extractJsonDependencyManifest(filePath, language, content, base === "composer.json" ? "composer" : "npm");
   }
+  if (base === "pyproject.toml") {
+    return extractPyprojectManifest(filePath, language, content);
+  }
+  if (base === "cargo.toml") {
+    return extractTomlPackageManifest(filePath, language, content, "cargo");
+  }
+  if (base === "go.mod") {
+    return extractGoModManifest(filePath, language, content);
+  }
+  if (base === "pubspec.yaml" || base === "pubspec.yml") {
+    return extractPubspecManifest(filePath, language, content);
+  }
+  if (base === "pom.xml") {
+    return extractPomManifest(filePath, language, content);
+  }
+  if (base === "build.gradle" || base === "build.gradle.kts") {
+    return extractGradleManifest(filePath, language, content);
+  }
+  if (base === "mix.exs") {
+    return extractMixManifest(filePath, language, content);
+  }
+  if (base.endsWith(".gemspec")) {
+    return extractGemspecManifest(filePath, language, content);
+  }
+  if (base === "requirements.txt") {
+    return extractRequirementsManifest(filePath, language, content);
+  }
+  return [];
+}
+
+function extractJsonDependencyManifest(filePath: string, language: Language, content: string, ecosystem: string): SymbolNode[] {
   try {
-    const parsed = JSON.parse(content) as { name?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    const parsed = JSON.parse(content) as {
+      name?: string;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+      require?: Record<string, string>;
+      "require-dev"?: Record<string, string>;
+    };
     const symbols: SymbolNode[] = [];
     if (parsed.name) {
-      symbols.push(makeSymbol(filePath, "json", "package", parsed.name, 1, 1));
+      symbols.push(manifestSymbol(filePath, language, "package", parsed.name, 1, ecosystem));
     }
-    for (const [name, version] of Object.entries({ ...parsed.dependencies, ...parsed.devDependencies })) {
-      symbols.push(makeSymbol(filePath, "json", "dependency", name, 1, 1, undefined, false, { version }));
+    const dependencies =
+      ecosystem === "composer"
+        ? { ...parsed.require, ...parsed["require-dev"] }
+        : { ...parsed.dependencies, ...parsed.devDependencies, ...parsed.peerDependencies };
+    for (const [name, version] of Object.entries(dependencies)) {
+      if (name.toLowerCase() === "php") continue;
+      symbols.push(manifestSymbol(filePath, language, "dependency", name, 1, ecosystem, version));
     }
     return symbols;
   } catch {
     return [];
   }
+}
+
+function extractPyprojectManifest(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const projectSection = tomlSection(content, "project");
+  const poetrySection = tomlSection(content, "tool.poetry");
+  const projectName = tomlStringValue(projectSection, "name") ?? tomlStringValue(poetrySection, "name");
+  if (projectName) {
+    symbols.push(manifestSymbol(filePath, language, "package", projectName, 1, "python"));
+  }
+  for (const dependency of [
+    ...tomlArrayValues(projectSection, "dependencies").map(parsePythonRequirement),
+    ...tomlInlineTableKeys(tomlSection(content, "project.optional-dependencies")),
+    ...tomlDependencyKeys(tomlSection(content, "tool.poetry.dependencies")),
+    ...tomlDependencyKeys(tomlSection(content, "tool.poetry.group.dev.dependencies"))
+  ]) {
+    if (dependency.name && dependency.name.toLowerCase() !== "python") {
+      symbols.push(manifestSymbol(filePath, language, "dependency", dependency.name, 1, "python", dependency.version));
+    }
+  }
+  return dedupeSymbols(symbols);
+}
+
+function extractTomlPackageManifest(filePath: string, language: Language, content: string, ecosystem: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const packageSection = tomlSection(content, "package");
+  const packageName = tomlStringValue(packageSection, "name");
+  if (packageName) {
+    symbols.push(manifestSymbol(filePath, language, "package", packageName, 1, ecosystem));
+  }
+  for (const sectionName of ["dependencies", "dev-dependencies", "build-dependencies"]) {
+    for (const dependency of tomlDependencyKeys(tomlSection(content, sectionName))) {
+      symbols.push(manifestSymbol(filePath, language, "dependency", dependency.name, 1, ecosystem, dependency.version));
+    }
+  }
+  return dedupeSymbols(symbols);
+}
+
+function extractGoModManifest(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const moduleName = /^module\s+(\S+)/m.exec(content)?.[1];
+  if (moduleName) {
+    symbols.push(manifestSymbol(filePath, language, "package", moduleName, 1, "go"));
+  }
+  const requireLine = /^require\s+(\S+)\s+(\S+)/gm;
+  for (const match of content.matchAll(requireLine)) {
+    symbols.push(manifestSymbol(filePath, language, "dependency", match[1], offsetToLine(content, match.index ?? 0), "go", match[2]));
+  }
+  const requireBlock = /^require\s*\(([\s\S]*?)^\)/gm;
+  for (const block of content.matchAll(requireBlock)) {
+    for (const line of block[1].split(/\r?\n/)) {
+      const match = /^\s*(\S+)\s+(\S+)/.exec(line);
+      if (match) {
+        symbols.push(manifestSymbol(filePath, language, "dependency", match[1], offsetToLine(content, block.index ?? 0), "go", match[2]));
+      }
+    }
+  }
+  return dedupeSymbols(symbols);
+}
+
+function extractPubspecManifest(filePath: string, language: Language, content: string): SymbolNode[] {
+  const lines = content.split(/\r?\n/);
+  const symbols: SymbolNode[] = [];
+  const packageName = findYamlScalar(lines, "name");
+  if (packageName) {
+    symbols.push(manifestSymbol(filePath, language, "package", packageName, 1, "dart"));
+  }
+  for (const item of extractYamlMapKeys(lines, ["dependencies", "dev_dependencies", "dependency_overrides"])) {
+    if (["flutter", "sdk"].includes(item.value.toLowerCase())) continue;
+    symbols.push(manifestSymbol(filePath, language, "dependency", item.value, item.line, "dart"));
+  }
+  return dedupeSymbols(symbols);
+}
+
+function extractPomManifest(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const projectBlock = /<project[\s\S]*?<\/project>/i.exec(content)?.[0] ?? content;
+  const groupId = xmlText(projectBlock, "groupId");
+  const artifactId = xmlText(projectBlock, "artifactId");
+  if (artifactId) {
+    symbols.push(manifestSymbol(filePath, language, "package", groupId ? `${groupId}:${artifactId}` : artifactId, 1, "maven"));
+  }
+  for (const dependency of content.matchAll(/<dependency>([\s\S]*?)<\/dependency>/gi)) {
+    const depGroup = xmlText(dependency[1], "groupId");
+    const depArtifact = xmlText(dependency[1], "artifactId");
+    const version = xmlText(dependency[1], "version");
+    if (depArtifact) {
+      symbols.push(manifestSymbol(filePath, language, "dependency", depGroup ? `${depGroup}:${depArtifact}` : depArtifact, offsetToLine(content, dependency.index ?? 0), "maven", version ?? undefined));
+    }
+  }
+  return dedupeSymbols(symbols);
+}
+
+function extractGradleManifest(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const projectName = /rootProject\.name\s*=\s*["']([^"']+)["']/.exec(content)?.[1] ?? /archivesBaseName\s*=\s*["']([^"']+)["']/.exec(content)?.[1];
+  if (projectName) {
+    symbols.push(manifestSymbol(filePath, language, "package", projectName, 1, "gradle"));
+  }
+  const dependencyRegex = /^\s*(?:implementation|api|compileOnly|runtimeOnly|testImplementation|kapt)\s*(?:\(?\s*)["']([^:"']+):([^:"']+):?([^"']*)["']/gm;
+  for (const match of content.matchAll(dependencyRegex)) {
+    const version = match[3]?.trim() || undefined;
+    symbols.push(manifestSymbol(filePath, language, "dependency", `${match[1]}:${match[2]}`, offsetToLine(content, match.index ?? 0), "gradle", version));
+  }
+  return dedupeSymbols(symbols);
+}
+
+function extractMixManifest(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const appName = /app:\s*:([A-Za-z_]\w*)/.exec(content)?.[1];
+  if (appName) {
+    symbols.push(manifestSymbol(filePath, language, "package", appName, 1, "hex"));
+  }
+  for (const match of content.matchAll(/\{\s*:([A-Za-z_]\w*)\s*,\s*["']([^"']+)["']/g)) {
+    symbols.push(manifestSymbol(filePath, language, "dependency", match[1], offsetToLine(content, match.index ?? 0), "hex", match[2]));
+  }
+  return dedupeSymbols(symbols);
+}
+
+function extractGemspecManifest(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const gemName = /\.name\s*=\s*["']([^"']+)["']/.exec(content)?.[1];
+  if (gemName) {
+    symbols.push(manifestSymbol(filePath, language, "package", gemName, 1, "ruby"));
+  }
+  for (const match of content.matchAll(/\.add_(?:runtime_|development_)?dependency\s+["']([^"']+)["'](?:\s*,\s*["']([^"']+)["'])?/g)) {
+    symbols.push(manifestSymbol(filePath, language, "dependency", match[1], offsetToLine(content, match.index ?? 0), "ruby", match[2]));
+  }
+  return dedupeSymbols(symbols);
+}
+
+function extractRequirementsManifest(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  for (const [index, line] of content.split(/\r?\n/).entries()) {
+    const match = /^\s*([A-Za-z0-9_.-]+)\s*([<>=!~].*)?$/.exec(line.replace(/#.*/, "").trim());
+    if (match) {
+      symbols.push(manifestSymbol(filePath, language, "dependency", match[1], index + 1, "python", match[2]?.trim()));
+    }
+  }
+  return dedupeSymbols(symbols);
+}
+
+function manifestSymbol(filePath: string, language: Language, kind: "package" | "dependency", name: string, line: number, ecosystem: string, version?: string): SymbolNode {
+  return makeSymbol(filePath, language, kind, name, line, line, undefined, kind === "package", {
+    ecosystem,
+    ...(version ? { version } : {})
+  });
+}
+
+function tomlSection(content: string, name: string): string {
+  const lines = content.split(/\r?\n/);
+  const output: string[] = [];
+  let active = false;
+  for (const line of lines) {
+    const header = /^\s*\[([^\]]+)\]\s*$/.exec(line);
+    if (header) {
+      if (active) {
+        break;
+      }
+      active = header[1].trim() === name;
+      continue;
+    }
+    if (active) {
+      output.push(line);
+    }
+  }
+  return output.join("\n");
+}
+
+function tomlStringValue(section: string, key: string): string | null {
+  return new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*["']([^"']+)["']`, "m").exec(section)?.[1] ?? null;
+}
+
+function tomlArrayValues(section: string, key: string): string[] {
+  const match = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*\\[([\\s\\S]*?)\\]`, "m").exec(section);
+  if (!match) {
+    return [];
+  }
+  return [...match[1].matchAll(/["']([^"']+)["']/g)].map((item) => item[1]);
+}
+
+function tomlDependencyKeys(section: string): Array<{ name: string; version?: string }> {
+  const dependencies: Array<{ name: string; version?: string }> = [];
+  for (const line of section.split(/\r?\n/)) {
+    const cleaned = line.replace(/#.*/, "").trim();
+    const match = /^([A-Za-z0-9_.-]+)\s*=\s*(?:"([^"]+)"|'([^']+)'|\{([^}]+)\})/.exec(cleaned);
+    if (!match) {
+      continue;
+    }
+    const inlineVersion = /version\s*=\s*["']([^"']+)["']/.exec(match[4] ?? "")?.[1];
+    dependencies.push({ name: match[1], version: match[2] ?? match[3] ?? inlineVersion });
+  }
+  return dependencies;
+}
+
+function tomlInlineTableKeys(section: string): Array<{ name: string; version?: string }> {
+  const dependencies: Array<{ name: string; version?: string }> = [];
+  for (const line of section.split(/\r?\n/)) {
+    const match = /^\s*[A-Za-z0-9_.-]+\s*=\s*\[([^\]]*)\]/.exec(line);
+    if (!match) {
+      continue;
+    }
+    dependencies.push(...[...match[1].matchAll(/["']([^"']+)["']/g)].map((item) => parsePythonRequirement(item[1])));
+  }
+  return dependencies;
+}
+
+function parsePythonRequirement(value: string): { name: string; version?: string } {
+  const match = /^\s*([A-Za-z0-9_.-]+)\s*(.*)$/.exec(value);
+  return { name: match?.[1] ?? value.trim(), version: match?.[2]?.trim() || undefined };
+}
+
+function xmlText(block: string, tag: string): string | null {
+  return new RegExp(`<${escapeRegExp(tag)}>([^<]+)</${escapeRegExp(tag)}>`, "i").exec(block)?.[1]?.trim() ?? null;
+}
+
+function extractYamlMapKeys(lines: string[], keys: string[]): Array<{ value: string; line: number }> {
+  const items: Array<{ value: string; line: number }> = [];
+  const keyPattern = keys.map(escapeRegExp).join("|");
+  const mapStart = new RegExp(`^(\\s*)(${keyPattern})\\s*:\\s*(?:#.*)?$`);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const start = mapStart.exec(lines[index]);
+    if (!start) {
+      continue;
+    }
+    const baseIndent = start[1].length;
+    for (let child = index + 1; child < lines.length; child += 1) {
+      const line = lines[child];
+      if (!line.trim()) {
+        continue;
+      }
+      const indent = line.match(/^\s*/)?.[0].length ?? 0;
+      if (indent <= baseIndent) {
+        break;
+      }
+      const item = /^\s*([A-Za-z0-9_.-]+)\s*:/.exec(line);
+      if (item) {
+        items.push({ value: item[1], line: child + 1 });
+      }
+    }
+  }
+  return items;
 }
 
 function extractYamlInfrastructure(filePath: string, content: string): ExtractionResult {

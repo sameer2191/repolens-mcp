@@ -10,6 +10,11 @@ export type Language =
   | "yaml"
   | "markdown"
   | "json"
+  | "toml"
+  | "xml"
+  | "ruby"
+  | "elixir"
+  | "gradle"
   | "shell"
   | "unknown";
 
