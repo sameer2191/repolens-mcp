@@ -1035,7 +1035,7 @@ export class MemoryStore {
     }));
 
     const packages = (this.db
-      .prepare("SELECT DISTINCT name FROM symbols WHERE kind IN ('package','dependency','module') ORDER BY name ASC LIMIT 80")
+      .prepare("SELECT DISTINCT name FROM symbols WHERE kind IN ('package','dependency') ORDER BY name ASC LIMIT 80")
       .all() as Array<{ name: string }>).map((row) => row.name);
 
     const risks: string[] = [];

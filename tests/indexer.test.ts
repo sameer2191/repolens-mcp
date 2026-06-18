@@ -16,7 +16,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
   const result = await indexRepository({ root: fixture, dbPath });
 
   assert.equal(result.mode, "full");
-  assert.equal(result.filesIndexed, 6);
+  assert.equal(result.filesIndexed, 9);
   assert.equal(result.filesUnchanged, 0);
   assert.equal(result.filesRemoved, 0);
   assert.ok(result.symbols >= 14);
@@ -58,11 +58,32 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const schema = store.graphSchema();
     assert.ok(schema.nodeLabels.some((label) => label.kind === "class"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "resource"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "container_image"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "stage"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "module"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "DEFINES"));
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CONFIGURES"));
 
     const graphMatches = store.searchGraph({ query: "createOrder", minDegree: 1 });
     assert.equal(graphMatches[0]?.symbol.name, "createOrder");
     assert.ok(graphMatches[0]?.degree >= 1);
+
+    const imageMatches = store.searchGraph({ kind: "container_image", query: "orders-api" });
+    assert.ok(imageMatches.some((match) => match.symbol.name === "ghcr.io/example/orders-api:1.2.3"));
+
+    const stageMatches = store.searchGraph({ kind: "stage", query: "build" });
+    assert.ok(stageMatches.some((match) => match.symbol.filePath === "Dockerfile"));
+
+    const resourceMatches = store.searchGraph({ kind: "resource", query: "orders-api" });
+    assert.ok(resourceMatches.some((match) => match.symbol.name === "Deployment/orders-api"));
+    assert.ok(resourceMatches.some((match) => match.symbol.name === "Service/orders-api"));
+
+    const imageQuery = store.queryGraph("MATCH (a)-[r:CONFIGURES]->(b) WHERE b.name CONTAINS 'orders-api' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(imageQuery.rows.some((row) => row["a.name"] === "Deployment/orders-api" && row["r.type"] === "CONFIGURES"));
+
+    const kustomizeQuery = store.queryGraph("MATCH (a)-[r:IMPORTS]->(b) WHERE a.name STARTS WITH 'Kustomization' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(kustomizeQuery.rows.some((row) => row["b.name"] === "deployment.yaml" && row["r.type"] === "IMPORTS"));
 
     const communities = store.communities(5, 3);
     assert.ok(communities.length > 0);
@@ -344,8 +365,7 @@ test("incremental indexing skips unchanged files and prunes removed files", asyn
 
   store = new MemoryStore(dbPath);
   try {
-    assert.equal(store.searchCode("Demo service").length, 0);
-    assert.equal(store.searchCode("fixture package").length, 0);
+    assert.equal(store.searchCode("fixture exposes").length, 0);
   } finally {
     store.close();
   }

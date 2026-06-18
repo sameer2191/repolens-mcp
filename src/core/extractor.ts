@@ -113,14 +113,27 @@ export function extractFromFile(filePath: string, language: Language, content: s
       edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
     }
   } else if (language === "yaml") {
-    for (const symbol of extractYamlResources(filePath, content)) {
+    const yaml = extractYamlInfrastructure(filePath, content);
+    for (const symbol of yaml.symbols) {
       symbols.push(symbol);
-      edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
+    }
+    for (const edge of yaml.edges) {
+      edges.push(edge);
     }
   } else if (language === "sql") {
     for (const symbol of extractSql(filePath, content)) {
       symbols.push(symbol);
       edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
+    }
+  }
+
+  if (isDockerfile(filePath)) {
+    const dockerfile = extractDockerfile(filePath, content);
+    for (const symbol of dockerfile.symbols) {
+      symbols.push(symbol);
+    }
+    for (const edge of dockerfile.edges) {
+      edges.push(edge);
     }
   }
 
@@ -370,13 +383,238 @@ function extractJsonManifest(filePath: string, content: string): SymbolNode[] {
   }
 }
 
-function extractYamlResources(filePath: string, content: string): SymbolNode[] {
-  const kind = /^kind:\s*([A-Za-z0-9_-]+)/m.exec(content)?.[1];
-  const name = /^\s*name:\s*([A-Za-z0-9_.-]+)/m.exec(content)?.[1];
-  if (!kind || !name) {
-    return [];
+function extractYamlInfrastructure(filePath: string, content: string): ExtractionResult {
+  const symbols: SymbolNode[] = [];
+  const edges: Edge[] = [];
+  const fileNode = fileQualifiedName(filePath);
+  const documents = splitYamlDocuments(content);
+
+  for (const document of documents) {
+    const kind = findYamlScalar(document.lines, "kind");
+    const name = findYamlMetadataName(document.lines);
+    if (kind && name) {
+      const line = findYamlScalarLine(document.lines, "kind") + document.startLine - 1;
+      const resource = makeSymbol(filePath, "yaml", "resource", `${kind}/${name}`, line, line, undefined, false, {
+        kind,
+        name
+      });
+      symbols.push(resource);
+      edges.push({ source: fileNode, target: resource.qualifiedName, type: "DECLARES", weight: 1 });
+
+      for (const image of extractYamlImages(document.lines)) {
+        const imageSymbol = makeSymbol(filePath, "yaml", "container_image", image.value, image.line + document.startLine - 1, image.line + document.startLine - 1, undefined, false, {
+          image: image.value
+        });
+        symbols.push(imageSymbol);
+        edges.push({
+          source: resource.qualifiedName,
+          target: imageSymbol.qualifiedName,
+          type: "CONFIGURES",
+          weight: 0.8,
+          metadata: { field: "image" }
+        });
+      }
+    }
   }
-  return [makeSymbol(filePath, "yaml", "resource", `${kind}/${name}`, 1, 1, undefined, false, { kind, name })];
+
+  if (isKustomizationFile(filePath) || documents.some((document) => findYamlScalar(document.lines, "kind")?.toLowerCase() === "kustomization")) {
+    const module = makeSymbol(filePath, "yaml", "module", `Kustomization/${kustomizationName(filePath)}`, 1, Math.max(1, content.split(/\r?\n/).length), undefined, false, {
+      path: filePath
+    });
+    symbols.push(module);
+    edges.push({ source: fileNode, target: module.qualifiedName, type: "DECLARES", weight: 1 });
+    for (const item of extractYamlListItems(content.split(/\r?\n/), ["resources", "bases", "components"])) {
+      edges.push({
+        source: module.qualifiedName,
+        target: fileQualifiedName(resolveKustomizeTarget(filePath, item.value)),
+        type: "IMPORTS",
+        weight: 0.7,
+        metadata: { field: item.key, value: item.value }
+      });
+    }
+  }
+
+  return { symbols, edges, imports: [] };
+}
+
+function extractDockerfile(filePath: string, content: string): ExtractionResult {
+  const symbols: SymbolNode[] = [];
+  const edges: Edge[] = [];
+  const fileNode = fileQualifiedName(filePath);
+  const lines = content.split(/\r?\n/);
+  const stagesByName = new Map<string, SymbolNode>();
+  let currentStage: SymbolNode | null = null;
+  let stageNumber = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const lineNumber = index + 1;
+    const from = /^\s*FROM\s+([^\s]+)(?:\s+AS\s+([A-Za-z0-9_.-]+))?/i.exec(line);
+    if (from) {
+      stageNumber += 1;
+      const image = from[1];
+      const alias = from[2];
+      const stageName = alias ?? `stage-${stageNumber}`;
+      const stage = makeSymbol(filePath, "shell", "stage", stageName, lineNumber, lineNumber, line.trim(), true, {
+        image,
+        alias: alias ?? null
+      });
+      const imageSymbol = makeSymbol(filePath, "shell", "container_image", image, lineNumber, lineNumber, undefined, false, { image });
+      symbols.push(stage, imageSymbol);
+      edges.push({ source: fileNode, target: stage.qualifiedName, type: "DECLARES", weight: 1 });
+      edges.push({ source: fileNode, target: imageSymbol.qualifiedName, type: "DECLARES", weight: 0.7 });
+      edges.push({ source: stage.qualifiedName, target: imageSymbol.qualifiedName, type: "IMPORTS", weight: 0.9, metadata: { instruction: "FROM" } });
+      stagesByName.set(stageName.toLowerCase(), stage);
+      stagesByName.set(String(stageNumber - 1), stage);
+      currentStage = stage;
+      continue;
+    }
+
+    const copyFrom = /^\s*COPY\s+.*--from=([^\s]+)/i.exec(line);
+    if (copyFrom && currentStage) {
+      const sourceStage = stagesByName.get(copyFrom[1].toLowerCase());
+      if (sourceStage) {
+        edges.push({
+          source: currentStage.qualifiedName,
+          target: sourceStage.qualifiedName,
+          type: "IMPORTS",
+          weight: 0.75,
+          metadata: { instruction: "COPY --from", line: lineNumber }
+        });
+      }
+    }
+  }
+
+  return { symbols, edges, imports: [] };
+}
+
+function splitYamlDocuments(content: string): Array<{ startLine: number; lines: string[] }> {
+  const lines = content.split(/\r?\n/);
+  const documents: Array<{ startLine: number; lines: string[] }> = [];
+  let current: string[] = [];
+  let startLine = 1;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (/^\s*---\s*$/.test(lines[index]) && current.some((line) => line.trim())) {
+      documents.push({ startLine, lines: current });
+      current = [];
+      startLine = index + 2;
+      continue;
+    }
+    current.push(lines[index]);
+  }
+
+  if (current.some((line) => line.trim())) {
+    documents.push({ startLine, lines: current });
+  }
+  return documents;
+}
+
+function findYamlScalar(lines: string[], key: string): string | null {
+  const regex = new RegExp(`^\\s*${escapeRegExp(key)}\\s*:\\s*["']?([^"'#]+?)["']?\\s*(?:#.*)?$`);
+  for (const line of lines) {
+    const match = regex.exec(line);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+  return null;
+}
+
+function findYamlScalarLine(lines: string[], key: string): number {
+  const regex = new RegExp(`^\\s*${escapeRegExp(key)}\\s*:`);
+  const index = lines.findIndex((line) => regex.test(line));
+  return index >= 0 ? index + 1 : 1;
+}
+
+function findYamlMetadataName(lines: string[]): string | null {
+  for (let index = 0; index < lines.length; index += 1) {
+    const metadata = /^(\s*)metadata\s*:\s*(?:#.*)?$/.exec(lines[index]);
+    if (!metadata) {
+      continue;
+    }
+    const metadataIndent = metadata[1].length;
+    for (let child = index + 1; child < lines.length; child += 1) {
+      const line = lines[child];
+      if (!line.trim()) {
+        continue;
+      }
+      const indent = line.match(/^\s*/)?.[0].length ?? 0;
+      if (indent <= metadataIndent) {
+        break;
+      }
+      const name = /^\s*name\s*:\s*["']?([^"'#]+?)["']?\s*(?:#.*)?$/.exec(line);
+      if (name) {
+        return name[1].trim();
+      }
+    }
+  }
+  return findYamlScalar(lines, "name");
+}
+
+function extractYamlImages(lines: string[]): Array<{ value: string; line: number }> {
+  const images: Array<{ value: string; line: number }> = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^\s*image\s*:\s*["']?([^"'#\s]+)["']?\s*(?:#.*)?$/.exec(lines[index]);
+    if (match) {
+      images.push({ value: match[1], line: index + 1 });
+    }
+  }
+  return images;
+}
+
+function extractYamlListItems(lines: string[], keys: string[]): Array<{ key: string; value: string; line: number }> {
+  const items: Array<{ key: string; value: string; line: number }> = [];
+  const keyPattern = keys.map(escapeRegExp).join("|");
+  const listStart = new RegExp(`^(\\s*)(${keyPattern})\\s*:\\s*(?:#.*)?$`);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const start = listStart.exec(lines[index]);
+    if (!start) {
+      continue;
+    }
+    const baseIndent = start[1].length;
+    const key = start[2];
+    for (let child = index + 1; child < lines.length; child += 1) {
+      const line = lines[child];
+      if (!line.trim()) {
+        continue;
+      }
+      const indent = line.match(/^\s*/)?.[0].length ?? 0;
+      if (indent <= baseIndent) {
+        break;
+      }
+      const item = /^\s*-\s*["']?([^"'#]+?)["']?\s*(?:#.*)?$/.exec(line);
+      if (item) {
+        items.push({ key, value: item[1].trim(), line: child + 1 });
+      }
+    }
+  }
+  return items;
+}
+
+function isDockerfile(filePath: string): boolean {
+  const base = path.posix.basename(filePath).toLowerCase();
+  return base === "dockerfile" || base.endsWith(".dockerfile");
+}
+
+function isKustomizationFile(filePath: string): boolean {
+  const base = path.posix.basename(filePath).toLowerCase();
+  return base === "kustomization.yaml" || base === "kustomization.yml";
+}
+
+function kustomizationName(filePath: string): string {
+  const dir = path.posix.dirname(filePath);
+  return dir === "." ? "." : dir;
+}
+
+function resolveKustomizeTarget(filePath: string, value: string): string {
+  if (/^[a-z]+:\/\//i.test(value) || value.startsWith("git::")) {
+    return `external:${value}`;
+  }
+  const dir = path.posix.dirname(filePath);
+  const base = dir === "." ? "" : dir;
+  return path.posix.normalize(path.posix.join(base, value));
 }
 
 function extractSql(filePath: string, content: string): SymbolNode[] {
@@ -446,4 +684,8 @@ function isCallableName(name: string): boolean {
 function callsName(content: string, name: string): boolean {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(?:^|[^A-Za-z0-9_$])(?:\\.|)${escaped}\\s*\\(`).test(content);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

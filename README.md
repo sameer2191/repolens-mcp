@@ -6,7 +6,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 21 tools for indexing, BM25 code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 21 tools for indexing, BM25 code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
@@ -16,6 +16,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
 - **Route-call edges**: connects literal `fetch`/Axios/Node HTTP calls to indexed route nodes with `HTTP_CALLS` edges.
+- **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
 - **Architecture recommendations**: turns hotspots, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
 - **Validation evidence**: tests, CI, CodeQL, docs, local dashboard, and a big-repo validation workflow.
@@ -100,7 +101,8 @@ The extractor is intentionally compact and extensible:
 - Python: classes, functions, imports, route decorators.
 - Go, Java, Rust: common functions, types, classes, traits, structs, imports.
 - SQL: created tables, views, indexes, functions, procedures.
-- YAML: Kubernetes-like resources from `kind` and `metadata.name`.
+- YAML: multi-document Kubernetes resources from `kind` and `metadata.name`, container image links, and Kustomize `resources`, `bases`, and `components`.
+- Dockerfile: build stages, base images, and `COPY --from` stage dependencies.
 - Markdown: headings as knowledge nodes.
 - JSON: `package.json` package and dependency nodes.
 
