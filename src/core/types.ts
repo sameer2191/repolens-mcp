@@ -373,6 +373,40 @@ export interface IndexResult {
   elapsedMs: number;
 }
 
+export interface BenchmarkOptions extends IndexOptions {
+  secretScan?: boolean;
+  secretScanLimit?: number;
+}
+
+export interface BenchmarkResult {
+  root: string;
+  dbPath: string;
+  generatedAt: string;
+  fullIndex: IndexResult;
+  incrementalIndex: IndexResult;
+  throughput: {
+    fullFilesPerSecond: number;
+    fullSymbolsPerSecond: number;
+    incrementalFilesPerSecond: number;
+  };
+  architecture: {
+    totals: ArchitectureSummary["totals"];
+    languages: ArchitectureSummary["languages"];
+    nodeLabels: ArchitectureSummary["nodeLabels"];
+    edgeTypes: ArchitectureSummary["edgeTypes"];
+    entrypoints: ArchitectureSummary["entrypoints"];
+    risks: string[];
+  };
+  secretScan?: {
+    scannedLines: number;
+    findings: number;
+    high: number;
+    medium: number;
+    low: number;
+    risks: string[];
+  };
+}
+
 export interface ProjectRecord {
   root: string;
   dbPath: string;

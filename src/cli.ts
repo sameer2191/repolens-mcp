@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   architectureReport,
+  benchmarkRepository,
   configGet,
   configList,
   configReset,
@@ -89,6 +90,21 @@ async function main(): Promise<void> {
         onResult: (result) => process.stderr.write(`${jsonBlock({ event: "indexed", ...result })}\n`)
       });
       print(summary);
+      break;
+    }
+    case "benchmark": {
+      const root = path.resolve(args.positional[0] ?? process.cwd());
+      print(
+        await benchmarkRepository({
+          root,
+          dbPath: stringFlag(args, "db"),
+          maxFileBytes: numberFlag(args, "max-file-bytes"),
+          runLabel: stringFlag(args, "label"),
+          bootstrapPackage: booleanFlag(args, "no-bootstrap") ? false : stringFlag(args, "bootstrap-package"),
+          secretScan: booleanFlag(args, "no-secret-scan") ? false : undefined,
+          secretScanLimit: numberFlag(args, "secret-limit")
+        })
+      );
       break;
     }
     case "list-projects":
@@ -583,6 +599,7 @@ function help(): string {
 
 Usage:
   repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap]
+  repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--no-secret-scan] [--secret-limit n]
   repolens-mcp list-projects [--limit n]
   repolens-mcp project-status [root-or-db-or-label]
   repolens-mcp delete-project <root-or-db-or-label> [--delete-db]

@@ -205,8 +205,9 @@ test("MCP stdio JSON-RPC initializes and lists registered tools", async () => {
     const tools = await client.request("tools/list", {});
     assert.equal(tools.error, undefined, stderrFor(child));
     const list = (tools.result as { tools?: Array<{ name: string }> }).tools ?? [];
-    assert.equal(list.length, 36);
+    assert.equal(list.length, 37);
     assert.ok(list.some((tool) => tool.name === "index_repository"));
+    assert.ok(list.some((tool) => tool.name === "benchmark_repository"));
     assert.ok(list.some((tool) => tool.name === "trace_path"));
     assert.ok(list.some((tool) => tool.name === "scan_secrets"));
   } finally {
@@ -274,7 +275,7 @@ test("MCP stdio JSON-RPC rejects fuzzed invalid tool calls without exiting", asy
 
     const stillAlive = await client.request("tools/list", {});
     assert.equal(stillAlive.error, undefined, stderrFor(child));
-    assert.equal(((stillAlive.result as { tools?: unknown[] }).tools ?? []).length, 36);
+    assert.equal(((stillAlive.result as { tools?: unknown[] }).tools ?? []).length, 37);
   } finally {
     await close();
   }

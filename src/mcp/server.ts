@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import {
   architectureReport,
+  benchmarkRepository,
   configGet,
   configList,
   configReset,
@@ -72,6 +73,35 @@ export async function startMcpServer(): Promise<void> {
     },
     async ({ root, dbPath, incremental, maxFileBytes, bootstrapPackage, noBootstrap }) =>
       text(await runIndex({ root: root ?? process.cwd(), dbPath, incremental, maxFileBytes, bootstrapPackage: noBootstrap ? false : bootstrapPackage }))
+  );
+
+  server.registerTool(
+    "benchmark_repository",
+    {
+      description: "Run a repeatable repository benchmark: full index, no-op incremental index, graph totals, throughput, and optional redacted secret-scan summary.",
+      inputSchema: {
+        root: z.string().optional().describe("Repository root. Defaults to current working directory."),
+        dbPath: z.string().optional().describe("Optional SQLite database path. Defaults to the repository .repolens path."),
+        maxFileBytes: z.number().int().positive().optional().describe("Skip files larger than this size."),
+        bootstrapPackage: z.string().optional().describe("Optional .rlgz graph package to import when the target database is missing."),
+        noBootstrap: z.boolean().optional().describe("Disable default .repolens/graph.rlgz bootstrap when true."),
+        label: z.string().optional().describe("Optional project catalog label for the benchmark run."),
+        secretScan: z.boolean().optional().describe("Set false to skip the medium-confidence redacted secret scan."),
+        secretScanLimit: z.number().int().positive().max(500).optional().describe("Maximum redacted secret findings to include in the summary.")
+      }
+    },
+    async ({ root, dbPath, maxFileBytes, bootstrapPackage, noBootstrap, label, secretScan, secretScanLimit }) =>
+      text(
+        await benchmarkRepository({
+          root: root ?? process.cwd(),
+          dbPath,
+          maxFileBytes,
+          bootstrapPackage: noBootstrap ? false : bootstrapPackage,
+          runLabel: label,
+          secretScan,
+          secretScanLimit
+        })
+      )
   );
 
   server.registerTool(
