@@ -6,7 +6,7 @@ import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
 import { watchRepository } from "./watcher.js";
 import type { ArchitectureReportOptions } from "./report.js";
-import type { DecisionRecord, GraphSearchOptions, IndexOptions, RuntimeTrace, WatchIndexOptions } from "./types.js";
+import type { ContextPack, DecisionRecord, GraphSearchOptions, IndexOptions, RuntimeTrace, WatchIndexOptions } from "./types.js";
 
 export async function runIndex(options: IndexOptions) {
   const result = await indexRepository(options);
@@ -100,6 +100,30 @@ export function findDependencyCycles(limit?: number, dbPath?: string) {
 
 export function ingestTraces(traces: RuntimeTrace[], dbPath?: string) {
   return withStore(dbPath, (store) => store.ingestTraces(traces));
+}
+
+export function contextPack(query: string, limit?: number, context?: number, dbPath?: string): ContextPack {
+  return withStore(dbPath, (store) => {
+    const max = Math.min(20, Math.max(1, Math.floor(limit ?? 6)));
+    const semantic = store.semanticSearch(query, max);
+    const graph = store.searchGraph({ query, limit: max });
+    const code = store.searchCode(query, max);
+    const snippetIds = new Set<string>();
+    for (const match of semantic) snippetIds.add(match.symbol.qualifiedName);
+    for (const match of graph) snippetIds.add(match.symbol.qualifiedName);
+    const snippets = [...snippetIds]
+      .slice(0, max)
+      .map((identifier) => store.getCodeSnippet(identifier, context ?? 2))
+      .filter((snippet): snippet is NonNullable<typeof snippet> => Boolean(snippet));
+    const edges = [...snippetIds]
+      .slice(0, Math.min(5, max))
+      .flatMap((identifier) => [
+        ...store.traceSymbol(identifier, "outbound", 1),
+        ...store.traceSymbol(identifier, "inbound", 1)
+      ])
+      .slice(0, 50);
+    return { query, semantic, graph, code, snippets, edges };
+  });
 }
 
 export function detectChanges(root?: string, limit?: number, dbPath?: string) {

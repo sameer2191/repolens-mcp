@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { architectureReport, packGraph, unpackGraph } from "../src/core/api.js";
+import { architectureReport, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
@@ -173,6 +173,12 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(observedHttp.rows.some((row) => row["a.name"] === "submitOrder" && row["r.type"] === "OBSERVED_HTTP_CALLS"));
     const observedEvent = store.queryGraph("MATCH (a)-[r:OBSERVED_EMITS]->(b:Channel) WHERE b.name = 'order.created' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(observedEvent.rows.some((row) => row["a.name"] === "notifyOrderCreated" && row["r.type"] === "OBSERVED_EMITS"));
+
+    const pack = contextPack("create order", 4, 1, dbPath);
+    assert.ok(pack.semantic.some((match) => match.symbol.name === "createOrder"));
+    assert.ok(pack.code.some((match) => match.text.includes("createOrder")));
+    assert.ok(pack.snippets.some((snippet) => snippet.symbol?.name === "createOrder"));
+    assert.ok(pack.edges.length > 0);
 
     assert.throws(() => store.queryGraph("MATCH (f) DELETE f RETURN f.name"), /read-only/);
 

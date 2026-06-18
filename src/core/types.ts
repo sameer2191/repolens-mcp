@@ -86,6 +86,15 @@ export interface TraceIngestResult {
   unresolved: Array<{ trace: RuntimeTrace; reason: string }>;
 }
 
+export interface ContextPack {
+  query: string;
+  semantic: SemanticSearchMatch[];
+  graph: GraphSearchMatch[];
+  code: CodeMatch[];
+  snippets: CodeSnippet[];
+  edges: Edge[];
+}
+
 export interface CodeMatch {
   filePath: string;
   language: Language;

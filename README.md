@@ -6,7 +6,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 25 tools for indexing, project inventory/status, BM25 code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 26 tools for indexing, project inventory/status, BM25 code search, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Codex-ready setup**: `doctor` inspects the local Codex MCP configuration, and `install-codex` can add a managed MCP block with dry-run and force safeguards.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog**: `list-projects`, `project-status`, and `delete-project` track indexed repositories across local workspaces without mixing their graph databases.
@@ -17,6 +17,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Graph communities**: detects functional modules from weighted relationships, not just folder names.
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
+- **Context packs for agents**: one query can return semantic matches, graph matches, BM25 code hits, snippets, and nearby edges for focused development context.
 - **Route-call edges**: connects literal `fetch`/Axios/Node HTTP calls to indexed route nodes with `HTTP_CALLS` edges.
 - **Runtime trace ingestion**: imports observed HTTP, event, or symbol traces as `OBSERVED_*` graph edges with counts and timestamps.
 - **Channel/event edges**: detects EventEmitter, Socket.IO-style, DOM custom event, Python decorator/call, and Swift `NotificationCenter` channels with `EMITS` and `LISTENS_ON` edges.
@@ -60,6 +61,7 @@ repolens-mcp communities [--db path] [--limit n] [--min-size n]
 repolens-mcp watch [repo] [--db path] [--interval-ms n]
 repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--min-degree n]
 repolens-mcp semantic "live session repository" [--limit n]
+repolens-mcp context-pack "create order" [--limit n] [--context n]
 repolens-mcp query-graph "MATCH (a)-[:CALLS]->(b) RETURN a.name,b.name LIMIT 5"
 repolens-mcp dead-code [--db path]
 repolens-mcp cycles [--db path] [--limit n]
@@ -96,6 +98,7 @@ repolens-mcp mcp
 | `find_communities` | Detect weighted graph communities with representative symbols, cohesion, and boundary counts. |
 | `search_graph` | Search structurally by query, kind, regex, relationship, file scope, or degree. |
 | `semantic_search` | Search symbols by local semantic token overlap across names, paths, signatures, and bodies. |
+| `context_pack` | Return semantic matches, graph matches, code hits, snippets, and nearby edges for one query. |
 | `query_graph` | Run a read-only Cypher-like query over symbols and one-hop edges. |
 | `find_dead_code` | Find non-exported functions and methods with no inbound call edges. |
 | `find_dependency_cycles` | Find import-resolved dependency cycles between architecture clusters. |
@@ -150,6 +153,7 @@ node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js communities --db /tmp/memory.db --limit 12
 node --experimental-sqlite dist/src/cli.js snippet createOrder --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js semantic "order checkout flow" --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js context-pack "order checkout flow" --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js cycles --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js query-graph "MATCH (f:Function) RETURN f.name,f.filePath LIMIT 5" --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js ingest-traces traces.json --db /tmp/memory.db

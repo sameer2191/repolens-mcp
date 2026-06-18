@@ -21,7 +21,7 @@ Result:
 
 - TypeScript build passed.
 - Node test suite passed: 13 tests, 0 failures.
-- Covered Codex MCP config rendering/install safeguards, project catalog list/status/delete behavior, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, multi-ecosystem manifest extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Covered Codex MCP config rendering/install safeguards, project catalog list/status/delete behavior, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, multi-ecosystem manifest extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, context-pack assembly, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -41,20 +41,20 @@ Result:
 - Files discovered: 53
 - Files indexed: 53
 - Files skipped: 0
-- Symbols: 443
-- Edges: 1,408
-- Lines indexed: 8,340
-- Full index elapsed: 361 ms
-- No-op incremental elapsed: 26 ms
+- Symbols: 445
+- Edges: 1,424
+- Lines indexed: 8,414
+- Full index elapsed: 373 ms
+- No-op incremental elapsed: 28 ms
 - No-op incremental unchanged files: 53
-- Full-text code-search rows: 7,508 `code_lines` rows and 7,508 `code_fts` rows
+- Full-text code-search rows: 7,575 `code_lines` rows and 7,575 `code_fts` rows
 - Channel graph rows: 8 `channel` nodes, 2 `EMITS` edges, and 11 `LISTENS_ON` edges
 - Manifest graph rows: 11 `package` nodes and 26 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 53 files, 443 symbols, and 1,408 edges.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 53 files, 445 symbols, and 1,424 edges.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, and fixture route/client communities.
-- Graph package: `.repolens/self.rlgz` (1,045,904 bytes from a 4,087,808-byte SQLite snapshot)
-- Imported package totals: 53 files, 443 symbols, 1,408 edges
+- Graph package: `.repolens/self.rlgz` (1,062,411 bytes from a 4,177,920-byte SQLite snapshot)
+- Imported package totals: 53 files, 445 symbols, 1,424 edges
 - Language mix: TypeScript, Markdown, JSON, YAML, TOML, XML, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -345,6 +345,14 @@ node --experimental-sqlite dist/src/cli.js query-graph "MATCH (a)-[r:OBSERVED_EM
 
 Confirmed two observed traces inserted one `OBSERVED_HTTP_CALLS` edge from `submitOrder` to `POST /orders` and one `OBSERVED_EMITS` edge from `notifyOrderCreated` to `order.created`, with no unresolved traces.
 
+Context-pack checks:
+
+```bash
+node --experimental-sqlite dist/src/cli.js context-pack "create order" --db /tmp/repolens-trace-smoke.db --limit 3 --context 1
+```
+
+Confirmed the context pack returned `createOrder` as the top semantic match, BM25 code hits, source snippets, and adjacent graph edges in one response.
+
 Source snippets:
 
 ```bash
@@ -543,4 +551,4 @@ Confirmed modified files map back to indexed symbols and produced a medium risk 
 
 ## Conclusion
 
-The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a local catalog, ingests runtime traces as observed graph edges, and exposes graph schema, structural search, semantic search, generated similarity/semantic edges, read-only graph queries, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a local catalog, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, and exposes graph schema, structural search, semantic search, generated similarity/semantic edges, read-only graph queries, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.

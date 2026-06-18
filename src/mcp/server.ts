@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import {
   architectureReport,
+  contextPack,
   deleteProject,
   detectChanges,
   findDeadCode,
@@ -242,6 +243,20 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ query, limit, dbPath }) => text(semanticSearch(query, limit, dbPath))
+  );
+
+  server.registerTool(
+    "context_pack",
+    {
+      description: "Collect semantic matches, structural graph matches, code hits, snippets, and nearby edges for a development question.",
+      inputSchema: {
+        query: z.string(),
+        limit: z.number().int().positive().max(20).optional(),
+        context: z.number().int().nonnegative().max(12).optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ query, limit, context, dbPath }) => text(contextPack(query, limit, context, dbPath))
   );
 
   server.registerTool(
