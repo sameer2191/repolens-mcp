@@ -8,18 +8,20 @@ on:
     - cron: "21 7 * * 1"
 
 permissions:
-  security-events: write
-  packages: read
-  actions: read
   contents: read
 
 jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: github/codeql-action/init@dd903d2e4f5405488e5ef1422510ee31c8b32357
         with:
           languages: javascript-typescript
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@dd903d2e4f5405488e5ef1422510ee31c8b32357

@@ -1,8 +1,14 @@
 # Security Policy
 
+## Supported Versions
+
+The `main` branch and the latest GitHub release receive security fixes. Older prerelease snapshots, local generated graph packages, and fixture repositories are not supported.
+
 ## Local-First Data Model
 
 RepoLens MCP reads source files from repositories you explicitly index and stores derived metadata in a local SQLite database. It does not send repository content to a hosted service.
+
+RepoLens is designed to run as a local MCP tool. Treat any generated database, graph export, context pack, or dashboard artifact as derived source-code metadata, and do not publish those artifacts until they have been reviewed for secrets and private business logic.
 
 ## Sensitive Files
 
@@ -16,6 +22,38 @@ repolens-mcp search api_key
 
 before committing any generated memory artifacts.
 
-## Reporting
+## Reporting A Vulnerability
 
-Open a private security advisory or contact the maintainer if you find a vulnerability involving secret exposure, unsafe file traversal, or MCP tool behavior.
+Use GitHub's private vulnerability reporting for this repository when available, or open a private security advisory from the Security tab. If neither flow is available, email the maintainer listed on the GitHub profile and include `RepoLens MCP security report` in the subject.
+
+Please include:
+
+- Affected version or commit SHA.
+- Operating system and Node.js version.
+- Whether the issue affects indexing, graph export, MCP tool responses, generated artifacts, or installation.
+- A minimal reproduction using a public fixture or redacted repository layout.
+- Any evidence of secret exposure, unsafe path traversal, command execution, or unauthorized file reads.
+
+## Response Targets
+
+Expected maintainer response targets:
+
+- Acknowledge new reports within 72 hours.
+- Triage severity and reproducibility within 7 days.
+- Publish fixes or mitigations for confirmed high-impact issues as soon as practical.
+- Request a CVE or GitHub Security Advisory when the issue affects released packages or published artifacts.
+
+## Scope
+
+In scope:
+
+- Secret exposure through indexing, search, context packs, dashboards, graph exports, or MCP resources.
+- Path traversal or symlink behavior that reads files outside the selected repository root.
+- Unsafe handling of runtime traces, package manifests, Docker/Kubernetes files, or generated memory artifacts.
+- Installation, release, or CI workflow behavior that could compromise published packages or artifacts.
+
+Out of scope:
+
+- Findings that require indexing repositories you do not have permission to inspect.
+- Vulnerabilities in third-party dependencies unless RepoLens uses them in a way that creates an additional exploit path.
+- Denial-of-service reports based only on intentionally indexing very large generated folders without an ignore rule.
