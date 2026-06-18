@@ -1,6 +1,6 @@
 # Validation Report
 
-Date: 2026-06-17
+Date: 2026-06-18
 
 ## Environment
 
@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 2 tests, 0 failures.
-- Covered decision persistence, repository indexing, Swift extraction, symbol search, code search, graph schema, structural graph search, dead-code candidates, architecture summary, and trace behavior on a fixture repository.
+- Node test suite passed: 3 tests, 0 failures.
+- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, Swift extraction, symbol search, code search, graph schema, structural graph search, dead-code candidates, architecture summary, and trace behavior on a fixture repository.
 
 ## Self Index
 
@@ -29,6 +29,7 @@ Command:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000
+node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000 --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db .repolens/self.db
 ```
 
@@ -37,9 +38,11 @@ Result:
 - Files discovered: 31
 - Files indexed: 31
 - Files skipped: 0
-- Symbols: 179
-- Edges: 417
-- Elapsed: 60 ms
+- Symbols: 181
+- Edges: 421
+- Full index elapsed: 106 ms
+- No-op incremental elapsed: 15 ms
+- No-op incremental unchanged files: 31
 - Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 
@@ -53,6 +56,11 @@ Command:
 node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
   --max-file-bytes 750000
+
+node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --max-file-bytes 750000 \
+  --incremental
 
 node --experimental-sqlite dist/src/cli.js architecture \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
@@ -74,7 +82,10 @@ Result:
 - Symbols: 5,234
 - Edges: 29,013
 - Lines indexed: 96,330
-- Elapsed: 10,531 ms
+- Full index elapsed: 10,531 ms
+- No-op incremental elapsed: 254 ms
+- No-op incremental unchanged files: 852
+- No-op incremental removed files: 0
 - Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html`
 - Graph JSON: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
@@ -104,6 +115,17 @@ Graph schema:
 | `DEFINES` edges | 4,252 |
 | `CALLS_LOCAL` edges | 3,163 |
 | `IMPORTS` edges | 1,321 |
+
+Incremental refresh:
+
+```bash
+node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --max-file-bytes 750000 \
+  --incremental
+```
+
+Confirmed a no-op incremental pass preserved 5,234 symbols and 29,013 edges while marking all 852 discovered files unchanged.
 
 Representative hotspots:
 

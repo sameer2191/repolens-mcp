@@ -31,10 +31,11 @@ export async function startMcpServer(): Promise<void> {
       inputSchema: {
         root: z.string().optional().describe("Repository root. Defaults to current working directory."),
         dbPath: z.string().optional().describe("Optional SQLite database path."),
+        incremental: z.boolean().optional().describe("Skip unchanged files and prune removed files using existing SQLite metadata."),
         maxFileBytes: z.number().int().positive().optional().describe("Skip files larger than this size.")
       }
     },
-    async ({ root, dbPath, maxFileBytes }) => text(await runIndex({ root: root ?? process.cwd(), dbPath, maxFileBytes }))
+    async ({ root, dbPath, incremental, maxFileBytes }) => text(await runIndex({ root: root ?? process.cwd(), dbPath, incremental, maxFileBytes }))
   );
 
   server.registerTool(

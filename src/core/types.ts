@@ -17,6 +17,7 @@ export interface IndexOptions {
   root: string;
   dbPath?: string;
   includeHidden?: boolean;
+  incremental?: boolean;
   maxFileBytes?: number;
   runLabel?: string;
 }
@@ -152,9 +153,12 @@ export interface IndexResult {
   root: string;
   dbPath: string;
   indexedAt: string;
+  mode: "full" | "incremental";
   filesDiscovered: number;
   filesIndexed: number;
   filesSkipped: number;
+  filesUnchanged: number;
+  filesRemoved: number;
   symbols: number;
   edges: number;
   elapsedMs: number;

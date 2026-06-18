@@ -6,7 +6,7 @@ import { sha256 } from "./hash.js";
 import { shouldIgnoreDirectory, shouldIgnoreFile } from "./ignore.js";
 import { detectLanguage, isTextCandidate, normalizeSlashes } from "./language.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
-import type { Edge, IndexedFile, IndexOptions, IndexResult, SymbolNode } from "./types.js";
+import type { IndexedFile, IndexOptions, IndexResult, SymbolNode } from "./types.js";
 
 const DEFAULT_MAX_FILE_BYTES = 750_000;
 
@@ -20,22 +20,40 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
   const started = performance.now();
   const root = path.resolve(options.root);
   const dbPath = path.resolve(options.dbPath ?? process.env.REPOLENS_DB ?? defaultDbPath(root));
+  const incremental = options.incremental ?? false;
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
   const indexedAt = new Date().toISOString();
   const store = new MemoryStore(dbPath);
   const fileContents = new Map<string, string>();
   const allSymbols: SymbolNode[] = [];
-  const allEdges: Edge[] = [];
 
   try {
     const walked = await walk(root, root, options.includeHidden ?? false);
+    const walkedPaths = new Set(walked.map((file) => file.relativePath));
+    const previousFiles = incremental ? new Map(store.listFiles().map((file) => [file.path, file])) : new Map<string, IndexedFile>();
+    let filesRemoved = 0;
+    let graphNeedsRebuild = !incremental;
+
     store.transaction(() => {
-      store.resetRepository(root);
+      if (incremental) {
+        for (const previous of previousFiles.keys()) {
+          if (!walkedPaths.has(previous)) {
+            store.deleteFile(previous);
+            filesRemoved += 1;
+          }
+        }
+      } else {
+        store.resetRepository(root);
+      }
       store.recordRun(root, options.runLabel ?? null, indexedAt);
     });
+    if (filesRemoved > 0) {
+      graphNeedsRebuild = true;
+    }
 
     let filesIndexed = 0;
     let filesSkipped = 0;
+    let filesUnchanged = 0;
 
     for (const file of walked) {
       const language = detectLanguage(file.relativePath);
@@ -47,22 +65,50 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
         sha256: "",
         indexedAt
       };
+      const previous = previousFiles.get(file.relativePath);
 
       if (!isTextCandidate(file.relativePath)) {
         filesSkipped += 1;
-        store.insertFile({ ...baseRecord, skipped: true, skipReason: "unsupported or binary extension" });
+        const skipped = { ...baseRecord, skipped: true, skipReason: "unsupported or binary extension" };
+        if (isSameSkippedFile(previous, skipped)) {
+          filesUnchanged += 1;
+        } else {
+          graphNeedsRebuild = true;
+          store.transaction(() => {
+            if (incremental) store.deleteFile(file.relativePath);
+            store.insertFile(skipped);
+          });
+        }
         continue;
       }
       if (file.bytes > maxFileBytes) {
         filesSkipped += 1;
-        store.insertFile({ ...baseRecord, skipped: true, skipReason: `larger than maxFileBytes ${maxFileBytes}` });
+        const skipped = { ...baseRecord, skipped: true, skipReason: `larger than maxFileBytes ${maxFileBytes}` };
+        if (isSameSkippedFile(previous, skipped)) {
+          filesUnchanged += 1;
+        } else {
+          graphNeedsRebuild = true;
+          store.transaction(() => {
+            if (incremental) store.deleteFile(file.relativePath);
+            store.insertFile(skipped);
+          });
+        }
         continue;
       }
 
       const content = await fs.readFile(file.absolutePath, "utf8").catch(() => null);
       if (content === null || content.includes("\u0000")) {
         filesSkipped += 1;
-        store.insertFile({ ...baseRecord, skipped: true, skipReason: "not valid utf8 text" });
+        const skipped = { ...baseRecord, skipped: true, skipReason: "not valid utf8 text" };
+        if (isSameSkippedFile(previous, skipped)) {
+          filesUnchanged += 1;
+        } else {
+          graphNeedsRebuild = true;
+          store.transaction(() => {
+            if (incremental) store.deleteFile(file.relativePath);
+            store.insertFile(skipped);
+          });
+        }
         continue;
       }
 
@@ -72,40 +118,63 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
         lines: lines.length,
         sha256: sha256(content)
       };
+      fileContents.set(file.relativePath, content);
+      filesIndexed += 1;
+
+      if (incremental && previous && !previous.skipped && previous.sha256 === record.sha256) {
+        filesUnchanged += 1;
+        allSymbols.push(...store.symbolsForFile(file.relativePath));
+        continue;
+      }
+
       const extracted = extractFromFile(file.relativePath, language, content);
       allSymbols.push(...extracted.symbols);
-      allEdges.push(...extracted.edges);
-      fileContents.set(file.relativePath, content);
+      graphNeedsRebuild = true;
 
       store.transaction(() => {
+        if (incremental) store.deleteFile(file.relativePath);
         store.insertFile(record);
         store.insertCodeLines(file.relativePath, lines);
         for (const symbol of extracted.symbols) store.insertSymbol(symbol);
         for (const edge of extracted.edges) store.insertEdge(edge);
       });
-      filesIndexed += 1;
     }
 
-    const callEdges = addCallEdges(allSymbols, fileContents);
-    store.transaction(() => {
-      for (const edge of callEdges) store.insertEdge(edge);
-    });
-    allEdges.push(...callEdges);
+    if (graphNeedsRebuild) {
+      const callEdges = addCallEdges(allSymbols, fileContents);
+      store.transaction(() => {
+        store.deleteCallEdges();
+        for (const edge of callEdges) store.insertEdge(edge);
+      });
+    }
+    const counts = store.counts();
 
     return {
       root,
       dbPath,
       indexedAt,
+      mode: incremental ? "incremental" : "full",
       filesDiscovered: walked.length,
       filesIndexed,
       filesSkipped,
-      symbols: allSymbols.length,
-      edges: allEdges.length,
+      filesUnchanged,
+      filesRemoved,
+      symbols: counts.symbols,
+      edges: counts.edges,
       elapsedMs: Math.round(performance.now() - started)
     };
   } finally {
     store.close();
   }
+}
+
+function isSameSkippedFile(previous: IndexedFile | undefined, next: IndexedFile): boolean {
+  return Boolean(
+    previous?.skipped &&
+      previous.language === next.language &&
+      previous.bytes === next.bytes &&
+      previous.skipReason === next.skipReason
+  );
 }
 
 async function walk(root: string, current: string, includeHidden: boolean): Promise<WalkedFile[]> {

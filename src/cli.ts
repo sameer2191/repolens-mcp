@@ -36,6 +36,7 @@ async function main(): Promise<void> {
       const result = await runIndex({
         root,
         dbPath: stringFlag(args, "db"),
+        incremental: booleanFlag(args, "incremental"),
         maxFileBytes: numberFlag(args, "max-file-bytes")
       });
       print(result);
@@ -191,6 +192,10 @@ function numberFlag(args: ParsedArgs, name: string): number | undefined {
   return value ? Number(value) : undefined;
 }
 
+function booleanFlag(args: ParsedArgs, name: string): boolean {
+  return args.flags.get(name) === true;
+}
+
 function required(value: string | undefined, name: string): string {
   if (!value) {
     throw new Error(`Missing required ${name}`);
@@ -225,7 +230,7 @@ function help(): string {
   return `repolens-mcp
 
 Usage:
-  repolens-mcp index [repo] [--db path] [--max-file-bytes n]
+  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental]
   repolens-mcp architecture [--db path]
   repolens-mcp search <query> [--db path] [--limit n]
   repolens-mcp symbols <query> [--kind function] [--db path]

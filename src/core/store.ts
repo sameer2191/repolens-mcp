@@ -173,6 +173,53 @@ export class MemoryStore {
     }
   }
 
+  listFiles(): IndexedFile[] {
+    const rows = this.db
+      .prepare("SELECT * FROM files ORDER BY path ASC")
+      .all() as unknown as FileRow[];
+    return rows.map((row) => ({
+      path: row.path,
+      language: row.language,
+      bytes: row.bytes,
+      lines: row.lines,
+      sha256: row.sha256,
+      indexedAt: row.indexed_at,
+      skipped: row.skipped === 1,
+      skipReason: row.skip_reason ?? undefined
+    }));
+  }
+
+  symbolsForFile(filePath: string): SymbolNode[] {
+    const rows = this.db
+      .prepare("SELECT * FROM symbols WHERE file_path = ? ORDER BY start_line ASC")
+      .all(filePath) as unknown as SymbolRow[];
+    return rows.map(rowToSymbol);
+  }
+
+  deleteFile(filePath: string): void {
+    const rows = this.db
+      .prepare("SELECT qualified_name FROM symbols WHERE file_path = ?")
+      .all(filePath) as Array<{ qualified_name: string }>;
+    const deleteEdges = this.db.prepare("DELETE FROM edges WHERE source = ? OR target = ?");
+    for (const row of rows) {
+      deleteEdges.run(row.qualified_name, row.qualified_name);
+    }
+    this.db.prepare("DELETE FROM symbols WHERE file_path = ?").run(filePath);
+    this.db.prepare("DELETE FROM code_lines WHERE file_path = ?").run(filePath);
+    this.db.prepare("DELETE FROM files WHERE path = ?").run(filePath);
+  }
+
+  deleteCallEdges(): void {
+    this.db.prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL')").run();
+  }
+
+  counts(): { symbols: number; edges: number } {
+    return {
+      symbols: getCount(this.db, "SELECT count(*) AS count FROM symbols"),
+      edges: getCount(this.db, "SELECT count(*) AS count FROM edges")
+    };
+  }
+
   searchCode(query: string, limit = 20): CodeMatch[] {
     const normalized = `%${query.toLowerCase()}%`;
     const rows = this.db
