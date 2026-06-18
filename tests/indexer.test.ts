@@ -38,6 +38,10 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     const code = store.searchCode("/orders");
     assert.ok(code.some((match) => match.text.includes("app.get")));
 
+    const splitCode = store.searchCode("create order");
+    assert.ok(splitCode.some((match) => match.text.includes("createOrder")));
+    assert.ok(splitCode[0]?.score > 0);
+
     const arch = store.architecture(fixture);
     assert.equal(arch.languages[0]?.language, "typescript");
     assert.ok(arch.languages.some((language) => language.language === "swift"));
@@ -341,6 +345,7 @@ test("incremental indexing skips unchanged files and prunes removed files", asyn
   store = new MemoryStore(dbPath);
   try {
     assert.equal(store.searchCode("Demo service").length, 0);
+    assert.equal(store.searchCode("fixture package").length, 0);
   } finally {
     store.close();
   }

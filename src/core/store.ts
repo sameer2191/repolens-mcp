@@ -80,6 +80,7 @@ export class MemoryStore {
   readonly dbPath: string;
   private readonly db: DatabaseSync;
   private readonly lockOwners = new Map<string, string>();
+  private codeFtsAvailable = false;
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
@@ -89,6 +90,7 @@ export class MemoryStore {
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA foreign_keys = ON");
     this.initSchema();
+    this.codeFtsAvailable = this.initSearchIndex();
   }
 
   close(): void {
@@ -150,6 +152,7 @@ export class MemoryStore {
     this.db.prepare("DELETE FROM symbols").run();
     this.db.prepare("DELETE FROM edges").run();
     this.db.prepare("DELETE FROM code_lines").run();
+    this.deleteSearchRows();
   }
 
   recordRun(root: string, label: string | null, indexedAt: string): number {
@@ -233,10 +236,16 @@ export class MemoryStore {
 
   insertCodeLines(filePath: string, lines: string[]): void {
     const stmt = this.db.prepare("INSERT INTO code_lines(file_path, line, text) VALUES (?, ?, ?)");
+    const ftsStmt = this.codeFtsAvailable
+      ? this.db.prepare("INSERT INTO code_fts(file_path, language, line, text, search_text) VALUES (?, ?, ?, ?, ?)")
+      : null;
+    const language = this.fileLanguage(filePath);
     for (let index = 0; index < lines.length; index += 1) {
       const text = lines[index];
       if (text.trim()) {
-        stmt.run(filePath, index + 1, text.slice(0, 2000));
+        const clippedText = text.slice(0, 2000);
+        stmt.run(filePath, index + 1, clippedText);
+        ftsStmt?.run(filePath, language, index + 1, clippedText, buildCodeSearchText(clippedText));
       }
     }
   }
@@ -274,6 +283,7 @@ export class MemoryStore {
     }
     this.db.prepare("DELETE FROM symbols WHERE file_path = ?").run(filePath);
     this.db.prepare("DELETE FROM code_lines WHERE file_path = ?").run(filePath);
+    this.deleteSearchRows(filePath);
     this.db.prepare("DELETE FROM files WHERE path = ?").run(filePath);
   }
 
@@ -293,7 +303,44 @@ export class MemoryStore {
   }
 
   searchCode(query: string, limit = 20): CodeMatch[] {
-    const normalized = `%${query.toLowerCase()}%`;
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return [];
+    }
+    const ftsQuery = buildFtsQuery(trimmed);
+    if (this.codeFtsAvailable && ftsQuery) {
+      try {
+        const rows = this.db
+          .prepare(
+            `SELECT file_path, language, line, text, bm25(code_fts) AS rank
+             FROM code_fts
+             WHERE code_fts MATCH ?
+             ORDER BY rank ASC, file_path ASC, line ASC
+             LIMIT ?`
+          )
+          .all(ftsQuery, limit) as Array<{
+          file_path: string;
+          language: Language;
+          line: number;
+          text: string;
+          rank: number;
+        }>;
+
+        if (rows.length > 0) {
+          return rows.map((row) => ({
+            filePath: row.file_path,
+            language: row.language,
+            line: row.line,
+            text: row.text,
+            score: Number((-row.rank).toFixed(6))
+          }));
+        }
+      } catch {
+        this.codeFtsAvailable = false;
+      }
+    }
+
+    const normalized = `%${trimmed.toLowerCase()}%`;
     const rows = this.db
       .prepare(
         `SELECT code_lines.file_path, files.language, code_lines.line, code_lines.text
@@ -310,7 +357,7 @@ export class MemoryStore {
       text: string;
     }>;
 
-    const lowered = query.toLowerCase();
+    const lowered = trimmed.toLowerCase();
     return rows.map((row) => ({
       filePath: row.file_path,
       language: row.language,
@@ -1299,6 +1346,62 @@ export class MemoryStore {
       );
     `);
   }
+
+  private initSearchIndex(): boolean {
+    try {
+      this.db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS code_fts USING fts5(
+          file_path UNINDEXED,
+          language UNINDEXED,
+          line UNINDEXED,
+          text UNINDEXED,
+          search_text,
+          tokenize = 'unicode61'
+        );
+      `);
+
+      const indexedRows = getCount(this.db, "SELECT count(*) AS count FROM code_fts");
+      const sourceRows = getCount(this.db, "SELECT count(*) AS count FROM code_lines");
+      if (indexedRows === 0 && sourceRows > 0) {
+        const rows = this.db
+          .prepare(
+            `SELECT code_lines.file_path, files.language, code_lines.line, code_lines.text
+             FROM code_lines
+             JOIN files ON files.path = code_lines.file_path
+             WHERE files.skipped = 0
+             ORDER BY code_lines.file_path ASC, code_lines.line ASC`
+          )
+          .all() as Array<{ file_path: string; language: Language; line: number; text: string }>;
+        const stmt = this.db.prepare("INSERT INTO code_fts(file_path, language, line, text, search_text) VALUES (?, ?, ?, ?, ?)");
+        for (const row of rows) {
+          stmt.run(row.file_path, row.language, row.line, row.text, buildCodeSearchText(row.text));
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private fileLanguage(filePath: string): Language {
+    const row = this.db.prepare("SELECT language FROM files WHERE path = ?").get(filePath) as { language: Language } | undefined;
+    return row?.language ?? "unknown";
+  }
+
+  private deleteSearchRows(filePath?: string): void {
+    if (!this.codeFtsAvailable) {
+      return;
+    }
+    try {
+      if (filePath) {
+        this.db.prepare("DELETE FROM code_fts WHERE file_path = ?").run(filePath);
+      } else {
+        this.db.prepare("DELETE FROM code_fts").run();
+      }
+    } catch {
+      this.codeFtsAvailable = false;
+    }
+  }
 }
 
 export function defaultDbPath(root: string): string {
@@ -1820,4 +1923,50 @@ function clusterName(filePath: string): string {
 
 function sqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
+}
+
+function buildCodeSearchText(text: string): string {
+  const terms = codeSearchTerms(text);
+  if (terms.length === 0) {
+    return text;
+  }
+  return `${text}\n${terms.join(" ")}`;
+}
+
+function buildFtsQuery(query: string): string | null {
+  const terms = codeSearchTerms(query).filter((term) => term.length > 1).slice(0, 12);
+  if (terms.length === 0) {
+    return null;
+  }
+  return terms.map((term) => `${term}*`).join(" OR ");
+}
+
+function codeSearchTerms(value: string): string[] {
+  const terms = new Set<string>();
+  for (const segment of value.split(/[^A-Za-z0-9_]+/)) {
+    addSearchTermSegment(segment, terms);
+  }
+  return [...terms];
+}
+
+function addSearchTermSegment(segment: string, terms: Set<string>): void {
+  const normalized = segment.trim();
+  if (!normalized) {
+    return;
+  }
+  const add = (term: string) => {
+    const cleaned = term.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (cleaned.length > 0 && cleaned.length <= 80) {
+      terms.add(cleaned);
+    }
+  };
+
+  add(normalized);
+  for (const part of normalized.split(/_+/)) {
+    add(part);
+  }
+  const camelSplit = normalized.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+  for (const part of camelSplit.split(/\s+/)) {
+    add(part);
+  }
 }

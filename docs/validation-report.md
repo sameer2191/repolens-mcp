@@ -21,7 +21,7 @@ Result:
 
 - TypeScript build passed.
 - Node test suite passed: 8 tests, 0 failures.
-- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, symbol search, code search, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -41,15 +41,16 @@ Result:
 - Files discovered: 36
 - Files indexed: 36
 - Files skipped: 0
-- Symbols: 282
-- Edges: 957
-- Lines indexed: 6,167
-- Full index elapsed: 227 ms
-- No-op incremental elapsed: 34 ms
+- Symbols: 287
+- Edges: 978
+- Lines indexed: 6,344
+- Full index elapsed: 510 ms
+- No-op incremental elapsed: 15 ms
 - No-op incremental unchanged files: 36
+- Full-text code-search rows: 5,731 `code_lines` rows and 5,731 `code_fts` rows
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, and fixture route/client communities.
-- Graph package: `.repolens/self.rlgz` (270,738 bytes from a 1,208,320-byte SQLite snapshot)
-- Imported package totals: 36 files, 282 symbols, 957 edges
+- Graph package: `.repolens/self.rlgz` (739,629 bytes from a 2,809,856-byte SQLite snapshot)
+- Imported package totals: 36 files, 287 symbols, 978 edges
 - Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -125,15 +126,15 @@ Result:
 - Symbols: 5,234
 - Edges: 30,324
 - Lines indexed: 96,330
-- Full index elapsed: 11,863 ms
-- No-op incremental elapsed: 273 ms
+- Full index elapsed: 17,528 ms
+- No-op incremental elapsed: 219 ms
 - No-op incremental unchanged files: 852
 - No-op incremental removed files: 0
-- Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (331 KB)
+- Full-text code-search rows: 82,084 `code_lines` rows and 82,084 `code_fts` rows
+- Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (339,475 bytes)
 - Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (8.8 KB)
-- Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html`
-- Graph JSON: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`
-- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (4,847,389 bytes from a 40,464,384-byte SQLite snapshot)
+- Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html` (1,000 nodes, 1,000 edges, 349,365 bytes)
+- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (11,036,555 bytes from a 66,830,336-byte SQLite snapshot)
 - Imported graph package totals: 816 files, 5,234 symbols, 30,324 edges
 - Graph communities sampled: order repository, iOS load flows, access/cart clearing, auth/request helpers, address book, live-session tests, cart, and menu management communities.
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
@@ -210,12 +211,14 @@ The review-signal counts are intentionally conservative; they are meant to route
 Search:
 
 ```bash
-node --experimental-sqlite dist/src/cli.js search live-session \
+node --experimental-sqlite dist/src/cli.js search "live session repository" \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
   --limit 5
 ```
 
-Confirmed matches across iOS docs, live-session API tests, and web-admin route files.
+Confirmed BM25-ranked matches across live-session repository tests and the main `LiveSessionRepository` interface.
+
+The fixture suite also verifies code-aware ranking by searching for `create order` and finding the `createOrder` source line, then confirms incremental deletion prunes stale full-text rows for removed files.
 
 Symbol lookup:
 

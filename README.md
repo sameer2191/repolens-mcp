@@ -6,13 +6,14 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 21 tools for indexing, code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 21 tools for indexing, BM25 code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI.
 - **Operational dashboard**: browse graph previews, structural filters, schema counts, dead-code candidates, review signals, and report links without a frontend build.
 - **Graph communities**: detects functional modules from weighted relationships, not just folder names.
+- **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
 - **Route-call edges**: connects literal `fetch`/Axios/Node HTTP calls to indexed route nodes with `HTTP_CALLS` edges.
 - **Architecture recommendations**: turns hotspots, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
@@ -70,7 +71,7 @@ repolens-mcp mcp
 | `index_repository` | Build or refresh the local SQLite memory. |
 | `export_graph_package` | Create a compressed, checksummed `.rlgz` package from an indexed graph database. |
 | `import_graph_package` | Import a compressed `.rlgz` package into a local graph database. |
-| `search_code` | Search indexed source lines. |
+| `search_code` | Search indexed source lines with BM25 ranking and code-aware token expansion. |
 | `search_symbols` | Search functions, classes, routes, resources, headings, and package nodes. |
 | `get_code_snippet` | Return source lines around a symbol, qualified name, file path, or `path:line` target. |
 | `get_architecture` | Return language mix, hotspots, entrypoints, packages, and risk markers. |
