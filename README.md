@@ -14,7 +14,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **MCP-native**: exposes 27 tools for indexing, project inventory/status, fleet summaries, BM25 code search, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Codex-ready setup**: `doctor` inspects the local Codex MCP configuration, and `install-codex` can add a managed MCP block with dry-run and force safeguards.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
-- **Project catalog and fleet summaries**: `list-projects`, `project-status`, `fleet-summary`, and `delete-project` track indexed repositories, aggregate languages/routes/dependencies, and highlight shared dependency or route overlap across local workspaces.
+- **Project catalog and fleet summaries**: `list-projects`, `project-status`, `fleet-summary`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and infer service links when one local project calls a route provided by another.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI.
@@ -23,7 +23,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
 - **Context packs for agents**: one query can return semantic matches, graph matches, BM25 code hits, snippets, and nearby edges for focused development context.
-- **Route-call edges**: connects literal `fetch`/Axios/Node HTTP calls to indexed route nodes with `HTTP_CALLS` edges.
+- **Route-call edges**: stores literal HTTP requests as `http_call` nodes, connects callers with `CALLS_HTTP_ENDPOINT`, and links matching in-repo routes with `HTTP_CALLS`.
 - **Runtime trace ingestion**: imports observed HTTP, event, or symbol traces as `OBSERVED_*` graph edges with counts and timestamps.
 - **Channel/event edges**: detects EventEmitter, Socket.IO-style, DOM custom event, Python decorator/call, and Swift `NotificationCenter` channels with `EMITS` and `LISTENS_ON` edges.
 - **Manifest dependency graph**: extracts package and dependency nodes from npm, Composer, Python, Go, Cargo, Maven, Gradle, Dart, Elixir, Ruby, and `requirements.txt` manifests.
@@ -94,7 +94,7 @@ repolens-mcp mcp
 | `list_projects` | List repositories indexed through RepoLens on this machine. |
 | `index_status` | Return the latest indexed status for a root, database path, label, or project folder name. |
 | `delete_project` | Remove a project from the local catalog, with optional safe `.repolens` DB cleanup. |
-| `fleet_summary` | Aggregate indexed projects by language, package, dependency, route, and overlap. |
+| `fleet_summary` | Aggregate indexed projects by language, package, dependency, route, HTTP call, route overlap, and inferred service link. |
 | `search_code` | Search indexed source lines with BM25 ranking and code-aware token expansion. |
 | `search_symbols` | Search functions, classes, routes, resources, headings, and package nodes. |
 | `get_code_snippet` | Return source lines around a symbol, qualified name, file path, or `path:line` target. |
@@ -121,7 +121,7 @@ repolens-mcp mcp
 The extractor is intentionally compact and extensible:
 
 - TypeScript and JavaScript: classes, interfaces, types, functions, const functions, imports, Express-style routes.
-- HTTP call linking: literal `fetch`, Axios, and Node `http` calls are linked to matching route nodes as `HTTP_CALLS`.
+- HTTP call linking: literal `fetch`, Axios, and Node `http` calls become `http_call` nodes with `CALLS_HTTP_ENDPOINT`; matching route nodes also receive `HTTP_CALLS`.
 - Channel/event linking: EventEmitter/Socket.IO-style `emit`, `on`, `once`, `addListener`, `subscribe`, DOM `CustomEvent`, Python `@*.on`, and Swift `NotificationCenter` patterns become `channel` nodes with `EMITS` and `LISTENS_ON` edges.
 - Swift: classes, structs, enums, protocols, actors, functions, and imports.
 - Python: classes, functions, imports, route decorators.
@@ -219,4 +219,4 @@ flowchart LR
 
 - Tree-sitter adapters for deeper language parsing.
 - Import resolver for monorepos and workspace packages.
-- Richer cross-repo queries and service-link inference.
+- Host-aware service-link inference from config, environment variables, and trace data.

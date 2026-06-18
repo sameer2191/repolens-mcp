@@ -21,6 +21,12 @@ interface ChannelOccurrence {
   pattern: string;
 }
 
+interface HttpCallOccurrence {
+  method: string;
+  path: string;
+  line: number;
+}
+
 const ignoredCallableNames = new Set([
   "get",
   "post",
@@ -168,6 +174,14 @@ export function extractFromFile(filePath: string, language: Language, content: s
     edges.push(edge);
   }
 
+  const httpCalls = extractHttpCallLinks(filePath, language, content, symbols);
+  for (const symbol of httpCalls.symbols) {
+    symbols.push(symbol);
+  }
+  for (const edge of httpCalls.edges) {
+    edges.push(edge);
+  }
+
   return { symbols: dedupeSymbols(symbols), edges, imports };
 }
 
@@ -218,7 +232,8 @@ export function addCallEdges(symbols: SymbolNode[], fileContents: Map<string, st
 
 export function addHttpEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
   const routes = symbols.filter((symbol) => symbol.kind === "route" && typeof symbol.metadata?.path === "string");
-  if (routes.length === 0) {
+  const httpCalls = symbols.filter((symbol) => symbol.kind === "http_call" && typeof symbol.metadata?.path === "string");
+  if (routes.length === 0 || httpCalls.length === 0) {
     return [];
   }
   const routeLookup = new Map<string, SymbolNode[]>();
@@ -231,32 +246,28 @@ export function addHttpEdges(symbols: SymbolNode[], fileContents: Map<string, st
     routeLookup.set(`ANY:${pathValue}`, [...(routeLookup.get(`ANY:${pathValue}`) ?? []), route]);
   }
 
-  const sources = symbols.filter((symbol) => ["function", "method", "class"].includes(symbol.kind));
   const edges: Edge[] = [];
-  for (const source of sources) {
-    const content = fileContents.get(source.filePath);
-    if (!content) continue;
-    const body = content
-      .split(/\r?\n/)
-      .slice(Math.max(0, source.startLine - 1), source.endLine)
-      .join("\n");
-    for (const call of extractHttpCalls(body, source.startLine)) {
-      const exact = routeLookup.get(`${call.method}:${call.path}`) ?? [];
-      const fallback = call.method === "ANY" ? routeLookup.get(`ANY:${call.path}`) ?? [] : [];
-      for (const route of exact.length ? exact : fallback) {
-        if (source.qualifiedName === route.qualifiedName) continue;
-        edges.push({
-          source: source.qualifiedName,
-          target: route.qualifiedName,
-          type: "HTTP_CALLS",
-          weight: call.method === "ANY" ? 0.65 : 0.9,
-          metadata: {
-            method: call.method,
-            path: call.path,
-            line: call.line
-          }
-        });
-      }
+  for (const call of httpCalls) {
+    const pathValue = normalizeHttpPath(String(call.metadata?.path ?? ""));
+    if (!pathValue) continue;
+    const method = String(call.metadata?.method ?? "ANY").toUpperCase();
+    const exact = routeLookup.get(`${method}:${pathValue}`) ?? [];
+    const fallback = method === "ANY" ? routeLookup.get(`ANY:${pathValue}`) ?? [] : [];
+    const source = sourceSymbolForLine(symbols, call.startLine, call.filePath)?.qualifiedName ?? fileQualifiedName(call.filePath);
+    for (const route of exact.length ? exact : fallback) {
+      if (source === route.qualifiedName) continue;
+      edges.push({
+        source,
+        target: route.qualifiedName,
+        type: "HTTP_CALLS",
+        weight: method === "ANY" ? 0.65 : 0.9,
+        metadata: {
+          method,
+          path: pathValue,
+          line: call.startLine,
+          call: call.qualifiedName
+        }
+      });
     }
   }
   return edges;
@@ -417,6 +428,46 @@ function extractChannelOccurrences(language: Language, content: string): Channel
   return occurrences;
 }
 
+function extractHttpCallLinks(filePath: string, language: Language, content: string, symbols: SymbolNode[]): ExtractionResult {
+  if (!["typescript", "javascript"].includes(language)) {
+    return { symbols: [], edges: [], imports: [] };
+  }
+  const calls = extractHttpCalls(content, 1);
+  if (calls.length === 0) {
+    return { symbols: [], edges: [], imports: [] };
+  }
+
+  const callSymbols: SymbolNode[] = [];
+  const edges: Edge[] = [];
+  const seen = new Set<string>();
+  const fileNode = fileQualifiedName(filePath);
+  for (const call of calls) {
+    const key = `${call.method}:${call.path}:${call.line}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    const name = `${call.method} ${call.path}`;
+    const callSymbol = makeSymbol(filePath, language, "http_call", name, call.line, call.line, undefined, false, {
+      method: call.method,
+      path: call.path,
+      line: call.line
+    });
+    const source = sourceSymbolForLine(symbols, call.line)?.qualifiedName ?? fileNode;
+    callSymbols.push(callSymbol);
+    edges.push({ source: fileNode, target: callSymbol.qualifiedName, type: "DEFINES", weight: 0.8 });
+    edges.push({
+      source,
+      target: callSymbol.qualifiedName,
+      type: "CALLS_HTTP_ENDPOINT",
+      weight: call.method === "ANY" ? 0.6 : 0.8,
+      metadata: { method: call.method, path: call.path, line: call.line }
+    });
+  }
+
+  return { symbols: callSymbols, edges, imports: [] };
+}
+
 function extractSwiftChannelOccurrences(content: string): ChannelOccurrence[] {
   const occurrences: ChannelOccurrence[] = [];
   const emitRegexes = [
@@ -438,9 +489,15 @@ function extractSwiftChannelOccurrences(content: string): ChannelOccurrence[] {
   return occurrences;
 }
 
-function sourceSymbolForLine(symbols: SymbolNode[], line: number): SymbolNode | null {
+function sourceSymbolForLine(symbols: SymbolNode[], line: number, filePath?: string): SymbolNode | null {
   const candidates = symbols
-    .filter((symbol) => ["function", "method", "class", "route"].includes(symbol.kind) && symbol.startLine <= line && symbol.endLine >= line)
+    .filter(
+      (symbol) =>
+        (filePath === undefined || symbol.filePath === filePath) &&
+        ["function", "method", "class", "route"].includes(symbol.kind) &&
+        symbol.startLine <= line &&
+        symbol.endLine >= line
+    )
     .sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine));
   return candidates[0] ?? null;
 }
@@ -453,10 +510,23 @@ function normalizeChannelName(channel: string | undefined): string | null {
   return trimmed.replace(/\s+/g, " ");
 }
 
-function extractHttpCalls(content: string, startLine: number): Array<{ method: string; path: string; line: number }> {
-  const calls: Array<{ method: string; path: string; line: number }> = [];
+function extractHttpCalls(content: string, startLine: number): HttpCallOccurrence[] {
+  const calls: HttpCallOccurrence[] = [];
+  const fetchRegex = /\bfetch\(\s*["'`]([^"'`]+)["'`]/gi;
+  for (const match of content.matchAll(fetchRegex)) {
+    const pathValue = normalizeHttpPath(match[1]);
+    if (!pathValue) continue;
+    const windowEnd = nextHttpCallBoundary(content, (match.index ?? 0) + match[0].length);
+    const callWindow = content.slice(match.index ?? 0, windowEnd);
+    const methodMatch = /\bmethod\s*:\s*["'`](GET|POST|PUT|PATCH|DELETE)["'`]/i.exec(callWindow);
+    calls.push({
+      method: (methodMatch?.[1] ?? "GET").toUpperCase(),
+      path: pathValue,
+      line: startLine + offsetToLine(content, match.index ?? 0) - 1
+    });
+  }
+
   const regexes: Array<{ regex: RegExp; method?: (match: RegExpExecArray) => string; urlGroup: number }> = [
-    { regex: /\bfetch\(\s*["'`]([^"'`]+)["'`](?:[\s\S]{0,180}?\bmethod\s*:\s*["'`](GET|POST|PUT|PATCH|DELETE)["'`])?/gi, method: (match) => match[2] ?? "GET", urlGroup: 1 },
     { regex: /\baxios\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/gi, method: (match) => match[1], urlGroup: 2 },
     { regex: /\b(?:http|https)\.(get|request)\(\s*["'`]([^"'`]+)["'`]/gi, method: (match) => (match[1].toLowerCase() === "get" ? "GET" : "ANY"), urlGroup: 2 }
   ];
@@ -472,6 +542,12 @@ function extractHttpCalls(content: string, startLine: number): Array<{ method: s
     }
   }
   return calls;
+}
+
+function nextHttpCallBoundary(content: string, startOffset: number): number {
+  const nextFetch = content.slice(startOffset).search(/\bfetch\(/);
+  const maxWindowEnd = Math.min(content.length, startOffset + 360);
+  return nextFetch >= 0 ? Math.min(maxWindowEnd, startOffset + nextFetch) : maxWindowEnd;
 }
 
 function normalizeHttpPath(value: string | undefined): string | null {

@@ -59,9 +59,13 @@ test("summarizes a fleet of indexed projects", async () => {
     assert.equal(fleet.totals.availableProjects, 2);
     assert.ok(fleet.totals.files >= 38);
     assert.ok(fleet.totals.routes >= 6);
+    assert.ok(fleet.totals.httpCalls >= 4);
+    assert.ok(fleet.totals.serviceLinks >= 2);
     assert.ok(fleet.projects.some((project) => project.label === "service-a" && project.routes.some((route) => route.path === "/orders")));
+    assert.ok(fleet.projects.some((project) => project.label === "service-a" && project.httpCalls.some((call) => call.path === "/orders")));
     assert.ok(fleet.sharedDependencies.some((dependency) => dependency.name === "express" && dependency.count === 2));
     assert.ok(fleet.routeOverlaps.some((route) => route.route === "GET /orders" && route.count === 2));
+    assert.ok(fleet.serviceLinks.some((link) => link.consumer === "service-a" && link.provider === "service-b" && link.route === "GET /orders" && link.calls >= 1));
     assert.ok(fleet.languages.some((language) => language.language === "typescript" && language.projects === 2));
   } finally {
     if (previousCatalog === undefined) {

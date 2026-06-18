@@ -65,9 +65,11 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(schema.nodeLabels.some((label) => label.kind === "stage"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "module"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "channel"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "http_call"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "package"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "dependency"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "DEFINES"));
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CALLS_HTTP_ENDPOINT"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CONFIGURES"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "EMITS"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "LISTENS_ON"));
@@ -161,6 +163,11 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const httpQuery = store.queryGraph("MATCH (a)-[r:HTTP_CALLS]->(b:Route) WHERE b.name CONTAINS '/orders' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(httpQuery.rows.some((row) => row["a.name"] === "loadOrders" && row["r.type"] === "HTTP_CALLS"));
+
+    const httpCallMatches = store.searchGraph({ kind: "http_call", query: "/orders" });
+    assert.ok(httpCallMatches.some((match) => match.symbol.name === "GET /orders" && match.symbol.filePath === "src/client.ts"));
+    const httpEndpointQuery = store.queryGraph("MATCH (a)-[r:CALLS_HTTP_ENDPOINT]->(b) WHERE b.name CONTAINS '/orders' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(httpEndpointQuery.rows.some((row) => row["a.name"] === "loadOrders" && row["r.type"] === "CALLS_HTTP_ENDPOINT"));
 
     const observed = store.ingestTraces([
       { type: "http", source: "submitOrder", sourceFile: "src/client.ts", method: "POST", path: "/orders", count: 3, observedAt: "2026-06-18T00:00:00.000Z" },

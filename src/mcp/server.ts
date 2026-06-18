@@ -115,7 +115,7 @@ export async function startMcpServer(): Promise<void> {
   server.registerTool(
     "fleet_summary",
     {
-      description: "Summarize all indexed RepoLens projects across the local catalog, including aggregate languages, routes, packages, shared dependencies, and route overlaps.",
+      description: "Summarize all indexed RepoLens projects across the local catalog, including aggregate languages, routes, HTTP calls, inferred service links, packages, shared dependencies, and route overlaps.",
       inputSchema: {
         limit: z.number().int().positive().max(500).optional()
       }

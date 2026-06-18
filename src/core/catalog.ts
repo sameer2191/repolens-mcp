@@ -52,7 +52,8 @@ export async function fleetSummary(limit = 50): Promise<FleetSummary> {
   const available = projects.filter((project) => project.dbExists && project.totals);
   const languageMap = new Map<Language, { language: Language; files: number; symbols: number; projects: Set<string> }>();
   const dependencyProjects = new Map<string, Set<string>>();
-  const routeProjects = new Map<string, Set<string>>();
+  const routeProjects = new Map<string, Map<string, FleetProjectSummary["routes"]>>();
+  const httpCallProjects = new Map<string, Map<string, FleetProjectSummary["httpCalls"]>>();
 
   for (const project of projects) {
     const projectName = projectLabel(project);
@@ -69,12 +70,20 @@ export async function fleetSummary(limit = 50): Promise<FleetSummary> {
       dependencyProjects.set(dependency, current);
     }
     for (const route of project.routes) {
-      const routeKey = `${route.method ?? "ANY"} ${route.path ?? route.name}`.trim();
-      const current = routeProjects.get(routeKey) ?? new Set<string>();
-      current.add(projectName);
+      const routeKey = endpointKey(route.method, route.path ?? route.name);
+      const current = routeProjects.get(routeKey) ?? new Map<string, FleetProjectSummary["routes"]>();
+      current.set(projectName, [...(current.get(projectName) ?? []), route]);
       routeProjects.set(routeKey, current);
     }
+    for (const call of project.httpCalls) {
+      const callKey = endpointKey(call.method, call.path ?? call.name);
+      const current = httpCallProjects.get(callKey) ?? new Map<string, FleetProjectSummary["httpCalls"]>();
+      current.set(projectName, [...(current.get(projectName) ?? []), call]);
+      httpCallProjects.set(callKey, current);
+    }
   }
+
+  const serviceLinks = buildServiceLinks(routeProjects, httpCallProjects);
 
   const risks = [
     ...projects.filter((project) => !project.dbExists).map((project) => `${projectLabel(project)} database missing`),
@@ -91,6 +100,8 @@ export async function fleetSummary(limit = 50): Promise<FleetSummary> {
       symbols: sum(available, (project) => project.totals?.symbols ?? 0),
       edges: sum(available, (project) => project.totals?.edges ?? 0),
       routes: sum(projects, (project) => project.routes.length),
+      httpCalls: sum(projects, (project) => project.httpCalls.length),
+      serviceLinks: serviceLinks.length,
       packages: new Set(projects.flatMap((project) => project.packages)).size,
       dependencies: new Set(projects.flatMap((project) => project.dependencies)).size
     },
@@ -104,10 +115,11 @@ export async function fleetSummary(limit = 50): Promise<FleetSummary> {
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
       .slice(0, 50),
     routeOverlaps: [...routeProjects.entries()]
-      .map(([route, projectSet]) => ({ route, projects: [...projectSet].sort(), count: projectSet.size }))
+      .map(([route, projectMap]) => ({ route, projects: [...projectMap.keys()].sort(), count: projectMap.size }))
       .filter((route) => route.count > 1)
       .sort((a, b) => b.count - a.count || a.route.localeCompare(b.route))
       .slice(0, 50),
+    serviceLinks,
     risks
   };
 }
@@ -182,6 +194,7 @@ async function fleetProjectForRecord(record: ProjectRecord): Promise<FleetProjec
       dbExists: status.dbExists,
       languages: [],
       routes: [],
+      httpCalls: [],
       packages: [],
       dependencies: [],
       risks
@@ -193,6 +206,7 @@ async function fleetProjectForRecord(record: ProjectRecord): Promise<FleetProjec
     try {
       const schema = store.graphSchema();
       const routes = store.searchGraph({ kind: "route", limit: 200 }).map((match) => routeSummary(match.symbol));
+      const httpCalls = store.searchGraph({ kind: "http_call", limit: 300 }).map((match) => httpCallSummary(match.symbol));
       const packages = uniqueNames(store.searchGraph({ kind: "package", limit: 200 }).map((match) => match.symbol.name));
       const dependencies = uniqueNames(store.searchGraph({ kind: "dependency", limit: 200 }).map((match) => match.symbol.name));
       return {
@@ -204,6 +218,7 @@ async function fleetProjectForRecord(record: ProjectRecord): Promise<FleetProjec
         totals: schema.totals,
         languages: schema.languages,
         routes,
+        httpCalls,
         packages,
         dependencies,
         risks
@@ -221,6 +236,7 @@ async function fleetProjectForRecord(record: ProjectRecord): Promise<FleetProjec
       totals: status.liveTotals,
       languages: [],
       routes: [],
+      httpCalls: [],
       packages: [],
       dependencies: [],
       risks: [...risks, error instanceof Error ? error.message : String(error)]
@@ -237,9 +253,59 @@ function routeSummary(symbol: SymbolNode): FleetProjectSummary["routes"][number]
   };
 }
 
+function httpCallSummary(symbol: SymbolNode): FleetProjectSummary["httpCalls"][number] {
+  return {
+    name: symbol.name,
+    method: metadataString(symbol, "method") ?? symbol.name.split(/\s+/)[0],
+    path: metadataString(symbol, "path"),
+    filePath: symbol.filePath,
+    line: metadataNumber(symbol, "line") ?? symbol.startLine
+  };
+}
+
 function metadataString(symbol: SymbolNode, key: string): string | undefined {
   const value = symbol.metadata?.[key];
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function metadataNumber(symbol: SymbolNode, key: string): number | undefined {
+  const value = symbol.metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function endpointKey(method: string | undefined, routePath: string | undefined): string {
+  const endpointMethod = method?.trim().toUpperCase() || "ANY";
+  const endpointPath = routePath?.trim() || "/";
+  return `${endpointMethod} ${endpointPath}`;
+}
+
+function buildServiceLinks(
+  routeProjects: Map<string, Map<string, FleetProjectSummary["routes"]>>,
+  httpCallProjects: Map<string, Map<string, FleetProjectSummary["httpCalls"]>>
+): FleetSummary["serviceLinks"] {
+  const links: FleetSummary["serviceLinks"] = [];
+  for (const [route, callersByProject] of httpCallProjects.entries()) {
+    const providersByProject = routeProjects.get(route);
+    if (!providersByProject) {
+      continue;
+    }
+    for (const [consumer, calls] of callersByProject.entries()) {
+      for (const [provider, providerRoutes] of providersByProject.entries()) {
+        if (consumer === provider) {
+          continue;
+        }
+        links.push({
+          consumer,
+          provider,
+          route,
+          calls: calls.length,
+          callFiles: uniqueNames(calls.map((call) => call.filePath)),
+          providerFiles: uniqueNames(providerRoutes.map((providerRoute) => providerRoute.filePath))
+        });
+      }
+    }
+  }
+  return links.sort((a, b) => b.calls - a.calls || a.consumer.localeCompare(b.consumer) || a.provider.localeCompare(b.provider) || a.route.localeCompare(b.route)).slice(0, 100);
 }
 
 async function deleteDbArtifacts(project: ProjectRecord): Promise<{ deleted: string[]; skipped: string[] }> {
