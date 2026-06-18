@@ -66,6 +66,17 @@ export interface Edge {
   metadata?: Record<string, unknown>;
 }
 
+export type TraceDirection = "inbound" | "outbound" | "both";
+
+export type TraceMode = "all" | "calls" | "data_flow" | "cross_service";
+
+export interface TraceOptions {
+  mode?: TraceMode;
+  edgeTypes?: string[];
+  includeTests?: boolean;
+  parameterName?: string;
+}
+
 export interface RuntimeTrace {
   source?: string;
   sourceFile?: string;

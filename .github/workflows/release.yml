@@ -16,6 +16,7 @@ jobs:
       attestations: write
       contents: write
       id-token: write
+      security-events: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -24,6 +25,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+      - name: Fail release on open CodeQL alerts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm run release:codeql-gate
       - run: node --experimental-sqlite dist/src/cli.js demo
       - run: npm pack --json
       - run: npm sbom --sbom-format cyclonedx --json > sbom.cyclonedx.json

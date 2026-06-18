@@ -211,6 +211,9 @@ export function checkout(order: Order) {
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "DATA_FLOWS"));
     const dataFlow = store.queryGraph("MATCH (a)-[r:DATA_FLOWS]->(b) WHERE b.name = 'persistOrder' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(dataFlow.rows.some((row) => row["a.name"] === "checkout" && row["b.name"] === "persistOrder" && row["r.type"] === "DATA_FLOWS"));
+    const trace = store.traceSymbol("checkout", "outbound", 2, { mode: "data_flow", parameterName: "order" });
+    assert.ok(trace.some((edge) => edge.type === "DATA_FLOWS" && edge.target.includes("persistOrder")));
+    assert.ok(trace.every((edge) => edge.type === "DATA_FLOWS"));
   } finally {
     store.close();
   }
@@ -289,6 +292,10 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const trace = store.traceSymbol("createOrder", "inbound", 2);
     assert.ok(trace.some((edge) => edge.source.includes("server.ts")));
+
+    const callTrace = store.traceSymbol("createOrder", "inbound", 2, { mode: "calls" });
+    assert.ok(callTrace.length > 0);
+    assert.ok(callTrace.every((edge) => edge.type === "CALLS" || edge.type === "CALLS_LOCAL"));
 
     const schema = store.graphSchema();
     assert.ok(schema.nodeLabels.some((label) => label.kind === "class"));
@@ -413,6 +420,9 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(httpCallMatches.some((match) => match.symbol.name === "GET /orders" && match.symbol.filePath === "src/client.ts"));
     const httpEndpointQuery = store.queryGraph("MATCH (a)-[r:CALLS_HTTP_ENDPOINT]->(b) WHERE b.name CONTAINS '/orders' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(httpEndpointQuery.rows.some((row) => row["a.name"] === "loadOrders" && row["r.type"] === "CALLS_HTTP_ENDPOINT"));
+    const crossServiceTrace = store.traceSymbol("loadOrders", "outbound", 2, { mode: "cross_service" });
+    assert.ok(crossServiceTrace.some((edge) => edge.type === "CALLS_HTTP_ENDPOINT"));
+    assert.ok(crossServiceTrace.every((edge) => ["HTTP_CALLS", "CALLS_HTTP_ENDPOINT", "OBSERVED_HTTP_CALLS", "EMITS", "LISTENS_ON", "OBSERVED_EMITS", "OBSERVED_LISTENS_ON"].includes(edge.type)));
 
     assert.ok(store.searchGraph({ kind: "graphql_operation", query: "GetOrders" }).some((match) => match.symbol.name === "query GetOrders"));
     assert.ok(store.searchGraph({ kind: "graphql_type", query: "Order" }).some((match) => match.symbol.name === "type Order"));
