@@ -6,7 +6,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 15 tools for indexing, code search, symbol search, graph schema, structural graph search, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, and graph snapshots.
+- **MCP-native**: exposes 16 tools for indexing, code search, symbol search, source snippets, graph schema, structural graph search, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, and graph snapshots.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots and architecture reports from the CLI.
@@ -38,6 +38,7 @@ repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental]
 repolens-mcp architecture [--db path]
 repolens-mcp search <query> [--db path]
 repolens-mcp symbols <query> [--kind function]
+repolens-mcp snippet <symbol-or-path:line> [--context n]
 repolens-mcp trace <symbol> [--direction inbound|outbound]
 repolens-mcp impact <path-or-symbol...>
 repolens-mcp schema [--db path]
@@ -59,6 +60,7 @@ repolens-mcp mcp
 | `index_repository` | Build or refresh the local SQLite memory. |
 | `search_code` | Search indexed source lines. |
 | `search_symbols` | Search functions, classes, routes, resources, headings, and package nodes. |
+| `get_code_snippet` | Return source lines around a symbol, qualified name, file path, or `path:line` target. |
 | `get_architecture` | Return language mix, hotspots, entrypoints, packages, and risk markers. |
 | `trace_symbol` | Trace inbound or outbound graph edges around a symbol. |
 | `impact_analysis` | Find adjacent symbols for changed files or symbols. |
@@ -93,6 +95,7 @@ node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/mem
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js snippet createOrder --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js cycles --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js report --db /tmp/memory.db --format html --out report.html
 node --experimental-sqlite dist/src/cli.js export-graph --db /tmp/memory.db --out graph.html --limit 1000

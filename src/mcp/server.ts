@@ -7,6 +7,7 @@ import {
   findDeadCode,
   findDependencyCycles,
   getArchitecture,
+  getCodeSnippet,
   getGraphSchema,
   graphSnapshot,
   impactAnalysis,
@@ -65,6 +66,19 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ query, kind, limit, dbPath }) => text(searchSymbols(query, kind, limit, dbPath))
+  );
+
+  server.registerTool(
+    "get_code_snippet",
+    {
+      description: "Return source lines around a symbol, qualified name, file path, or path:line target.",
+      inputSchema: {
+        identifier: z.string().describe("Symbol name, qualified symbol name, file path, or file path with :line suffix."),
+        context: z.number().int().nonnegative().max(40).optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ identifier, context, dbPath }) => text(getCodeSnippet(identifier, context, dbPath))
   );
 
   server.registerTool(

@@ -21,7 +21,7 @@ Result:
 
 - TypeScript build passed.
 - Node test suite passed: 4 tests, 0 failures.
-- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, Swift extraction, symbol search, code search, graph schema, structural graph search, import-resolved dependency cycles, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, Swift extraction, symbol search, code search, source snippets, graph schema, structural graph search, import-resolved dependency cycles, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -38,11 +38,11 @@ Result:
 - Files discovered: 32
 - Files indexed: 32
 - Files skipped: 0
-- Symbols: 214
-- Edges: 585
+- Symbols: 217
+- Edges: 599
 - Lines indexed: 4,410
-- Full index elapsed: 74 ms
-- No-op incremental elapsed: 15 ms
+- Full index elapsed: 71 ms
+- No-op incremental elapsed: 14 ms
 - No-op incremental unchanged files: 32
 - Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
@@ -196,6 +196,24 @@ node --experimental-sqlite dist/src/cli.js symbols repository \
 
 Confirmed repository interfaces and exported domain types under `apps/web-admin/src/lib/server/repositories`.
 
+Source snippets:
+
+```bash
+node --experimental-sqlite dist/src/cli.js snippet getCodeSnippet \
+  --db .repolens/self.db \
+  --context 2
+
+node --experimental-sqlite dist/src/cli.js snippet makeSession \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --context 1
+
+node --experimental-sqlite dist/src/cli.js snippet 'apps/web-admin/src/lib/server/repositories/live-session-repository.ts:40' \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --context 2
+```
+
+Confirmed symbol-based snippets, Swift snippets, and `path:line` snippets with highlighted line ranges.
+
 Graph schema:
 
 ```bash
@@ -271,11 +289,12 @@ curl --fail http://127.0.0.1:9750/api/schema
 curl --fail 'http://127.0.0.1:9750/api/search-graph?q=live-session&relationship=CALLS&limit=3'
 curl --fail 'http://127.0.0.1:9750/api/dead-code?limit=3'
 curl --fail 'http://127.0.0.1:9750/api/cycles?limit=5'
+curl --fail 'http://127.0.0.1:9750/api/snippet?id=makeSession&context=1'
 curl --fail 'http://127.0.0.1:9750/api/report?format=markdown&graphLimit=50'
 curl --fail http://127.0.0.1:9750/
 ```
 
-Confirmed the dashboard served the large validation database, returned the 816-file / 5,234-symbol / 29,013-edge schema, returned live-session graph matches, returned Swift dead-code candidates, returned an empty import-resolved cycle list, generated an 8,992-byte Markdown report response, and served the 15,978-byte HTML dashboard shell.
+Confirmed the dashboard served the large validation database, returned the 816-file / 5,234-symbol / 29,013-edge schema, returned live-session graph matches, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated an 8,992-byte Markdown report response, and served the 15,978-byte HTML dashboard shell.
 
 Trace:
 

@@ -32,6 +32,10 @@ export function searchSymbols(query: string, kind?: string, limit?: number, dbPa
   return withStore(dbPath, (store) => store.searchSymbols(query, kind, limit));
 }
 
+export function getCodeSnippet(identifier: string, context?: number, dbPath?: string) {
+  return withStore(dbPath, (store) => store.getCodeSnippet(identifier, context));
+}
+
 export function traceSymbol(name: string, direction: "inbound" | "outbound", depth?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.traceSymbol(name, direction, depth));
 }

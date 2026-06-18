@@ -66,6 +66,15 @@ export interface CodeMatch {
   score: number;
 }
 
+export interface CodeSnippet {
+  filePath: string;
+  language: Language;
+  startLine: number;
+  endLine: number;
+  symbol?: SymbolNode;
+  lines: Array<{ line: number; text: string; highlight: boolean }>;
+}
+
 export interface ArchitectureSummary {
   root: string;
   indexedAt: string;

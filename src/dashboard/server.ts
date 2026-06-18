@@ -1,5 +1,5 @@
 import http from "node:http";
-import { architectureReport, findDeadCode, findDependencyCycles, getArchitecture, getGraphSchema, graphSnapshot, searchCode, searchGraph, searchSymbols } from "../core/api.js";
+import { architectureReport, findDeadCode, findDependencyCycles, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, searchCode, searchGraph, searchSymbols } from "../core/api.js";
 
 export interface DashboardOptions {
   dbPath?: string;
@@ -49,6 +49,9 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
           code: query ? searchCode(query, 20, options.dbPath) : [],
           symbols: query ? searchSymbols(query, undefined, 20, options.dbPath) : []
         });
+      } else if (url.pathname === "/api/snippet") {
+        const identifier = url.searchParams.get("id") ?? "";
+        sendJson(response, identifier ? getCodeSnippet(identifier, numberParam(url, "context"), options.dbPath) : null);
       } else {
         send(response, 404, "text/plain; charset=utf-8", "Not found");
       }

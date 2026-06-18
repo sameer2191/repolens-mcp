@@ -8,6 +8,7 @@ import {
   findDeadCode,
   findDependencyCycles,
   getArchitecture,
+  getCodeSnippet,
   getGraphSchema,
   graphSnapshot,
   impactAnalysis,
@@ -56,6 +57,9 @@ async function main(): Promise<void> {
       break;
     case "symbols":
       print(searchSymbols(required(args.positional[0], "query"), stringFlag(args, "kind"), numberFlag(args, "limit"), stringFlag(args, "db")));
+      break;
+    case "snippet":
+      print(getCodeSnippet(required(args.positional[0], "symbol or path:line"), numberFlag(args, "context"), stringFlag(args, "db")));
       break;
     case "trace":
       print(
@@ -261,6 +265,7 @@ Usage:
   repolens-mcp architecture [--db path]
   repolens-mcp search <query> [--db path] [--limit n]
   repolens-mcp symbols <query> [--kind function] [--db path]
+  repolens-mcp snippet <symbol-or-path:line> [--context n] [--db path]
   repolens-mcp trace <symbol> [--direction inbound|outbound] [--depth n] [--db path]
   repolens-mcp impact <path-or-symbol...> [--db path]
   repolens-mcp schema [--db path]

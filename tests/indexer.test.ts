@@ -26,6 +26,14 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     const symbols = store.searchSymbols("createOrder");
     assert.equal(symbols[0]?.name, "createOrder");
 
+    const snippet = store.getCodeSnippet("createOrder", 1);
+    assert.equal(snippet?.symbol?.name, "createOrder");
+    assert.ok(snippet?.lines.some((line) => line.highlight && line.text.includes("createOrder")));
+
+    const lineSnippet = store.getCodeSnippet("src/orders.ts:8", 1);
+    assert.equal(lineSnippet?.filePath, "src/orders.ts");
+    assert.ok(lineSnippet?.lines.some((line) => line.line === 8 && line.highlight));
+
     const code = store.searchCode("/orders");
     assert.ok(code.some((match) => match.text.includes("app.get")));
 

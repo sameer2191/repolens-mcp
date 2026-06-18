@@ -7,6 +7,7 @@ import type {
   ArchitectureRecommendation,
   ChangeImpactResult,
   CodeMatch,
+  CodeSnippet,
   DeadCodeCandidate,
   DependencyCycle,
   DecisionRecord,
@@ -277,6 +278,67 @@ export class MemoryStore {
       )
       .get(qualifiedNameOrName, qualifiedNameOrName, qualifiedNameOrName) as SymbolRow | undefined;
     return row ? rowToSymbol(row) : null;
+  }
+
+  getCodeSnippet(identifier: string, context = 4): CodeSnippet | null {
+    const symbol = this.getSymbol(identifier) ?? this.searchSymbols(identifier, undefined, 1)[0];
+    if (symbol) {
+      return this.snippetForLocation(symbol.filePath, symbol.startLine, symbol.endLine, clampPositive(context, 0, 40), symbol);
+    }
+
+    const location = parseFileLine(identifier);
+    if (location) {
+      return this.snippetForLocation(location.filePath, location.line, location.line, clampPositive(context, 0, 40));
+    }
+
+    const file = this.db.prepare("SELECT * FROM files WHERE path = ? LIMIT 1").get(identifier) as FileRow | undefined;
+    if (!file) {
+      return null;
+    }
+    return this.snippetForLocation(file.path, 1, Math.min(file.lines, 40), 0);
+  }
+
+  private snippetForLocation(filePath: string, startLine: number, endLine: number, context: number, symbol?: SymbolNode): CodeSnippet | null {
+    const file = this.db.prepare("SELECT * FROM files WHERE path = ? LIMIT 1").get(filePath) as FileRow | undefined;
+    const from = Math.max(1, startLine - context);
+    const to = Math.max(from, endLine + context);
+    const root = this.latestRoot();
+    const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(root, filePath);
+
+    let lines: Array<{ line: number; text: string; highlight: boolean }> = [];
+    try {
+      const content = fs.readFileSync(absolutePath, "utf8");
+      lines = content
+        .split(/\r?\n/)
+        .slice(from - 1, to)
+        .map((text, index) => {
+          const line = from + index;
+          return { line, text, highlight: line >= startLine && line <= endLine };
+        });
+    } catch {
+      const rows = this.db
+        .prepare(
+          `SELECT line, text
+           FROM code_lines
+           WHERE file_path = ? AND line BETWEEN ? AND ?
+           ORDER BY line ASC`
+        )
+        .all(filePath, from, to) as Array<{ line: number; text: string }>;
+      lines = rows.map((row) => ({ ...row, highlight: row.line >= startLine && row.line <= endLine }));
+    }
+
+    if (lines.length === 0) {
+      return null;
+    }
+
+    return {
+      filePath,
+      language: symbol?.language ?? file?.language ?? "unknown",
+      startLine: from,
+      endLine: lines[lines.length - 1].line,
+      symbol,
+      lines
+    };
   }
 
   traceSymbol(name: string, direction: "inbound" | "outbound", depth = 2): Edge[] {
@@ -1163,6 +1225,14 @@ function resolveImportFile(sourceFile: string, specifier: string, filePaths: Set
 
 function stripKnownExtension(value: string): string {
   return value.replace(/\.(tsx?|jsx?|mjs|cjs|swift|py|go|java|rs|sql|json|ya?ml|md|sh)$/i, "");
+}
+
+function parseFileLine(identifier: string): { filePath: string; line: number } | null {
+  const match = /^(.*):(\d+)$/.exec(identifier);
+  if (!match) {
+    return null;
+  }
+  return { filePath: match[1], line: Number(match[2]) };
 }
 
 function clusterName(filePath: string): string {
