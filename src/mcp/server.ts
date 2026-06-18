@@ -32,7 +32,8 @@ import {
   semanticSearch,
   searchSymbols,
   traceSymbol,
-  unpackGraph
+  unpackGraph,
+  vectorSearch
 } from "../core/api.js";
 import { agentProfiles, installAgentSetup, type AgentId } from "../core/agents.js";
 import type { IndexResult } from "../core/types.js";
@@ -321,6 +322,19 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ query, limit, dbPath }) => text(semanticSearch(query, limit, dbPath))
+  );
+
+  server.registerTool(
+    "vector_search",
+    {
+      description: "Search indexed symbols with deterministic local vector embeddings over names, paths, signatures, metadata, and symbol bodies.",
+      inputSchema: {
+        query: z.union([z.string(), z.array(z.string())]).describe("Concept query, for example ['checkout', 'cart', 'session']."),
+        limit: z.number().int().positive().max(100).optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ query, limit, dbPath }) => text(vectorSearch(query, limit, dbPath))
   );
 
   server.registerTool(

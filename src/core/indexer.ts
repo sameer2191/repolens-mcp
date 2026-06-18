@@ -159,6 +159,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
         for (const edge of httpEdges) store.insertEdge(edge);
         for (const edge of semanticEdges) store.insertEdge(edge);
       });
+      store.rebuildSymbolVectors();
     }
     const counts = store.counts();
 

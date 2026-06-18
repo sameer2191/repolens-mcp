@@ -222,6 +222,12 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(semanticMatches.some((match) => match.symbol.name === "createOrder"));
     assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "SEMANTICALLY_RELATED"));
 
+    const vectorMatches = store.vectorSearch("create order total", 5);
+    assert.ok(vectorMatches.some((match) => match.symbol.name === "createOrder"));
+    assert.ok(vectorMatches[0]?.vector.dimensions === 384);
+    assert.ok(vectorMatches[0]?.vector.nonZero > 0);
+    assert.ok(vectorMatches.some((match) => match.matchedTokens.includes("order")));
+
     const nodeQuery = store.queryGraph("MATCH (f:Function) WHERE f.name = 'createOrder' RETURN f.name,f.filePath LIMIT 5");
     assert.equal(nodeQuery.rows[0]?.["f.name"], "createOrder");
     assert.equal(nodeQuery.rows[0]?.["f.filePath"], "src/orders.ts");
@@ -274,6 +280,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const pack = contextPack("createOrder", 8, 1, dbPath);
     assert.ok(pack.semantic.some((match) => match.symbol.name === "createOrder"));
+    assert.ok(pack.vector.some((match) => match.symbol.name === "createOrder"));
     assert.ok(pack.code.some((match) => match.text.includes("createOrder")));
     assert.ok(pack.snippets.some((snippet) => snippet.symbol?.name === "createOrder"));
     assert.ok(pack.edges.length > 0);

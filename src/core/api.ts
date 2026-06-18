@@ -105,6 +105,10 @@ export function semanticSearch(query: string | string[], limit?: number, dbPath?
   return withStore(dbPath, (store) => store.semanticSearch(query, limit));
 }
 
+export function vectorSearch(query: string | string[], limit?: number, dbPath?: string) {
+  return withStore(dbPath, (store) => store.vectorSearch(query, limit));
+}
+
 export function queryGraph(query: string, limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.queryGraph(query, limit));
 }
@@ -125,10 +129,12 @@ export function contextPack(query: string, limit?: number, context?: number, dbP
   return withStore(dbPath, (store) => {
     const max = Math.min(20, Math.max(1, Math.floor(limit ?? 6)));
     const semantic = store.semanticSearch(query, max);
+    const vector = store.vectorSearch(query, max);
     const graph = store.searchGraph({ query, limit: max });
     const code = store.searchCode(query, max);
     const snippetIds = new Set<string>();
     for (const match of semantic) snippetIds.add(match.symbol.qualifiedName);
+    for (const match of vector) snippetIds.add(match.symbol.qualifiedName);
     for (const match of graph) snippetIds.add(match.symbol.qualifiedName);
     const snippets = [...snippetIds]
       .slice(0, max)
@@ -141,7 +147,7 @@ export function contextPack(query: string, limit?: number, context?: number, dbP
         ...store.traceSymbol(identifier, "inbound", 1)
       ])
       .slice(0, 50);
-    return { query, semantic, graph, code, snippets, edges };
+    return { query, semantic, vector, graph, code, snippets, edges };
   });
 }
 

@@ -92,6 +92,7 @@ export interface TraceIngestResult {
 export interface ContextPack {
   query: string;
   semantic: SemanticSearchMatch[];
+  vector: VectorSearchMatch[];
   graph: GraphSearchMatch[];
   code: CodeMatch[];
   snippets: CodeSnippet[];
@@ -255,6 +256,24 @@ export interface SemanticSearchMatch {
   score: number;
   matchedTokens: string[];
   reasons: string[];
+}
+
+export interface VectorSearchMatch {
+  symbol: SymbolNode;
+  score: number;
+  matchedTokens: string[];
+  vector: {
+    dimensions: number;
+    magnitude: number;
+    nonZero: number;
+  };
+  reasons: string[];
+}
+
+export interface VectorIndexStats {
+  dimensions: number;
+  symbols: number;
+  vectors: number;
 }
 
 export interface GraphPackageExportResult {

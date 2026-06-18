@@ -1,5 +1,5 @@
 import http from "node:http";
-import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, fleetSummary, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols } from "../core/api.js";
+import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, fleetSummary, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols, vectorSearch } from "../core/api.js";
 
 export interface DashboardOptions {
   dbPath?: string;
@@ -41,6 +41,9 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
       } else if (url.pathname === "/api/semantic") {
         const query = url.searchParams.get("q") ?? "";
         sendJson(response, query ? semanticSearch(query, numberParam(url, "limit") ?? 25, options.dbPath) : []);
+      } else if (url.pathname === "/api/vector") {
+        const query = url.searchParams.get("q") ?? "";
+        sendJson(response, query ? vectorSearch(query, numberParam(url, "limit") ?? 25, options.dbPath) : []);
       } else if (url.pathname === "/api/communities") {
         sendJson(response, findCommunities(numberParam(url, "limit") ?? 12, numberParam(url, "minSize") ?? 4, options.dbPath));
       } else if (url.pathname === "/api/dead-code") {
@@ -163,6 +166,7 @@ function dashboardHtml(): string {
         <div class="stack">
           <input id="semantic-query" placeholder="live session repository">
           <button class="primary" id="semantic-run" type="button">Search Meaning</button>
+          <button id="vector-run" type="button">Vector Search</button>
         </div>
       </section>
       <section>
@@ -266,6 +270,7 @@ function dashboardHtml(): string {
     const indexed = document.querySelector('#indexed');
     const search = document.querySelector('#search');
     const semanticRun = document.querySelector('#semantic-run');
+    const vectorRun = document.querySelector('#vector-run');
     const semanticQuery = document.querySelector('#semantic-query');
     const nodeLabels = document.querySelector('#node-labels');
     const edgeTypes = document.querySelector('#edge-types');
@@ -335,6 +340,12 @@ function dashboardHtml(): string {
       const data = await fetch('/api/semantic?' + params({ q, limit: 30 })).then(r => r.json());
       results.innerHTML = data.map(match => item('<b>' + escapeHtml(match.symbol.name) + '</b> <span class="sub">' + escapeHtml(match.symbol.kind) + ' score ' + match.score.toFixed(3) + '</span><div class="path">' + escapeHtml(match.symbol.filePath) + ':' + match.symbol.startLine + '</div><div class="sub">' + escapeHtml(match.reasons.join(' | ')) + '</div>')).join('') || '<div class="sub">No semantic matches.</div>';
     }
+    async function doVectorSearch() {
+      const q = semanticQuery.value.trim();
+      if (!q) { results.innerHTML = '<div class="sub">Enter a vector query.</div>'; return; }
+      const data = await fetch('/api/vector?' + params({ q, limit: 30 })).then(r => r.json());
+      results.innerHTML = data.map(match => item('<b>' + escapeHtml(match.symbol.name) + '</b> <span class="sub">' + escapeHtml(match.symbol.kind) + ' vector ' + match.score.toFixed(3) + '</span><div class="path">' + escapeHtml(match.symbol.filePath) + ':' + match.symbol.startLine + '</div><div class="sub">' + escapeHtml(match.reasons.join(' | ')) + '</div><div class="sub">' + fmt.format(match.vector.nonZero) + ' nonzero / ' + fmt.format(match.vector.dimensions) + ' dims</div>')).join('') || '<div class="sub">No vector matches.</div>';
+    }
     async function doGraphSearch() {
       const query = params({ q: graphQuery.value, kind: graphKind.value, relationship: graphRel.value, file: graphFile.value, minDegree: graphDegree.value, limit: 30 });
       const data = await fetch('/api/search-graph?' + query).then(r => r.json());
@@ -387,6 +398,7 @@ function dashboardHtml(): string {
     }
     search.addEventListener('input', () => { clearTimeout(window.__t); window.__t = setTimeout(doSearch, 120); });
     semanticRun.addEventListener('click', doSemanticSearch);
+    vectorRun.addEventListener('click', doVectorSearch);
     graphRun.addEventListener('click', doGraphSearch);
     cypherRun.addEventListener('click', doCypherQuery);
     window.addEventListener('resize', resizeGraph);

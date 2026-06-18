@@ -33,7 +33,8 @@ import {
   semanticSearch,
   searchSymbols,
   traceSymbol,
-  unpackGraph
+  unpackGraph,
+  vectorSearch
 } from "./core/api.js";
 import { agentProfiles, installAgentSetup, uninstallAgentSetup, type AgentId } from "./core/agents.js";
 import type { ReportFormat } from "./core/report.js";
@@ -173,6 +174,10 @@ async function main(): Promise<void> {
       break;
     case "semantic":
       print(semanticSearch(required(args.positional[0], "query"), numberFlag(args, "limit"), stringFlag(args, "db")));
+      break;
+    case "vector":
+    case "vector-search":
+      print(vectorSearch(required(args.positional[0], "query"), numberFlag(args, "limit"), stringFlag(args, "db")));
       break;
     case "context-pack":
       print(contextPack(required(args.positional[0], "query"), numberFlag(args, "limit"), numberFlag(args, "context"), stringFlag(args, "db")));
@@ -476,6 +481,7 @@ Usage:
   repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--max-file-bytes n] [--label name]
   repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern regex] [--file-pattern src/] [--min-degree n] [--db path]
   repolens-mcp semantic "meaningful concept query" [--db path] [--limit n]
+  repolens-mcp vector "meaningful concept query" [--db path] [--limit n]
   repolens-mcp context-pack "meaningful concept query" [--db path] [--limit n] [--context n]
   repolens-mcp query-graph "MATCH (a)-[:CALLS]->(b) RETURN a.name,b.name LIMIT 5" [--db path]
   repolens-mcp dead-code [--db path] [--limit n]

@@ -1,6 +1,7 @@
 import type { Edge, SymbolNode } from "./types.js";
 
 const SEMANTIC_KINDS = new Set(["function", "method", "class", "interface", "type", "struct", "enum", "protocol", "actor", "route"]);
+const DEFAULT_VECTOR_DIMENSIONS = 384;
 const STOP_WORDS = new Set([
   "the",
   "and",
@@ -47,6 +48,13 @@ interface CandidateScore {
   matchedTokens: string[];
 }
 
+export interface LocalVector {
+  dimensions: number;
+  weights: Array<[number, number]>;
+  magnitude: number;
+  tokens: string[];
+}
+
 export function buildSemanticEdges(symbols: SymbolNode[], fileContents: Map<string, string>, maxEdges = 6000): Edge[] {
   const features = symbols
     .filter((symbol) => SEMANTIC_KINDS.has(symbol.kind) && symbol.language !== "unknown")
@@ -75,14 +83,18 @@ export function buildSemanticEdges(symbols: SymbolNode[], fileContents: Map<stri
 }
 
 export function semanticTokens(value: string): Set<string> {
+  return new Set(semanticTokenList(value));
+}
+
+export function semanticTokenList(value: string): string[] {
   const normalized = value
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[_./:-]+/g, " ")
     .toLowerCase();
-  const tokens = new Set<string>();
+  const tokens: string[] = [];
   for (const token of normalized.match(/[a-z][a-z0-9]{2,}/g) ?? []) {
     if (!STOP_WORDS.has(token)) {
-      tokens.add(stemToken(token));
+      tokens.push(stemToken(token));
     }
   }
   return tokens;
@@ -96,6 +108,49 @@ export function semanticScore(queryTokens: Set<string>, targetTokens: Set<string
   const precision = matchedTokens.length / Math.max(1, queryTokens.size);
   const coverage = matchedTokens.length / Math.sqrt(Math.max(1, targetTokens.size));
   return { score: Number((precision * 0.7 + coverage * 0.3).toFixed(4)), matchedTokens };
+}
+
+export function semanticVector(value: string, dimensions = DEFAULT_VECTOR_DIMENSIONS): LocalVector {
+  const safeDimensions = Math.max(32, Math.min(2048, Math.floor(dimensions)));
+  const counts = new Map<string, number>();
+  for (const token of semanticTokenList(value)) {
+    counts.set(token, (counts.get(token) ?? 0) + 1);
+  }
+
+  const buckets = new Map<number, number>();
+  for (const [token, count] of counts) {
+    const hash = hashToken(token);
+    const bucket = Math.abs(hash) % safeDimensions;
+    const sign = hash & 1 ? -1 : 1;
+    const lengthBoost = token.length >= 8 ? 1.15 : 1;
+    const weight = sign * (1 + Math.log(count)) * lengthBoost;
+    buckets.set(bucket, (buckets.get(bucket) ?? 0) + weight);
+  }
+
+  const weights = [...buckets.entries()]
+    .filter(([, weight]) => Math.abs(weight) > 0.000001)
+    .sort((a, b) => a[0] - b[0])
+    .map(([bucket, weight]) => [bucket, Number(weight.toFixed(6))] as [number, number]);
+  const magnitude = Math.sqrt(weights.reduce((sum, [, weight]) => sum + weight * weight, 0));
+
+  return {
+    dimensions: safeDimensions,
+    weights,
+    magnitude: Number(magnitude.toFixed(6)),
+    tokens: [...counts.keys()].sort()
+  };
+}
+
+export function cosineSimilarity(query: LocalVector, target: LocalVector): number {
+  if (query.magnitude === 0 || target.magnitude === 0 || query.dimensions !== target.dimensions) {
+    return 0;
+  }
+  const targetWeights = new Map(target.weights);
+  let dot = 0;
+  for (const [bucket, weight] of query.weights) {
+    dot += weight * (targetWeights.get(bucket) ?? 0);
+  }
+  return dot / Math.max(0.000001, query.magnitude * target.magnitude);
 }
 
 function featureForSymbol(symbol: SymbolNode, content: string): SymbolFeature {
@@ -188,4 +243,13 @@ function stemToken(token: string): string {
   if (token.endsWith("ed") && token.length > 4) return token.slice(0, -2);
   if (token.endsWith("s") && token.length > 4) return token.slice(0, -1);
   return token;
+}
+
+function hashToken(token: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < token.length; index += 1) {
+    hash ^= token.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash | 0;
 }

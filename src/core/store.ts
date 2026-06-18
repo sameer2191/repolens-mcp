@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { semanticScore, semanticTokens } from "./semantic.js";
+import { cosineSimilarity, semanticScore, semanticTokens, semanticVector, type LocalVector } from "./semantic.js";
 import type {
   ArchitectureSummary,
   ArchitectureRecommendation,
@@ -28,7 +28,9 @@ import type {
   SecretFinding,
   SecretScanOptions,
   SecretScanResult,
-  TraceIngestResult
+  TraceIngestResult,
+  VectorIndexStats,
+  VectorSearchMatch
 } from "./types.js";
 
 interface CountRow {
@@ -59,6 +61,15 @@ interface FileRow {
   indexed_at: string;
   skipped: number;
   skip_reason: string | null;
+}
+
+interface SymbolVectorRow {
+  qualified_name: string;
+  dimensions: number;
+  magnitude: number;
+  weights: string;
+  tokens: string;
+  updated_at: string;
 }
 
 interface ParsedGraphQuery {
@@ -168,6 +179,7 @@ export class MemoryStore {
     this.db.prepare("DELETE FROM runs WHERE root = ?").run(root);
     this.db.prepare("DELETE FROM files").run();
     this.db.prepare("DELETE FROM symbols").run();
+    this.db.prepare("DELETE FROM symbol_vectors").run();
     this.db.prepare("DELETE FROM edges").run();
     this.db.prepare("DELETE FROM code_lines").run();
     this.deleteSearchRows();
@@ -296,8 +308,10 @@ export class MemoryStore {
       .prepare("SELECT qualified_name FROM symbols WHERE file_path = ?")
       .all(filePath) as Array<{ qualified_name: string }>;
     const deleteEdges = this.db.prepare("DELETE FROM edges WHERE source = ? OR target = ?");
+    const deleteVector = this.db.prepare("DELETE FROM symbol_vectors WHERE qualified_name = ?");
     for (const row of rows) {
       deleteEdges.run(row.qualified_name, row.qualified_name);
+      deleteVector.run(row.qualified_name);
     }
     this.db.prepare("DELETE FROM symbols WHERE file_path = ?").run(filePath);
     this.db.prepare("DELETE FROM code_lines WHERE file_path = ?").run(filePath);
@@ -556,6 +570,19 @@ export class MemoryStore {
     return rows.map((row) => row.text).join("\n");
   }
 
+  private vectorText(symbol: SymbolNode): string {
+    return [
+      symbol.kind,
+      symbol.name,
+      symbol.qualifiedName,
+      symbol.filePath,
+      symbol.signature ?? "",
+      symbol.doc ?? "",
+      JSON.stringify(symbol.metadata ?? {}),
+      this.codeWindow(symbol.filePath, symbol.startLine, symbol.endLine)
+    ].join("\n");
+  }
+
   traceSymbol(name: string, direction: "inbound" | "outbound", depth = 2): Edge[] {
     const start = this.getSymbol(name);
     if (!start) {
@@ -740,6 +767,101 @@ export class MemoryStore {
         return { symbol, score, matchedTokens: scored.matchedTokens, reasons };
       })
       .filter((match) => match.score > 0)
+      .sort((a, b) => b.score - a.score || a.symbol.qualifiedName.localeCompare(b.symbol.qualifiedName))
+      .slice(0, clampPositive(limit, 1, 100));
+  }
+
+  rebuildSymbolVectors(dimensions = 384): VectorIndexStats {
+    const vectorDimensions = Math.max(32, Math.min(2048, Math.floor(dimensions)));
+    const rows = this.db
+      .prepare(
+        `SELECT *
+         FROM symbols
+         WHERE kind NOT IN ('file', 'dependency', 'package', 'lockfile', 'locked_dependency')
+         ORDER BY file_path ASC, start_line ASC
+         LIMIT 20000`
+      )
+      .all() as unknown as SymbolRow[];
+    const insert = this.db.prepare(
+      `INSERT INTO symbol_vectors(qualified_name, dimensions, magnitude, weights, tokens, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(qualified_name) DO UPDATE SET
+         dimensions=excluded.dimensions,
+         magnitude=excluded.magnitude,
+         weights=excluded.weights,
+         tokens=excluded.tokens,
+         updated_at=excluded.updated_at`
+    );
+    const updatedAt = new Date().toISOString();
+    let vectors = 0;
+
+    this.transaction(() => {
+      this.db.prepare("DELETE FROM symbol_vectors").run();
+      for (const row of rows) {
+        const symbol = rowToSymbol(row);
+        const vector = semanticVector(this.vectorText(symbol), vectorDimensions);
+        if (vector.magnitude === 0 || vector.weights.length === 0) {
+          continue;
+        }
+        insert.run(symbol.qualifiedName, vector.dimensions, vector.magnitude, JSON.stringify(vector.weights), JSON.stringify(vector.tokens), updatedAt);
+        vectors += 1;
+      }
+    });
+
+    return { dimensions: vectorDimensions, symbols: rows.length, vectors };
+  }
+
+  vectorSearch(query: string | string[], limit = 20): VectorSearchMatch[] {
+    const queryText = Array.isArray(query) ? query.join(" ") : query;
+    const queryVector = semanticVector(queryText);
+    if (queryVector.magnitude === 0 || queryVector.weights.length === 0) {
+      return [];
+    }
+    this.ensureSymbolVectors(queryVector.dimensions);
+
+    const rows = this.db
+      .prepare(
+        `SELECT s.*, v.dimensions, v.magnitude, v.weights, v.tokens, v.updated_at
+         FROM symbol_vectors v
+         JOIN symbols s ON s.qualified_name = v.qualified_name
+         WHERE v.dimensions = ?
+         ORDER BY s.exported DESC, s.name ASC
+         LIMIT 20000`
+      )
+      .all(queryVector.dimensions) as unknown as Array<SymbolRow & SymbolVectorRow>;
+    const queryTokens = new Set(queryVector.tokens);
+
+    return rows
+      .map((row) => {
+        const symbol = rowToSymbol(row);
+        const vector = rowToVector(row);
+        const targetTokens = new Set(vector.tokens);
+        const matchedTokens = [...queryTokens].filter((token) => targetTokens.has(token)).sort();
+        const cosine = cosineSimilarity(queryVector, vector);
+        const nameTokens = semanticTokens(symbol.name);
+        const nameHits = [...queryTokens].filter((token) => nameTokens.has(token));
+        const pathHits = [...queryTokens].filter((token) => symbol.filePath.toLowerCase().includes(token));
+        const boost = nameHits.length * 0.03 + pathHits.length * 0.015 + (symbol.exported ? 0.01 : 0);
+        const score = Number(Math.min(1, Math.max(0, cosine + boost)).toFixed(4));
+        const reasons = [
+          `cosine ${Math.max(0, cosine).toFixed(3)}`,
+          ...(nameHits.length ? [`name vector matched ${nameHits.join(", ")}`] : []),
+          ...(pathHits.length ? [`path vector matched ${pathHits.join(", ")}`] : []),
+          ...(matchedTokens.length ? [`overlap ${matchedTokens.slice(0, 10).join(", ")}`] : [])
+        ];
+        return {
+          symbol,
+          score,
+          matchedTokens,
+          vector: {
+            dimensions: vector.dimensions,
+            magnitude: vector.magnitude,
+            nonZero: vector.weights.length
+          },
+          reasons
+        };
+      })
+      .filter((match) => match.score > 0.04 && (match.matchedTokens.length > 0 || match.score > 0.2))
       .sort((a, b) => b.score - a.score || a.symbol.qualifiedName.localeCompare(b.symbol.qualifiedName))
       .slice(0, clampPositive(limit, 1, 100));
   }
@@ -1578,6 +1700,15 @@ export class MemoryStore {
       CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source);
       CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target);
       CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(type);
+      CREATE TABLE IF NOT EXISTS symbol_vectors (
+        qualified_name TEXT PRIMARY KEY,
+        dimensions INTEGER NOT NULL,
+        magnitude REAL NOT NULL,
+        weights TEXT NOT NULL,
+        tokens TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_symbol_vectors_dimensions ON symbol_vectors(dimensions);
       CREATE TABLE IF NOT EXISTS code_lines (
         file_path TEXT NOT NULL,
         line INTEGER NOT NULL,
@@ -1629,6 +1760,15 @@ export class MemoryStore {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  private ensureSymbolVectors(dimensions: number): void {
+    const row = this.db.prepare("SELECT count(*) AS count, min(dimensions) AS min_dimensions, max(dimensions) AS max_dimensions FROM symbol_vectors").get() as
+      | { count: number; min_dimensions: number | null; max_dimensions: number | null }
+      | undefined;
+    if (!row?.count || row.min_dimensions !== dimensions || row.max_dimensions !== dimensions) {
+      this.rebuildSymbolVectors(dimensions);
     }
   }
 
@@ -1749,6 +1889,35 @@ function rowToSymbol(row: SymbolRow): SymbolNode {
     exported: row.exported === 1,
     metadata: parseMetadata(row.metadata)
   };
+}
+
+function rowToVector(row: SymbolVectorRow): LocalVector {
+  return {
+    dimensions: row.dimensions,
+    magnitude: row.magnitude,
+    weights: parseVectorWeights(row.weights),
+    tokens: parseStringArray(row.tokens)
+  };
+}
+
+function parseVectorWeights(value: string): Array<[number, number]> {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter(
+        (item): item is [number, number] =>
+          Array.isArray(item) &&
+          item.length === 2 &&
+          Number.isFinite(item[0]) &&
+          Number.isFinite(item[1])
+      )
+      .map(([bucket, weight]) => [Math.floor(bucket), weight]);
+  } catch {
+    return [];
+  }
 }
 
 function parseMetadata(value: string): Record<string, unknown> {
