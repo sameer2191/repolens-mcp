@@ -261,6 +261,71 @@ export function addCallEdges(symbols: SymbolNode[], fileContents: Map<string, st
   return edges;
 }
 
+export function addTypeRelationEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
+  const typeSymbols = symbols.filter(isTypeSymbol);
+  if (typeSymbols.length === 0) {
+    return [];
+  }
+
+  const typeLookup = new Map<string, SymbolNode[]>();
+  for (const symbol of typeSymbols) {
+    typeLookup.set(symbol.name, [...(typeLookup.get(symbol.name) ?? []), symbol]);
+  }
+
+  const edges: Edge[] = [];
+  const seen = new Set<string>();
+  const structuralTargets = new Map<string, Set<string>>();
+  const addEdge = (source: SymbolNode, target: SymbolNode, type: "INHERITS" | "IMPLEMENTS" | "USES_TYPE", weight: number, metadata?: Record<string, unknown>) => {
+    if (source.qualifiedName === target.qualifiedName) {
+      return;
+    }
+    const key = `${source.qualifiedName}\0${target.qualifiedName}\0${type}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    edges.push({ source: source.qualifiedName, target: target.qualifiedName, type, weight, metadata });
+    if (type !== "USES_TYPE") {
+      const targets = structuralTargets.get(source.qualifiedName) ?? new Set<string>();
+      targets.add(target.qualifiedName);
+      structuralTargets.set(source.qualifiedName, targets);
+    }
+  };
+
+  for (const source of typeSymbols) {
+    const declaration = declarationTextForSymbol(source, fileContents);
+    for (const relation of declarationTypeRelations(source, declaration)) {
+      for (const targetName of relation.targets) {
+        const target = resolveTypeSymbol(targetName, source, typeLookup);
+        if (!target) {
+          continue;
+        }
+        const type = relation.type ?? structuralRelationFor(source, target);
+        addEdge(source, target, type, type === "INHERITS" ? 0.95 : 0.9, { relation: relation.reason, targetName });
+      }
+    }
+  }
+
+  for (const source of symbols.filter(shouldScanTypeUses)) {
+    const text = textForSymbol(source, fileContents);
+    if (!text) {
+      continue;
+    }
+    for (const typeName of extractReferencedTypeNames(text, typeLookup)) {
+      if (typeName === source.name) {
+        continue;
+      }
+      const target = resolveTypeSymbol(typeName, source, typeLookup);
+      if (!target || structuralTargets.get(source.qualifiedName)?.has(target.qualifiedName)) {
+        continue;
+      }
+      addEdge(source, target, "USES_TYPE", source.filePath === target.filePath ? 0.75 : 0.6, { targetName: typeName });
+    }
+  }
+
+  return edges;
+}
+
 export function addHttpEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
   const routes = symbols.filter((symbol) => symbol.kind === "route" && typeof symbol.metadata?.path === "string");
   const httpCalls = symbols.filter((symbol) => symbol.kind === "http_call" && typeof symbol.metadata?.path === "string");
@@ -1789,6 +1854,148 @@ function isCallableName(name: string): boolean {
   }
   const lowered = name.toLowerCase();
   return !ignoredCallableNames.has(lowered);
+}
+
+function isTypeSymbol(symbol: SymbolNode): boolean {
+  return ["class", "interface", "type", "struct", "enum", "protocol", "actor", "trait"].includes(symbol.kind);
+}
+
+function shouldScanTypeUses(symbol: SymbolNode): boolean {
+  return ["function", "method", "class", "interface", "type", "struct", "enum", "protocol", "actor", "trait"].includes(symbol.kind);
+}
+
+function declarationTextForSymbol(symbol: SymbolNode, fileContents: Map<string, string>): string {
+  const content = fileContents.get(symbol.filePath);
+  if (!content) {
+    return symbol.signature ?? "";
+  }
+  const lines = content.split(/\r?\n/);
+  const declaration: string[] = [];
+  for (let index = Math.max(0, symbol.startLine - 1); index < Math.min(lines.length, symbol.startLine + 8); index += 1) {
+    const line = lines[index];
+    declaration.push(line);
+    if (line.includes("{") || line.trimEnd().endsWith(";")) {
+      break;
+    }
+  }
+  return declaration.join("\n");
+}
+
+function textForSymbol(symbol: SymbolNode, fileContents: Map<string, string>): string {
+  const content = fileContents.get(symbol.filePath);
+  if (!content) {
+    return symbol.signature ?? "";
+  }
+  const lines = content.split(/\r?\n/);
+  return lines
+    .slice(Math.max(0, symbol.startLine - 1), Math.min(lines.length, symbol.endLine))
+    .join("\n");
+}
+
+function declarationTypeRelations(symbol: SymbolNode, declaration: string): Array<{ type?: "INHERITS" | "IMPLEMENTS"; targets: string[]; reason: string }> {
+  const compact = declaration.replace(/\s+/g, " ").trim();
+  const relations: Array<{ type?: "INHERITS" | "IMPLEMENTS"; targets: string[]; reason: string }> = [];
+
+  const classExtends = /\bclass\s+[A-Za-z_$][\w$]*(?:<[^>{}]+>)?\s+extends\s+([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?(?:<[^>{}]+>)?)/.exec(compact);
+  if (classExtends?.[1]) {
+    relations.push({ type: "INHERITS", targets: typeNamesFromList(classExtends[1]), reason: "class extends" });
+  }
+  const classImplements = /\bclass\s+[A-Za-z_$][\w$]*(?:<[^>{}]+>)?(?:\s+extends\s+[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?(?:<[^>{}]+>)?)?\s+implements\s+([^{}]+)/.exec(compact);
+  if (classImplements?.[1]) {
+    relations.push({ type: "IMPLEMENTS", targets: typeNamesFromList(classImplements[1]), reason: "class implements" });
+  }
+  const interfaceExtends = /\binterface\s+[A-Za-z_$][\w$]*(?:<[^>{}]+>)?\s+extends\s+([^{}]+)/.exec(compact);
+  if (interfaceExtends?.[1]) {
+    relations.push({ type: "INHERITS", targets: typeNamesFromList(interfaceExtends[1]), reason: "interface extends" });
+  }
+  const pythonBases = /\bclass\s+[A-Za-z_]\w*\(([^)]*)\)/.exec(compact);
+  if (pythonBases?.[1]) {
+    relations.push({ type: "INHERITS", targets: typeNamesFromList(pythonBases[1]), reason: "python base class" });
+  }
+  const rustTraitBounds = /\btrait\s+[A-Za-z_]\w*\s*:\s*([^{}]+)/.exec(compact);
+  if (rustTraitBounds?.[1]) {
+    relations.push({ type: "INHERITS", targets: typeNamesFromList(rustTraitBounds[1]), reason: "trait bound" });
+  }
+  if (["swift", "kotlin"].includes(symbol.language) || ["struct", "enum", "protocol", "actor"].includes(symbol.kind)) {
+    const swiftConformance = /\b(?:class|struct|enum|actor|protocol)\s+[A-Za-z_]\w*(?:<[^>{}]+>)?\s*:\s*([^{}]+)/.exec(compact);
+    if (swiftConformance?.[1]) {
+      relations.push({ targets: typeNamesFromList(swiftConformance[1]), reason: "swift inheritance or conformance" });
+    }
+  }
+
+  return relations.filter((relation) => relation.targets.length > 0);
+}
+
+function structuralRelationFor(source: SymbolNode, target: SymbolNode): "INHERITS" | "IMPLEMENTS" {
+  if (source.kind === "class" && target.kind !== "protocol" && target.kind !== "interface" && target.kind !== "trait") {
+    return "INHERITS";
+  }
+  if (source.kind === "protocol" || source.kind === "interface" || source.kind === "trait") {
+    return "INHERITS";
+  }
+  return "IMPLEMENTS";
+}
+
+function typeNamesFromList(value: string): string[] {
+  const names = new Set<string>();
+  for (const segment of value.split(/[,|+&]/)) {
+    const cleaned = segment
+      .replace(/<[^<>]*>/g, " ")
+      .replace(/\bwhere\b[\s\S]*$/i, " ")
+      .trim();
+    const match = /(?:[A-Za-z_$][\w$]*\.)*([A-Za-z_$][\w$]*)/.exec(cleaned);
+    if (match?.[1] && !ignoredTypeNames.has(match[1])) {
+      names.add(match[1]);
+    }
+  }
+  return [...names];
+}
+
+function extractReferencedTypeNames(text: string, typeLookup: Map<string, SymbolNode[]>): string[] {
+  const cleaned = text.replace(/(["'`])(?:\\.|(?!\1)[\s\S])*\1/g, " ");
+  const names = new Set<string>();
+  for (const match of cleaned.matchAll(/\b[A-Z][A-Za-z0-9_$]*\b/g)) {
+    const name = match[0];
+    if (typeLookup.has(name) && !ignoredTypeNames.has(name)) {
+      names.add(name);
+    }
+  }
+  return [...names];
+}
+
+const ignoredTypeNames = new Set([
+  "Array",
+  "Boolean",
+  "Date",
+  "Error",
+  "False",
+  "Map",
+  "None",
+  "Number",
+  "Object",
+  "Partial",
+  "Promise",
+  "Record",
+  "Request",
+  "Response",
+  "Result",
+  "Set",
+  "String",
+  "True",
+  "Void"
+]);
+
+function resolveTypeSymbol(name: string, source: SymbolNode, typeLookup: Map<string, SymbolNode[]>): SymbolNode | null {
+  const candidates = typeLookup.get(name);
+  if (!candidates?.length) {
+    return null;
+  }
+  return (
+    candidates.find((candidate) => candidate.filePath === source.filePath) ??
+    candidates.find((candidate) => candidate.exported) ??
+    candidates[0] ??
+    null
+  );
 }
 
 function callsName(content: string, name: string): boolean {

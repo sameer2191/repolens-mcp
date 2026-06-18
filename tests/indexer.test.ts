@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { architectureReport, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
-import { extractFromFile } from "../src/core/extractor.js";
+import { addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
@@ -91,6 +91,43 @@ paths:
   assert.ok(openapi.symbols.some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/:id" && symbol.metadata?.protocol === "openapi"));
 });
 
+test("extracts typed inheritance, implementation, and usage edges", () => {
+  const content = `
+export interface Order {
+  id: string;
+}
+
+export interface PersistedOrder extends Order {
+  savedAt: Date;
+}
+
+export interface OrderRepository {
+  save(order: Order): PersistedOrder;
+}
+
+export class BaseRepository {}
+
+export class MemoryOrderRepository extends BaseRepository implements OrderRepository {
+  save(order: Order): PersistedOrder {
+    return { ...order, savedAt: new Date() };
+  }
+}
+
+export function serializeOrder(input: Partial<Order>): PersistedOrder {
+  return { id: input.id ?? "new", savedAt: new Date() };
+}
+`;
+  const extracted = extractFromFile("src/repository.ts", "typescript", content);
+  const edges = addTypeRelationEdges(extracted.symbols, new Map([["src/repository.ts", content]]));
+  const symbol = (name: string) => extracted.symbols.find((item) => item.name === name)?.qualifiedName;
+
+  assert.ok(edges.some((edge) => edge.type === "INHERITS" && edge.source === symbol("PersistedOrder") && edge.target === symbol("Order")));
+  assert.ok(edges.some((edge) => edge.type === "INHERITS" && edge.source === symbol("MemoryOrderRepository") && edge.target === symbol("BaseRepository")));
+  assert.ok(edges.some((edge) => edge.type === "IMPLEMENTS" && edge.source === symbol("MemoryOrderRepository") && edge.target === symbol("OrderRepository")));
+  assert.ok(edges.some((edge) => edge.type === "USES_TYPE" && edge.source === symbol("serializeOrder") && edge.target === symbol("Order")));
+  assert.ok(!edges.some((edge) => edge.type === "IMPLEMENTS" && edge.source === symbol("BaseRepository")));
+});
+
 test("indexes a TypeScript repo with symbols, routes, search, and architecture", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-test-"));
   const dbPath = path.join(tmp, "memory.db");
@@ -161,6 +198,10 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CONFIGURES"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "EMITS"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "LISTENS_ON"));
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "USES_TYPE"));
+
+    const typeUsage = store.queryGraph("MATCH (a)-[r:USES_TYPE]->(b) WHERE b.name = 'Order' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(typeUsage.rows.some((row) => row["b.name"] === "Order" && row["r.type"] === "USES_TYPE"));
 
     const graphMatches = store.searchGraph({ query: "createOrder", minDegree: 1 });
     assert.equal(graphMatches[0]?.symbol.name, "createOrder");

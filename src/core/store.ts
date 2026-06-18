@@ -326,7 +326,9 @@ export class MemoryStore {
   }
 
   deleteDerivedEdges(): void {
-    this.db.prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL', 'HTTP_CALLS', 'IMPORTS_FILE', 'SIMILAR_TO', 'SEMANTICALLY_RELATED')").run();
+    this.db
+      .prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL', 'HTTP_CALLS', 'IMPORTS_FILE', 'INHERITS', 'IMPLEMENTS', 'USES_TYPE', 'SIMILAR_TO', 'SEMANTICALLY_RELATED')")
+      .run();
   }
 
   counts(): { symbols: number; edges: number } {
@@ -2279,6 +2281,9 @@ function communityEdgeWeight(type: string, weight: number): number {
     HTTP_CALLS: 2.4,
     CALLS_LOCAL: 2,
     CALLS: 1.6,
+    INHERITS: 1.55,
+    IMPLEMENTS: 1.45,
+    USES_TYPE: 1.2,
     IMPORTS: 1.1,
     DEFINES: 0.9,
     DECLARES: 0.8,
