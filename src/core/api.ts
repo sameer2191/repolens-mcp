@@ -13,7 +13,7 @@ import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
 import { watchRepository } from "./watcher.js";
 import type { ArchitectureReportOptions } from "./report.js";
-import type { ContextPack, DecisionRecord, GraphSearchOptions, IndexOptions, RuntimeTrace, WatchIndexOptions } from "./types.js";
+import type { ContextPack, DecisionRecord, GraphSearchOptions, IndexOptions, RuntimeTrace, SecretScanOptions, WatchIndexOptions } from "./types.js";
 
 export async function runIndex(options: IndexOptions) {
   const result = await indexRepository(options);
@@ -67,6 +67,10 @@ export function getArchitecture(dbPath?: string) {
 
 export function searchCode(query: string, limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.searchCode(query, limit));
+}
+
+export function scanSecrets(options: SecretScanOptions = {}, dbPath?: string) {
+  return withStore(dbPath, (store) => store.scanSecrets(options));
 }
 
 export function searchSymbols(query: string, kind?: string, limit?: number, dbPath?: string) {

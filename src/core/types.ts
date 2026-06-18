@@ -114,6 +114,40 @@ export interface CodeSnippet {
   lines: Array<{ line: number; text: string; highlight: boolean }>;
 }
 
+export type SecretConfidence = "low" | "medium" | "high";
+
+export interface SecretScanOptions {
+  limit?: number;
+  includeTests?: boolean;
+  minConfidence?: SecretConfidence;
+}
+
+export interface SecretFinding {
+  filePath: string;
+  language: Language;
+  line: number;
+  kind: string;
+  label: string;
+  severity: "low" | "medium" | "high";
+  confidence: SecretConfidence;
+  evidence: string;
+  redacted: string;
+  reason: string;
+}
+
+export interface SecretScanResult {
+  scannedLines: number;
+  findings: SecretFinding[];
+  totals: {
+    findings: number;
+    high: number;
+    medium: number;
+    low: number;
+    files: number;
+  };
+  risks: string[];
+}
+
 export interface ArchitectureSummary {
   root: string;
   indexedAt: string;

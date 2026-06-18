@@ -25,6 +25,7 @@ import {
   queryGraph,
   rememberDecision,
   runIndex,
+  scanSecrets,
   searchCode,
   searchGraph,
   semanticSearch,
@@ -175,6 +176,20 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ query, limit, dbPath }) => text(searchCode(query, limit, dbPath))
+  );
+
+  server.registerTool(
+    "scan_secrets",
+    {
+      description: "Scan indexed source and config lines for redacted secret, token, credential, and sensitive environment patterns.",
+      inputSchema: {
+        limit: z.number().int().positive().max(500).optional(),
+        includeTests: z.boolean().optional().describe("Include test, spec, fixture, and mock paths. Defaults to false."),
+        minConfidence: z.enum(["low", "medium", "high"]).optional().describe("Minimum confidence to return. Defaults to low."),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ limit, includeTests, minConfidence, dbPath }) => text(scanSecrets({ limit, includeTests, minConfidence }, dbPath))
   );
 
   server.registerTool(

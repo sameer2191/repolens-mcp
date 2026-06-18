@@ -23,6 +23,10 @@ import type {
   SemanticSearchMatch,
   SymbolNode,
   RuntimeTrace,
+  SecretConfidence,
+  SecretFinding,
+  SecretScanOptions,
+  SecretScanResult,
   TraceIngestResult
 } from "./types.js";
 
@@ -379,6 +383,74 @@ export class MemoryStore {
       text: row.text,
       score: row.text.toLowerCase().includes(lowered) ? 1 : 0.5
     }));
+  }
+
+  scanSecrets(options: SecretScanOptions = {}): SecretScanResult {
+    const limit = clampPositive(options.limit ?? 50, 1, 500);
+    const minConfidence = options.minConfidence ?? "low";
+    const minRank = secretConfidenceRank(minConfidence);
+    const includeTests = options.includeTests ?? false;
+    const rows = this.db
+      .prepare(
+        `SELECT code_lines.file_path, files.language, code_lines.line, code_lines.text
+         FROM code_lines
+         JOIN files ON files.path = code_lines.file_path
+         WHERE files.skipped = 0
+         ORDER BY code_lines.file_path ASC, code_lines.line ASC`
+      )
+      .all() as Array<{
+      file_path: string;
+      language: Language;
+      line: number;
+      text: string;
+    }>;
+
+    const findings: SecretFinding[] = [];
+    let scannedLines = 0;
+    for (const row of rows) {
+      if (!includeTests && isTestLikePath(row.file_path)) {
+        continue;
+      }
+      scannedLines += 1;
+      for (const finding of detectSecretFindings({
+        filePath: row.file_path,
+        language: row.language,
+        line: row.line,
+        text: row.text
+      })) {
+        if (secretConfidenceRank(finding.confidence) >= minRank) {
+          findings.push(finding);
+        }
+      }
+    }
+
+    findings.sort(
+      (left, right) =>
+        secretConfidenceRank(right.confidence) - secretConfidenceRank(left.confidence) ||
+        secretSeverityRank(right.severity) - secretSeverityRank(left.severity) ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.line - right.line
+    );
+
+    const totals = {
+      findings: findings.length,
+      high: findings.filter((finding) => finding.severity === "high").length,
+      medium: findings.filter((finding) => finding.severity === "medium").length,
+      low: findings.filter((finding) => finding.severity === "low").length,
+      files: new Set(findings.map((finding) => finding.filePath)).size
+    };
+    const risks: string[] = [];
+    if (totals.high > 0) risks.push(`${totals.high} high-severity secret patterns`);
+    if (totals.medium > 0) risks.push(`${totals.medium} medium-severity secret patterns`);
+    if (totals.low > 0) risks.push(`${totals.low} low-confidence sensitive references`);
+    if (findings.length > limit) risks.push(`showing ${limit} of ${findings.length} findings`);
+
+    return {
+      scannedLines,
+      findings: findings.slice(0, limit),
+      totals,
+      risks
+    };
   }
 
   searchSymbols(query: string, kind?: string, limit = 20): SymbolNode[] {
@@ -1696,6 +1768,283 @@ function clampPositive(value: number, min: number, max: number): number {
     return min;
   }
   return Math.min(max, Math.max(min, Math.floor(value)));
+}
+
+function detectSecretFindings(row: { filePath: string; language: Language; line: number; text: string }): SecretFinding[] {
+  const findings: SecretFinding[] = [];
+  const seen = new Set<string>();
+  const text = row.text;
+
+  const knownPatterns: Array<{
+    kind: string;
+    label: string;
+    severity: "medium" | "high";
+    confidence: SecretConfidence;
+    regex: RegExp;
+    reason: string;
+  }> = [
+    {
+      kind: "aws_access_key",
+      label: "AWS access key id",
+      severity: "high",
+      confidence: "high",
+      regex: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g,
+      reason: "matches an AWS access key id shape"
+    },
+    {
+      kind: "github_token",
+      label: "GitHub token",
+      severity: "high",
+      confidence: "high",
+      regex: /\b(?:gh[pousr]_[A-Za-z0-9_]{30,}|github_pat_[A-Za-z0-9_]{20,}_[A-Za-z0-9_]{20,})\b/g,
+      reason: "matches a GitHub token shape"
+    },
+    {
+      kind: "openai_key",
+      label: "OpenAI API key",
+      severity: "high",
+      confidence: "high",
+      regex: /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g,
+      reason: "matches an OpenAI API key shape"
+    },
+    {
+      kind: "stripe_live_key",
+      label: "Stripe live key",
+      severity: "high",
+      confidence: "high",
+      regex: /\b(?:sk|rk)_live_[A-Za-z0-9]{16,}\b/g,
+      reason: "matches a Stripe live secret key shape"
+    },
+    {
+      kind: "slack_token",
+      label: "Slack token",
+      severity: "high",
+      confidence: "high",
+      regex: /\bxox[baprs]-[A-Za-z0-9-]{16,}\b/g,
+      reason: "matches a Slack token shape"
+    },
+    {
+      kind: "private_key",
+      label: "Private key marker",
+      severity: "high",
+      confidence: "high",
+      regex: /-----BEGIN [A-Z0-9 ]+ PRIVATE KEY-----/g,
+      reason: "contains a private key block marker"
+    },
+    {
+      kind: "jwt",
+      label: "JWT-like token",
+      severity: "medium",
+      confidence: "high",
+      regex: /\beyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}\b/g,
+      reason: "matches a three-part JWT token shape"
+    }
+  ];
+
+  for (const pattern of knownPatterns) {
+    for (const match of text.matchAll(pattern.regex)) {
+      const value = match[0];
+      addSecretFinding(findings, seen, {
+        filePath: row.filePath,
+        language: row.language,
+        line: row.line,
+        kind: pattern.kind,
+        label: pattern.label,
+        severity: pattern.severity,
+        confidence: pattern.confidence,
+        evidence: redactLine(text, value),
+        redacted: redactSecret(value),
+        reason: pattern.reason
+      });
+    }
+  }
+
+  const assignmentPattern =
+    /["']?([A-Za-z0-9_.-]*(?:api[_-]?key|secret|token|password|passwd|pwd|credential|client[_-]?secret|access[_-]?key)[A-Za-z0-9_.-]*)["']?\s*[:=]\s*(["'`]?)([^"'`,\s#;]+)\2/gi;
+  for (const match of text.matchAll(assignmentPattern)) {
+    const key = match[1];
+    const quote = match[2];
+    const value = match[3];
+    if (!value || !isSensitiveAssignmentKey(key) || isPlaceholderSecretValue(value)) {
+      continue;
+    }
+    if (!quote && looksLikeCodeExpression(value)) {
+      continue;
+    }
+    const severity = /password|passwd|pwd|client[_-]?secret|access[_-]?key|secret/i.test(key) ? "medium" : "low";
+    addSecretFinding(findings, seen, {
+      filePath: row.filePath,
+      language: row.language,
+      line: row.line,
+      kind: "sensitive_assignment",
+      label: key,
+      severity,
+      confidence: severity === "low" ? "low" : "medium",
+      evidence: redactLine(text, value),
+      redacted: redactSecret(value),
+      reason: "sensitive-looking key assigned to a literal value"
+    });
+  }
+
+  if (findings.length === 0 && isSensitiveReferenceLine(text) && !isPlaceholderReference(text)) {
+    addSecretFinding(findings, seen, {
+      filePath: row.filePath,
+      language: row.language,
+      line: row.line,
+      kind: "sensitive_reference",
+      label: "sensitive reference",
+      severity: "low",
+      confidence: "low",
+      evidence: clipEvidence(text),
+      redacted: "",
+      reason: "line references sensitive configuration without an obvious literal secret"
+    });
+  }
+
+  return findings;
+}
+
+function addSecretFinding(findings: SecretFinding[], seen: Set<string>, finding: SecretFinding): void {
+  const key = `${finding.filePath}:${finding.line}:${finding.kind}:${finding.redacted}:${finding.evidence}`;
+  if (seen.has(key)) {
+    return;
+  }
+  seen.add(key);
+  findings.push(finding);
+}
+
+function isPlaceholderSecretValue(value: string): boolean {
+  const normalized = value.trim().replace(/^["'`]|["'`]$/g, "");
+  if (normalized.length < 8) {
+    return true;
+  }
+  const lower = normalized.toLowerCase();
+  if (["string", "number", "boolean", "unknown", "object", "undefined", "function"].includes(lower)) {
+    return true;
+  }
+  if (
+    lower.includes("example") ||
+    lower.includes("sample") ||
+    lower.includes("placeholder") ||
+    lower.includes("dummy") ||
+    lower.includes("minimum") ||
+    (lower.includes("min-") && lower.includes("char")) ||
+    lower.includes("changeme") ||
+    lower.includes("replace") ||
+    lower.includes("redacted") ||
+    lower.includes("your_") ||
+    lower.includes("your-") ||
+    lower.includes("todo") ||
+    lower.includes("fake") ||
+    lower.includes("${") ||
+    lower.includes("process.env") ||
+    lower.includes("import.meta.env") ||
+    lower.includes("deno.env") ||
+    lower.startsWith("env.") ||
+    lower.startsWith("config.") ||
+    lower.startsWith("settings.") ||
+    lower.includes("\\(") ||
+    lower.includes("<") ||
+    lower.includes(">") ||
+    lower.includes("...") ||
+    lower.includes("***")
+  ) {
+    return true;
+  }
+  if (/^x{6,}$/i.test(normalized) || /^\*{6,}$/.test(normalized)) {
+    return true;
+  }
+  if (/^__.*__$/.test(normalized)) {
+    return true;
+  }
+  if (/^[A-Z][A-Z0-9_]{7,}$/.test(normalized) && !/^(?:AKIA|ASIA)[A-Z0-9]{16}$/.test(normalized)) {
+    return true;
+  }
+  return false;
+}
+
+function isSensitiveAssignmentKey(key: string): boolean {
+  const parts = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  const partSet = new Set(parts);
+  if (partSet.has("password") || partSet.has("passwd") || partSet.has("pwd") || partSet.has("credential") || partSet.has("credentials")) {
+    return true;
+  }
+  if (partSet.has("secret") || (partSet.has("client") && partSet.has("secret"))) {
+    return true;
+  }
+  if ((partSet.has("api") && partSet.has("key")) || (partSet.has("access") && partSet.has("key"))) {
+    return true;
+  }
+  if (!partSet.has("token")) {
+    return false;
+  }
+  if (parts.length === 1) {
+    return true;
+  }
+  return ["auth", "access", "refresh", "session", "bearer", "api", "github", "gitlab", "slack", "stripe", "openai", "jwt"].some((part) => partSet.has(part));
+}
+
+function looksLikeCodeExpression(value: string): boolean {
+  return /[()[\]{}!?]/.test(value) || /^[A-Za-z_$][A-Za-z0-9_$]*(?:[.][A-Za-z_$][A-Za-z0-9_$]*)*$/.test(value);
+}
+
+function isPlaceholderReference(value: string): boolean {
+  const lower = value.toLowerCase();
+  return lower.includes("your_") || lower.includes("your-") || lower.includes("placeholder") || lower.includes("example");
+}
+
+function isSensitiveReferenceLine(value: string): boolean {
+  const lower = value.toLowerCase();
+  if (/\b(?:api[_-]?key|password|passwd|credential|credentials|client[_-]?secret|access[_-]?key)\b/i.test(value)) {
+    return true;
+  }
+  if (/\bsecret\b/i.test(value) && /\b(?:env|config|credential|key|token|password|value|var|variable|process)\b/i.test(value)) {
+    return true;
+  }
+  if (/\b(?:auth|access|refresh|session|bearer|github|gitlab|slack|stripe|openai|gh)[_-]?token\b/i.test(value)) {
+    return true;
+  }
+  return lower.includes("github.token") || lower.includes("process.env") || lower.includes("import.meta.env");
+}
+
+function isTestLikePath(filePath: string): boolean {
+  const segments = filePath.split("/");
+  return (
+    segments.some((segment) => /^(?:test|tests|spec|specs|fixture|fixtures|__tests__|mocks|__mocks__)$/i.test(segment) || /(?:test|tests|spec|specs|fixture|fixtures|mock|mocks)$/i.test(segment)) ||
+    /\.(?:test|spec)\.[cm]?[jt]sx?$/i.test(filePath)
+  );
+}
+
+function redactLine(text: string, value: string): string {
+  const redacted = redactSecret(value);
+  return clipEvidence(text.split(value).join(redacted));
+}
+
+function redactSecret(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 8) {
+    return "[redacted]";
+  }
+  const prefix = trimmed.slice(0, Math.min(4, Math.floor(trimmed.length / 3)));
+  const suffix = trimmed.slice(-4);
+  return `${prefix}...${suffix}`;
+}
+
+function clipEvidence(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length > 180 ? `${trimmed.slice(0, 177)}...` : trimmed;
+}
+
+function secretConfidenceRank(confidence: SecretConfidence): number {
+  return confidence === "high" ? 3 : confidence === "medium" ? 2 : 1;
+}
+
+function secretSeverityRank(severity: "low" | "medium" | "high"): number {
+  return severity === "high" ? 3 : severity === "medium" ? 2 : 1;
 }
 
 function communityEdgeWeight(type: string, weight: number): number {

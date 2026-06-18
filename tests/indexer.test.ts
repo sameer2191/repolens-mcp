@@ -327,6 +327,62 @@ test("packs and imports a reusable graph package", async () => {
   }
 });
 
+test("scans indexed lines for redacted secret findings", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-secrets-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.mkdir(path.join(repo, "tests"), { recursive: true });
+  const awsKey = "AKIA1234567890ABCDEF";
+  const githubToken = "ghp_abcdefghijklmnopqrstuvwxyzABCDEFGH1234";
+  const password = "correct-horse-battery-staple";
+  const openAiKey = "sk-proj-abcdefghijklmnopqrstuvwxyz1234567890";
+  await fs.writeFile(
+    path.join(repo, "src", "config.ts"),
+    [
+      `export const awsAccessKey = "${awsKey}";`,
+      `export const gh = "${githubToken}";`,
+      `export const databasePassword = "${password}";`,
+      `export const placeholder = "your_api_key_here";`,
+      "export const apiKey = process.env.API_KEY;"
+    ].join("\n")
+  );
+  await fs.writeFile(path.join(repo, "tests", "config.test.ts"), `const token = "${openAiKey}";\n`);
+
+  await indexRepository({ root: repo, dbPath });
+  const store = new MemoryStore(dbPath);
+  try {
+    const scan = store.scanSecrets({ limit: 20 });
+    const serialized = JSON.stringify(scan);
+    assert.ok(scan.scannedLines > 0);
+    assert.ok(scan.findings.some((finding) => finding.kind === "aws_access_key"));
+    assert.ok(scan.findings.some((finding) => finding.kind === "github_token"));
+    assert.ok(scan.findings.some((finding) => finding.kind === "sensitive_assignment" && finding.label === "databasePassword"));
+    assert.ok(scan.findings.some((finding) => finding.kind === "sensitive_reference" && finding.confidence === "low"));
+    assert.ok(scan.findings.every((finding) => !finding.filePath.startsWith("tests/")));
+    assert.ok(scan.risks.some((risk) => risk.includes("high-severity secret patterns")));
+    assert.equal(serialized.includes(awsKey), false);
+    assert.equal(serialized.includes(githubToken), false);
+    assert.equal(serialized.includes(password), false);
+    assert.equal(serialized.includes("your_api_key_here"), false);
+
+    const mediumOnly = store.scanSecrets({ minConfidence: "medium", limit: 20 });
+    assert.ok(mediumOnly.findings.every((finding) => finding.confidence === "medium" || finding.confidence === "high"));
+    assert.ok(!mediumOnly.findings.some((finding) => finding.kind === "sensitive_reference"));
+
+    const withTests = store.scanSecrets({ includeTests: true, minConfidence: "high", limit: 20 });
+    assert.ok(withTests.findings.some((finding) => finding.kind === "openai_key" && finding.filePath === "tests/config.test.ts"));
+    assert.equal(JSON.stringify(withTests).includes(openAiKey), false);
+
+    const limited = store.scanSecrets({ includeTests: true, limit: 1 });
+    assert.equal(limited.findings.length, 1);
+    assert.ok(limited.totals.findings > limited.findings.length);
+    assert.ok(limited.risks.some((risk) => risk.includes("showing 1 of")));
+  } finally {
+    store.close();
+  }
+});
+
 test("watch mode keeps a repository indexed incrementally", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-watch-"));
   const dbPath = path.join(tmp, "memory.db");

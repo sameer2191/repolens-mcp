@@ -27,6 +27,7 @@ import {
   rememberDecision,
   runIndex,
   runWatch,
+  scanSecrets,
   searchCode,
   searchGraph,
   semanticSearch,
@@ -113,6 +114,19 @@ async function main(): Promise<void> {
         code: searchCode(required(args.positional[0], "query"), numberFlag(args, "limit"), stringFlag(args, "db")),
         symbols: searchSymbols(required(args.positional[0], "query"), undefined, numberFlag(args, "limit"), stringFlag(args, "db"))
       });
+      break;
+    case "scan-secrets":
+    case "secrets":
+      print(
+        scanSecrets(
+          {
+            limit: numberFlag(args, "limit"),
+            includeTests: booleanFlag(args, "include-tests"),
+            minConfidence: secretConfidenceFlag(args)
+          },
+          stringFlag(args, "db")
+        )
+      );
       break;
     case "symbols":
       print(searchSymbols(required(args.positional[0], "query"), stringFlag(args, "kind"), numberFlag(args, "limit"), stringFlag(args, "db")));
@@ -368,6 +382,17 @@ function booleanFlag(args: ParsedArgs, name: string): boolean {
   return args.flags.get(name) === true;
 }
 
+function secretConfidenceFlag(args: ParsedArgs): "low" | "medium" | "high" | undefined {
+  const value = stringFlag(args, "min-confidence");
+  if (!value) {
+    return undefined;
+  }
+  if (value === "low" || value === "medium" || value === "high") {
+    return value;
+  }
+  throw new Error("Invalid --min-confidence. Use one of: low, medium, high.");
+}
+
 function agentList(value: string | undefined): AgentId[] | undefined {
   if (!value || value === "all") {
     return undefined;
@@ -440,6 +465,7 @@ Usage:
   repolens-mcp fleet-graph [--limit n] [--max-nodes n] [--max-edges n]
   repolens-mcp architecture [--db path]
   repolens-mcp search <query> [--db path] [--limit n]
+  repolens-mcp scan-secrets [--db path] [--limit n] [--min-confidence low|medium|high] [--include-tests]
   repolens-mcp symbols <query> [--kind function] [--db path]
   repolens-mcp snippet <symbol-or-path:line> [--context n] [--db path]
   repolens-mcp trace <symbol> [--direction inbound|outbound] [--depth n] [--db path]

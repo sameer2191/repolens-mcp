@@ -11,7 +11,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 29 tools for indexing, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, BM25 code search, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 30 tools for indexing, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, BM25 code search, redacted secret scanning, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
@@ -23,6 +23,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
 - **Context packs for agents**: one query can return semantic matches, graph matches, BM25 code hits, snippets, and nearby edges for focused development context.
+- **Redacted secret scan**: review high-confidence token shapes, sensitive assignments, and environment references from indexed source/config lines without returning raw secret values.
 - **Route-call edges**: stores literal HTTP requests as `http_call` nodes, connects callers with `CALLS_HTTP_ENDPOINT`, and links matching in-repo routes with `HTTP_CALLS`.
 - **Runtime trace ingestion**: imports observed HTTP, event, or symbol traces as `OBSERVED_*` graph edges with counts and timestamps.
 - **Channel/event edges**: detects EventEmitter, Socket.IO-style, DOM custom event, Python decorator/call, and Swift `NotificationCenter` channels with `EMITS` and `LISTENS_ON` edges.
@@ -69,6 +70,7 @@ repolens-mcp fleet-summary [--limit n]
 repolens-mcp fleet-graph [--limit n] [--max-nodes n] [--max-edges n]
 repolens-mcp architecture [--db path]
 repolens-mcp search <query> [--db path]
+repolens-mcp scan-secrets [--db path] [--limit n] [--min-confidence low|medium|high] [--include-tests]
 repolens-mcp symbols <query> [--kind function]
 repolens-mcp snippet <symbol-or-path:line> [--context n]
 repolens-mcp trace <symbol> [--direction inbound|outbound]
@@ -113,6 +115,7 @@ repolens-mcp mcp
 | `cross_repo_graph` | Return a catalog-wide graph of indexed repositories, shared dependencies, overlapping routes, and inferred cross-repo HTTP caller/provider edges. |
 | `agent_setup` | Render or write project-local RepoLens MCP setup guidance for supported coding agents. |
 | `search_code` | Search indexed source lines with BM25 ranking and code-aware token expansion. |
+| `scan_secrets` | Scan indexed source/config lines for redacted secret, token, credential, and sensitive environment patterns. |
 | `search_symbols` | Search functions, classes, routes, resources, headings, and package nodes. |
 | `get_code_snippet` | Return source lines around a symbol, qualified name, file path, or `path:line` target. |
 | `get_architecture` | Return language mix, hotspots, entrypoints, packages, and risk markers. |
