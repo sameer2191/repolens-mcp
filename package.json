@@ -33,6 +33,10 @@
   ],
   "author": "Sameer Mir",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=24.0.0"
   },

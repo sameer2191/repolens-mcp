@@ -54,3 +54,14 @@ jobs:
           else
             gh release create "$tag" ./*.tgz sbom.cyclonedx.json checksums.txt --title "$tag" --notes "RepoLens MCP release package, CycloneDX SBOM, and SHA-256 checksums."
           fi
+      - name: Publish npm package
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NPM_TOKEN is not configured; skipping npm publish."
+            exit 0
+          fi
+          npm publish --access public --provenance
