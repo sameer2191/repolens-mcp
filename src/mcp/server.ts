@@ -347,7 +347,7 @@ export async function startMcpServer(): Promise<void> {
   server.registerTool(
     "search_graph",
     {
-      description: "Search the indexed graph structurally by name, kind, relationship, file scope, regex pattern, or degree.",
+      description: "Search the indexed graph structurally by name, kind, relationship, file scope, safe wildcard pattern, or degree.",
       inputSchema: {
         query: z.string().optional(),
         kind: z.string().optional(),

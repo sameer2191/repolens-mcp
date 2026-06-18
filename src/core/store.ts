@@ -751,9 +751,9 @@ export class MemoryStore {
       params.push(options.minDegree ?? 0);
     }
 
-    const regex = options.namePattern?.trim() ? new RegExp(options.namePattern.trim(), "i") : null;
-    const sqlLimit = regex ? Math.min(1000, Math.max(limit + offset, (limit + offset) * 12)) : limit;
-    const sqlOffset = regex ? 0 : offset;
+    const nameMatcher = options.namePattern?.trim() ? createWildcardMatcher(options.namePattern.trim()) : null;
+    const sqlLimit = nameMatcher ? Math.min(1000, Math.max(limit + offset, (limit + offset) * 12)) : limit;
+    const sqlOffset = nameMatcher ? 0 : offset;
     const rows = this.db
       .prepare(
         `WITH inbound AS (
@@ -773,7 +773,9 @@ export class MemoryStore {
       )
       .all(...params, sqlLimit, sqlOffset) as unknown as Array<SymbolRow & { inbound: number; outbound: number; degree: number }>;
 
-    const matches = regex ? rows.filter((row) => regex.test(row.name) || regex.test(row.qualified_name)).slice(offset, offset + limit) : rows;
+    const matches = nameMatcher
+      ? rows.filter((row) => nameMatcher(row.name) || nameMatcher(row.qualified_name)).slice(offset, offset + limit)
+      : rows;
     return matches.map((row) => ({
       symbol: rowToSymbol(row),
       inbound: row.inbound,
@@ -2388,32 +2390,29 @@ function stableCommunityId(label: string, members: string[]): string {
 }
 
 function parseGraphQuery(query: string, defaultLimit: number): ParsedGraphQuery {
-  const trimmed = query.trim().replace(/;+\s*$/, "");
+  const trimmed = trimTrailingSemicolons(query.trim());
   if (!trimmed) {
     throw new Error("query_graph requires a query");
   }
-  if (/\b(CREATE|MERGE|DELETE|SET|REMOVE|DROP|INSERT|UPDATE|ALTER|PRAGMA|ATTACH|DETACH)\b/i.test(stripQuotedStrings(trimmed))) {
+  if (hasMutationKeyword(stripQuotedStrings(trimmed))) {
     throw new Error("query_graph is read-only; mutation keywords are not supported");
   }
 
-  const limitMatch = /\s+LIMIT\s+(\d+)\s*$/i.exec(trimmed);
-  const limit = limitMatch ? clampPositive(Number(limitMatch[1]), 1, 500) : defaultLimit;
-  const withoutLimit = limitMatch ? trimmed.slice(0, limitMatch.index).trim() : trimmed;
-  const skipMatch = /\s+SKIP\s+(\d+)\s*$/i.exec(withoutLimit);
-  const skip = skipMatch ? Math.max(0, Number(skipMatch[1])) : 0;
-  const withoutSkip = skipMatch ? withoutLimit.slice(0, skipMatch.index).trim() : withoutLimit;
-  const orderMatch = /\s+ORDER\s+BY\s+(.+)$/i.exec(withoutSkip);
-  const orderBy = orderMatch ? parseOrderBy(orderMatch[1].trim()) : [];
-  const withoutOrder = orderMatch ? withoutSkip.slice(0, orderMatch.index).trim() : withoutSkip;
-  const match = /^MATCH\s+(.+?)\s+(?:WHERE\s+(.+?)\s+)?RETURN\s+(.+)$/i.exec(withoutOrder);
-  if (!match) {
+  const limitClause = consumeTrailingNumberClause(trimmed, "LIMIT");
+  const limit = limitClause.value === undefined ? defaultLimit : clampPositive(limitClause.value, 1, 500);
+  const skipClause = consumeTrailingNumberClause(limitClause.text, "SKIP");
+  const skip = skipClause.value === undefined ? 0 : Math.max(0, skipClause.value);
+  const orderClause = consumeTrailingKeywordClause(skipClause.text, "ORDER BY");
+  const orderBy = orderClause.value === undefined ? [] : parseOrderBy(orderClause.value);
+  const shape = parseQueryShape(orderClause.text);
+  if (!shape) {
     throw new Error("Supported query shape: MATCH (...) [WHERE alias.property OP 'value'] RETURN [DISTINCT] alias.property[, ...] [ORDER BY alias.property] [SKIP n] [LIMIT n]");
   }
 
-  const parsedReturn = parseReturn(match[3].trim());
+  const parsedReturn = parseReturn(shape.returnText);
   return {
-    pattern: parseMatchPattern(match[1].trim()),
-    where: parseWhere(match[2]?.trim()),
+    pattern: parseMatchPattern(shape.matchText),
+    where: parseWhere(shape.whereText),
     returns: parsedReturn.returns,
     orderBy,
     limit,
@@ -2423,87 +2422,97 @@ function parseGraphQuery(query: string, defaultLimit: number): ParsedGraphQuery 
 }
 
 function parseMatchPattern(pattern: string): ParsedGraphQuery["pattern"] {
-  const node = /^\((\w+)(?::([A-Za-z_][\w-]*))?\)$/.exec(pattern);
-  if (node) {
-    return { kind: "node", alias: node[1], label: node[2] };
+  const trimmed = pattern.trim();
+  const outboundIndex = trimmed.indexOf("->");
+  const inboundIndex = trimmed.indexOf("<-");
+  if (outboundIndex < 0 && inboundIndex < 0) {
+    const node = parseNodePattern(trimmed);
+    if (node) {
+      return { kind: "node", alias: node.alias, label: node.label };
+    }
+    throw new Error("Supported MATCH patterns: (n), (a)-[:TYPE]->(b), or (a)<-[:TYPE]-(b)");
   }
 
-  const outbound = /^\((\w+)(?::([A-Za-z_][\w-]*))?\)\s*-\s*\[(?:(\w+))?(?::([A-Za-z_][\w-]*))?\]\s*->\s*\((\w+)(?::([A-Za-z_][\w-]*))?\)$/.exec(pattern);
-  if (outbound) {
+  if (outboundIndex >= 0 && inboundIndex >= 0) {
+    throw new Error("Supported MATCH patterns: (n), (a)-[:TYPE]->(b), or (a)<-[:TYPE]-(b)");
+  }
+
+  const direction = outboundIndex >= 0 ? "outbound" : "inbound";
+  const arrowIndex = outboundIndex >= 0 ? outboundIndex : inboundIndex;
+  const left = trimmed.slice(0, arrowIndex).trim();
+  const right = trimmed.slice(arrowIndex + 2).trim();
+
+  if (direction === "outbound") {
+    const parsedLeft = parseNodeEdgeSide(left, "left");
+    const parsedRight = parseNodePattern(right);
+    if (!parsedLeft || !parsedRight) {
+      throw new Error("Supported MATCH patterns: (n), (a)-[:TYPE]->(b), or (a)<-[:TYPE]-(b)");
+    }
     return {
       kind: "edge",
-      leftAlias: outbound[1],
-      leftLabel: outbound[2],
-      edgeAlias: outbound[3] || "e",
-      edgeType: outbound[4],
-      rightAlias: outbound[5],
-      rightLabel: outbound[6],
-      direction: "outbound"
+      leftAlias: parsedLeft.node.alias,
+      leftLabel: parsedLeft.node.label,
+      edgeAlias: parsedLeft.edge.alias,
+      edgeType: parsedLeft.edge.type,
+      rightAlias: parsedRight.alias,
+      rightLabel: parsedRight.label,
+      direction
     };
   }
 
-  const inbound = /^\((\w+)(?::([A-Za-z_][\w-]*))?\)\s*<-\s*\[(?:(\w+))?(?::([A-Za-z_][\w-]*))?\]\s*-\s*\((\w+)(?::([A-Za-z_][\w-]*))?\)$/.exec(pattern);
-  if (inbound) {
-    return {
-      kind: "edge",
-      leftAlias: inbound[1],
-      leftLabel: inbound[2],
-      edgeAlias: inbound[3] || "e",
-      edgeType: inbound[4],
-      rightAlias: inbound[5],
-      rightLabel: inbound[6],
-      direction: "inbound"
-    };
+  const parsedLeft = parseNodePattern(left);
+  const parsedRight = parseNodeEdgeSide(right, "right");
+  if (!parsedLeft || !parsedRight) {
+    throw new Error("Supported MATCH patterns: (n), (a)-[:TYPE]->(b), or (a)<-[:TYPE]-(b)");
   }
-
-  throw new Error("Supported MATCH patterns: (n), (a)-[:TYPE]->(b), or (a)<-[:TYPE]-(b)");
+  return {
+    kind: "edge",
+    leftAlias: parsedLeft.alias,
+    leftLabel: parsedLeft.label,
+    edgeAlias: parsedRight.edge.alias,
+    edgeType: parsedRight.edge.type,
+    rightAlias: parsedRight.node.alias,
+    rightLabel: parsedRight.node.label,
+    direction
+  };
 }
 
 function parseWhere(where: string | undefined): GraphWhereCondition[] {
   if (!where) {
     return [];
   }
-  return where.split(/\s+AND\s+/i).map((part) => {
-    const match = /^(\w+)\.([A-Za-z_]\w*)\s*(=|<>|CONTAINS|STARTS WITH|ENDS WITH)\s*(?:'([^']*)'|"([^"]*)"|([^\s]+))$/i.exec(part.trim());
+  return splitKeyword(where, "AND").map((part) => {
+    const match = parseWherePart(part.trim());
     if (!match) {
       throw new Error(`Unsupported WHERE condition: ${part}`);
     }
-    return {
-      alias: match[1],
-      property: match[2],
-      operator: match[3].toUpperCase() as GraphWhereCondition["operator"],
-      value: match[4] ?? match[5] ?? match[6] ?? ""
-    };
+    return match;
   });
 }
 
 function parseReturn(returnText: string): { returns: GraphReturnExpression[]; distinct: boolean } {
   let text = returnText.trim();
   let distinct = false;
-  if (/^DISTINCT\s+/i.test(text)) {
+  if (startsWithKeyword(text, "DISTINCT")) {
     distinct = true;
-    text = text.replace(/^DISTINCT\s+/i, "");
+    text = text.slice("DISTINCT".length).trimStart();
   }
-  const expressions = text.split(",").map((part) => {
-    const countMatch = /^count\(\s*(?:(DISTINCT)\s+)?(?:(\w+)(?:\.([A-Za-z_]\w*))?|\*)\s*\)(?:\s+AS\s+([A-Za-z_]\w*))?$/i.exec(part.trim());
-    if (countMatch) {
-      return {
-        alias: countMatch[2] ?? "*",
-        property: countMatch[3] ?? "qualifiedName",
-        output: countMatch[4] ?? "count",
-        aggregate: "count" as const,
-        distinct: Boolean(countMatch[1])
-      };
+  const expressions = splitList(text).map((part) => {
+    const expression = part.trim();
+    const countExpression = parseCountReturn(expression);
+    if (countExpression) {
+      return countExpression;
     }
-    const match = /^(\w+)(?:\.([A-Za-z_]\w*))?(?:\s+AS\s+([A-Za-z_]\w*))?$/i.exec(part.trim());
-    if (!match) {
+    const aliasSplit = splitAlias(expression);
+    const propertyRef = parsePropertyRef(aliasSplit.expression);
+    if (!propertyRef) {
       throw new Error(`Unsupported RETURN expression: ${part}`);
     }
-    const property = match[2] ?? "qualifiedName";
+    const property = propertyRef.property ?? "qualifiedName";
     return {
-      alias: match[1],
+      alias: propertyRef.alias,
       property,
-      output: match[3] ?? `${match[1]}.${property}`
+      output: aliasSplit.alias ?? `${propertyRef.alias}.${property}`
     };
   });
   if (expressions.length === 0) {
@@ -2516,17 +2525,420 @@ function parseReturn(returnText: string): { returns: GraphReturnExpression[]; di
 }
 
 function parseOrderBy(orderText: string): GraphOrderExpression[] {
-  return orderText.split(",").map((part) => {
-    const match = /^(\w+)\.([A-Za-z_]\w*)(?:\s+(ASC|DESC))?$/i.exec(part.trim());
-    if (!match) {
+  return splitList(orderText).map((part) => {
+    const tokens = splitWords(part.trim());
+    if (tokens.length < 1 || tokens.length > 2) {
+      throw new Error(`Unsupported ORDER BY expression: ${part}`);
+    }
+    const propertyRef = parsePropertyRef(tokens[0]);
+    if (!propertyRef?.property) {
+      throw new Error(`Unsupported ORDER BY expression: ${part}`);
+    }
+    const direction = tokens[1]?.toUpperCase();
+    if (direction !== undefined && direction !== "ASC" && direction !== "DESC") {
       throw new Error(`Unsupported ORDER BY expression: ${part}`);
     }
     return {
-      alias: match[1],
-      property: match[2],
-      direction: (match[3]?.toUpperCase() as "ASC" | "DESC" | undefined) ?? "ASC"
+      alias: propertyRef.alias,
+      property: propertyRef.property,
+      direction: direction ?? "ASC"
     };
   });
+}
+
+function parseCountReturn(expression: string): GraphReturnExpression | null {
+  if (!startsWithCaseInsensitive(expression, "count(")) {
+    return null;
+  }
+  const close = expression.indexOf(")");
+  if (close < 0) {
+    throw new Error(`Unsupported RETURN expression: ${expression}`);
+  }
+  let inner = expression.slice("count(".length, close).trim();
+  const aliasText = expression.slice(close + 1).trim();
+  const output = aliasText ? parseAliasClause(aliasText) : "count";
+  let distinct = false;
+  if (startsWithKeyword(inner, "DISTINCT")) {
+    distinct = true;
+    inner = inner.slice("DISTINCT".length).trimStart();
+  }
+  if (inner === "*") {
+    return { alias: "*", property: "qualifiedName", output, aggregate: "count", distinct };
+  }
+  const propertyRef = parsePropertyRef(inner);
+  if (!propertyRef) {
+    throw new Error(`Unsupported RETURN expression: ${expression}`);
+  }
+  return {
+    alias: propertyRef.alias,
+    property: propertyRef.property ?? "qualifiedName",
+    output,
+    aggregate: "count",
+    distinct
+  };
+}
+
+function splitAlias(expression: string): { expression: string; alias?: string } {
+  const index = findKeywordOutsideQuotes(expression, "AS");
+  if (index < 0) {
+    return { expression: expression.trim() };
+  }
+  const alias = expression.slice(index + "AS".length).trim();
+  if (!isIdentifier(alias)) {
+    throw new Error(`Unsupported alias: ${alias}`);
+  }
+  return { expression: expression.slice(0, index).trim(), alias };
+}
+
+function parseAliasClause(value: string): string {
+  if (!startsWithKeyword(value, "AS")) {
+    throw new Error(`Unsupported alias clause: ${value}`);
+  }
+  const alias = value.slice("AS".length).trim();
+  if (!isIdentifier(alias)) {
+    throw new Error(`Unsupported alias: ${alias}`);
+  }
+  return alias;
+}
+
+function parseWherePart(part: string): GraphWhereCondition | null {
+  const operators: GraphWhereCondition["operator"][] = ["STARTS WITH", "ENDS WITH", "CONTAINS", "<>", "="];
+  for (const operator of operators) {
+    const index = findOperatorOutsideQuotes(part, operator);
+    if (index < 0) {
+      continue;
+    }
+    const propertyRef = parsePropertyRef(part.slice(0, index).trim());
+    if (!propertyRef?.property) {
+      return null;
+    }
+    return {
+      alias: propertyRef.alias,
+      property: propertyRef.property,
+      operator,
+      value: parseWhereValue(part.slice(index + operator.length).trim())
+    };
+  }
+  return null;
+}
+
+function parseWhereValue(value: string): string {
+  if (!value) {
+    return "";
+  }
+  const first = value[0];
+  if ((first === "'" || first === "\"") && value.endsWith(first)) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+function parsePropertyRef(value: string): { alias: string; property?: string } | null {
+  const parts = value.split(".");
+  if (parts.length < 1 || parts.length > 2 || !isIdentifier(parts[0])) {
+    return null;
+  }
+  if (parts[1] !== undefined && !isIdentifier(parts[1])) {
+    return null;
+  }
+  return { alias: parts[0], property: parts[1] };
+}
+
+function parseNodePattern(value: string): { alias: string; label?: string } | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("(") || !trimmed.endsWith(")")) {
+    return null;
+  }
+  const body = trimmed.slice(1, -1).trim();
+  if (!body) {
+    return null;
+  }
+  const colon = body.indexOf(":");
+  const alias = colon < 0 ? body : body.slice(0, colon);
+  const label = colon < 0 ? undefined : body.slice(colon + 1);
+  if (!isIdentifier(alias) || (label !== undefined && !isLabelIdentifier(label))) {
+    return null;
+  }
+  return { alias, ...(label ? { label } : {}) };
+}
+
+function parseNodeEdgeSide(value: string, nodeSide: "left" | "right"): { node: { alias: string; label?: string }; edge: { alias: string; type?: string } } | null {
+  const trimmed = value.trim();
+  const bracketStart = trimmed.indexOf("[");
+  const bracketEnd = trimmed.indexOf("]");
+  if (bracketStart < 0 || bracketEnd < bracketStart || trimmed.slice(bracketEnd + 1).includes("]")) {
+    return null;
+  }
+  const edge = parseEdgePattern(trimmed.slice(bracketStart, bracketEnd + 1));
+  if (!edge) {
+    return null;
+  }
+
+  if (nodeSide === "left") {
+    const nodeSegment = trimmed.slice(0, bracketStart).trim();
+    const tail = trimmed.slice(bracketEnd + 1).trim();
+    if (!nodeSegment.endsWith("-") || tail) {
+      return null;
+    }
+    const node = parseNodePattern(nodeSegment.slice(0, -1).trim());
+    return node ? { node, edge } : null;
+  }
+
+  const head = trimmed.slice(0, bracketStart).trim();
+  const nodeSegment = trimmed.slice(bracketEnd + 1).trim();
+  if (head || !nodeSegment.startsWith("-")) {
+    return null;
+  }
+  const node = parseNodePattern(nodeSegment.slice(1).trim());
+  return node ? { node, edge } : null;
+}
+
+function parseEdgePattern(value: string): { alias: string; type?: string } | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+    return null;
+  }
+  const body = trimmed.slice(1, -1).trim();
+  if (!body) {
+    return { alias: "e" };
+  }
+  const colon = body.indexOf(":");
+  const alias = colon < 0 ? body : body.slice(0, colon);
+  const type = colon < 0 ? undefined : body.slice(colon + 1);
+  if (alias && !isIdentifier(alias)) {
+    return null;
+  }
+  if (type !== undefined && !isLabelIdentifier(type)) {
+    return null;
+  }
+  return { alias: alias || "e", ...(type ? { type } : {}) };
+}
+
+function parseQueryShape(text: string): { matchText: string; whereText?: string; returnText: string } | null {
+  if (!startsWithKeyword(text, "MATCH")) {
+    return null;
+  }
+  const afterMatch = text.slice("MATCH".length).trimStart();
+  const returnIndex = findKeywordOutsideQuotes(afterMatch, "RETURN");
+  if (returnIndex < 0) {
+    return null;
+  }
+  const beforeReturn = afterMatch.slice(0, returnIndex).trim();
+  const returnText = afterMatch.slice(returnIndex + "RETURN".length).trim();
+  if (!beforeReturn || !returnText) {
+    return null;
+  }
+  const whereIndex = findKeywordOutsideQuotes(beforeReturn, "WHERE");
+  if (whereIndex < 0) {
+    return { matchText: beforeReturn, returnText };
+  }
+  const matchText = beforeReturn.slice(0, whereIndex).trim();
+  const whereText = beforeReturn.slice(whereIndex + "WHERE".length).trim();
+  return matchText && whereText ? { matchText, whereText, returnText } : null;
+}
+
+function consumeTrailingNumberClause(text: string, keyword: string): { text: string; value?: number } {
+  const clause = consumeTrailingKeywordClause(text, keyword);
+  if (clause.value === undefined) {
+    return { text };
+  }
+  if (!isAllDigits(clause.value)) {
+    throw new Error(`${keyword} requires a positive integer`);
+  }
+  return { text: clause.text, value: Number(clause.value) };
+}
+
+function consumeTrailingKeywordClause(text: string, keyword: string): { text: string; value?: string } {
+  const index = findLastKeywordOutsideQuotes(text, keyword);
+  if (index < 0) {
+    return { text };
+  }
+  const value = text.slice(index + keyword.length).trim();
+  if (!value) {
+    return { text };
+  }
+  return { text: text.slice(0, index).trimEnd(), value };
+}
+
+function splitKeyword(text: string, keyword: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  while (start <= text.length) {
+    const index = findKeywordOutsideQuotes(text, keyword, start);
+    if (index < 0) {
+      parts.push(text.slice(start));
+      break;
+    }
+    parts.push(text.slice(start, index));
+    start = index + keyword.length;
+  }
+  return parts;
+}
+
+function splitList(text: string): string[] {
+  const parts: string[] = [];
+  let quote: string | null = null;
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === "\"") {
+      quote = char;
+      continue;
+    }
+    if (char === "(") depth += 1;
+    if (char === ")" && depth > 0) depth -= 1;
+    if (char === "," && depth === 0) {
+      parts.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+function splitWords(text: string): string[] {
+  const words: string[] = [];
+  let start = -1;
+  for (let index = 0; index <= text.length; index += 1) {
+    const char = text[index] ?? " ";
+    if (isWhitespace(char)) {
+      if (start >= 0) {
+        words.push(text.slice(start, index));
+        start = -1;
+      }
+    } else if (start < 0) {
+      start = index;
+    }
+  }
+  return words;
+}
+
+function findOperatorOutsideQuotes(text: string, operator: string): number {
+  if (operator === "=" || operator === "<>") {
+    return findSymbolOperatorOutsideQuotes(text, operator);
+  }
+  return findKeywordOutsideQuotes(text, operator);
+}
+
+function findSymbolOperatorOutsideQuotes(text: string, operator: string): number {
+  let quote: string | null = null;
+  for (let index = 0; index <= text.length - operator.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === "\"") {
+      quote = char;
+      continue;
+    }
+    if (text.slice(index, index + operator.length) === operator) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function findKeywordOutsideQuotes(text: string, keyword: string, start = 0): number {
+  return findKeywordOutsideQuotesFrom(text, keyword, start, false);
+}
+
+function findLastKeywordOutsideQuotes(text: string, keyword: string): number {
+  return findKeywordOutsideQuotesFrom(text, keyword, 0, true);
+}
+
+function findKeywordOutsideQuotesFrom(text: string, keyword: string, start: number, last: boolean): number {
+  let quote: string | null = null;
+  let found = -1;
+  for (let index = start; index <= text.length - keyword.length; index += 1) {
+    const char = text[index];
+    if (quote) {
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === "\"") {
+      quote = char;
+      continue;
+    }
+    if (equalsIgnoreCase(text.slice(index, index + keyword.length), keyword) && hasKeywordBoundary(text, index, keyword.length)) {
+      if (!last) return index;
+      found = index;
+    }
+  }
+  return found;
+}
+
+function startsWithKeyword(text: string, keyword: string): boolean {
+  return equalsIgnoreCase(text.slice(0, keyword.length), keyword) && hasKeywordBoundary(text, 0, keyword.length);
+}
+
+function startsWithCaseInsensitive(text: string, value: string): boolean {
+  return equalsIgnoreCase(text.slice(0, value.length), value);
+}
+
+function hasKeywordBoundary(text: string, start: number, length: number): boolean {
+  const before = start === 0 ? "" : text[start - 1];
+  const after = text[start + length] ?? "";
+  return !isIdentifierChar(before) && !isIdentifierChar(after);
+}
+
+function hasMutationKeyword(text: string): boolean {
+  const keywords = ["CREATE", "MERGE", "DELETE", "SET", "REMOVE", "DROP", "INSERT", "UPDATE", "ALTER", "PRAGMA", "ATTACH", "DETACH"];
+  return keywords.some((keyword) => findKeywordOutsideQuotes(text, keyword) >= 0);
+}
+
+function trimTrailingSemicolons(value: string): string {
+  let end = value.length;
+  while (end > 0) {
+    while (end > 0 && isWhitespace(value[end - 1])) end -= 1;
+    if (value[end - 1] !== ";") break;
+    end -= 1;
+  }
+  return value.slice(0, end).trimEnd();
+}
+
+function isAllDigits(value: string): boolean {
+  return [...value].every((char) => char >= "0" && char <= "9");
+}
+
+function isIdentifier(value: string): boolean {
+  if (!value || !(isAlpha(value[0]) || value[0] === "_")) {
+    return false;
+  }
+  return [...value.slice(1)].every(isIdentifierChar);
+}
+
+function isLabelIdentifier(value: string): boolean {
+  if (!value || !(isAlpha(value[0]) || value[0] === "_")) {
+    return false;
+  }
+  return [...value.slice(1)].every((char) => isIdentifierChar(char) || char === "-");
+}
+
+function isIdentifierChar(char: string): boolean {
+  return isAlpha(char) || isDigit(char) || char === "_";
+}
+
+function isAlpha(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function isDigit(char: string): boolean {
+  return char >= "0" && char <= "9";
+}
+
+function isWhitespace(char: string): boolean {
+  return char === " " || char === "\t" || char === "\n" || char === "\r";
+}
+
+function equalsIgnoreCase(left: string, right: string): boolean {
+  return left.length === right.length && left.toLowerCase() === right.toLowerCase();
 }
 
 function whereSql(condition: GraphWhereCondition, aliasMap: Map<string, string>, params: Array<string | number>): string {
@@ -2610,8 +3022,64 @@ function normalizeGraphLabel(label: string): string {
   return label.replace(/Node$/i, "").toLowerCase();
 }
 
+function createWildcardMatcher(pattern: string): (value: string) => boolean {
+  const normalized = pattern.slice(0, 160).toLowerCase();
+  if (!normalized.includes("*") && !normalized.includes("?")) {
+    return (value: string) => value.toLowerCase().includes(normalized);
+  }
+  return (value: string) => wildcardMatch(normalized, value.toLowerCase());
+}
+
+function wildcardMatch(pattern: string, value: string): boolean {
+  let patternIndex = 0;
+  let valueIndex = 0;
+  let starIndex = -1;
+  let starValueIndex = 0;
+  while (valueIndex < value.length) {
+    if (patternIndex < pattern.length && (pattern[patternIndex] === "?" || pattern[patternIndex] === value[valueIndex])) {
+      patternIndex += 1;
+      valueIndex += 1;
+      continue;
+    }
+    if (patternIndex < pattern.length && pattern[patternIndex] === "*") {
+      starIndex = patternIndex;
+      starValueIndex = valueIndex;
+      patternIndex += 1;
+      continue;
+    }
+    if (starIndex >= 0) {
+      patternIndex = starIndex + 1;
+      starValueIndex += 1;
+      valueIndex = starValueIndex;
+      continue;
+    }
+    return false;
+  }
+  while (patternIndex < pattern.length && pattern[patternIndex] === "*") {
+    patternIndex += 1;
+  }
+  return patternIndex === pattern.length;
+}
+
 function stripQuotedStrings(value: string): string {
-  return value.replace(/'[^']*'|"[^"]*"/g, "''");
+  let result = "";
+  let quote: string | null = null;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+        result += "''";
+      }
+      continue;
+    }
+    if (char === "'" || char === "\"") {
+      quote = char;
+      continue;
+    }
+    result += char;
+  }
+  return result;
 }
 
 function stronglyConnectedComponents(graph: Map<string, Set<string>>): string[][] {

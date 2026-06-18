@@ -72,7 +72,7 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
         send(response, 404, "text/plain; charset=utf-8", "Not found");
       }
     } catch (error) {
-      send(response, 500, "application/json; charset=utf-8", JSON.stringify({ error: String(error) }));
+      send(response, 500, "application/json; charset=utf-8", dashboardErrorBody());
     }
   });
 
@@ -89,6 +89,10 @@ function numberParam(url: URL, name: string): number | undefined {
 
 function sendJson(response: http.ServerResponse, body: unknown): void {
   send(response, 200, "application/json; charset=utf-8", JSON.stringify(body, null, 2));
+}
+
+export function dashboardErrorBody(): string {
+  return JSON.stringify({ error: "Internal server error" });
 }
 
 function send(response: http.ServerResponse, status: number, contentType: string, body: string): void {

@@ -208,16 +208,114 @@ function resolveCandidate(base: string, filePaths: Set<string>): string | null {
 
 function parseJsonConfig(content: string): { compilerOptions?: { baseUrl?: unknown; paths?: unknown } } | null {
   try {
-    return JSON.parse(stripJsonComments(content).replace(/,\s*([}\]])/g, "$1")) as { compilerOptions?: { baseUrl?: unknown; paths?: unknown } };
+    return JSON.parse(stripTrailingJsonCommas(stripJsonComments(content))) as { compilerOptions?: { baseUrl?: unknown; paths?: unknown } };
   } catch {
     return null;
   }
 }
 
 function stripJsonComments(value: string): string {
-  return value
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+  let result = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const current = value[index];
+    const next = value[index + 1];
+
+    if (inString) {
+      result += current;
+      if (escaped) {
+        escaped = false;
+      } else if (current === "\\") {
+        escaped = true;
+      } else if (current === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (current === "\"") {
+      inString = true;
+      result += current;
+      continue;
+    }
+
+    if (current === "/" && next === "/") {
+      index += 1;
+      while (index + 1 < value.length && value[index + 1] !== "\n" && value[index + 1] !== "\r") {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (current === "/" && next === "*") {
+      index += 1;
+      while (index + 1 < value.length) {
+        index += 1;
+        const commentChar = value[index];
+        if (commentChar === "\n" || commentChar === "\r") {
+          result += commentChar;
+        }
+        if (commentChar === "*" && value[index + 1] === "/") {
+          index += 1;
+          break;
+        }
+      }
+      continue;
+    }
+
+    result += current;
+  }
+
+  return result;
+}
+
+function stripTrailingJsonCommas(value: string): string {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const current = value[index];
+
+    if (inString) {
+      result += current;
+      if (escaped) {
+        escaped = false;
+      } else if (current === "\\") {
+        escaped = true;
+      } else if (current === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (current === "\"") {
+      inString = true;
+      result += current;
+      continue;
+    }
+
+    if (current === "," && isTrailingJsonComma(value, index + 1)) {
+      continue;
+    }
+
+    result += current;
+  }
+
+  return result;
+}
+
+function isTrailingJsonComma(value: string, start: number): boolean {
+  for (let index = start; index < value.length; index += 1) {
+    const current = value[index];
+    if (current === " " || current === "\t" || current === "\n" || current === "\r") {
+      continue;
+    }
+    return current === "}" || current === "]";
+  }
+  return false;
 }
 
 function specificity(pattern: string): number {

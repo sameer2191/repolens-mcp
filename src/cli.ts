@@ -514,7 +514,7 @@ Usage:
   repolens-mcp schema [--db path]
   repolens-mcp communities [--db path] [--limit n] [--min-size n]
   repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--max-file-bytes n] [--label name]
-  repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern regex] [--file-pattern src/] [--min-degree n] [--db path]
+  repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern wildcard] [--file-pattern src/] [--min-degree n] [--db path]
   repolens-mcp semantic "meaningful concept query" [--db path] [--limit n]
   repolens-mcp vector "meaningful concept query" [--db path] [--limit n]
   repolens-mcp context-pack "meaningful concept query" [--db path] [--limit n] [--context n]
