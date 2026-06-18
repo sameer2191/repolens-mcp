@@ -188,6 +188,52 @@ export function addCallEdges(symbols: SymbolNode[], fileContents: Map<string, st
   return edges;
 }
 
+export function addHttpEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
+  const routes = symbols.filter((symbol) => symbol.kind === "route" && typeof symbol.metadata?.path === "string");
+  if (routes.length === 0) {
+    return [];
+  }
+  const routeLookup = new Map<string, SymbolNode[]>();
+  for (const route of routes) {
+    const pathValue = normalizeHttpPath(String(route.metadata?.path ?? ""));
+    if (!pathValue) continue;
+    const method = String(route.metadata?.method ?? "ROUTE").toUpperCase();
+    const key = `${method}:${pathValue}`;
+    routeLookup.set(key, [...(routeLookup.get(key) ?? []), route]);
+    routeLookup.set(`ANY:${pathValue}`, [...(routeLookup.get(`ANY:${pathValue}`) ?? []), route]);
+  }
+
+  const sources = symbols.filter((symbol) => ["function", "method", "class"].includes(symbol.kind));
+  const edges: Edge[] = [];
+  for (const source of sources) {
+    const content = fileContents.get(source.filePath);
+    if (!content) continue;
+    const body = content
+      .split(/\r?\n/)
+      .slice(Math.max(0, source.startLine - 1), source.endLine)
+      .join("\n");
+    for (const call of extractHttpCalls(body, source.startLine)) {
+      const exact = routeLookup.get(`${call.method}:${call.path}`) ?? [];
+      const fallback = call.method === "ANY" ? routeLookup.get(`ANY:${call.path}`) ?? [] : [];
+      for (const route of exact.length ? exact : fallback) {
+        if (source.qualifiedName === route.qualifiedName) continue;
+        edges.push({
+          source: source.qualifiedName,
+          target: route.qualifiedName,
+          type: "HTTP_CALLS",
+          weight: call.method === "ANY" ? 0.65 : 0.9,
+          metadata: {
+            method: call.method,
+            path: call.path,
+            line: call.line
+          }
+        });
+      }
+    }
+  }
+  return edges;
+}
+
 function makeSymbol(
   filePath: string,
   language: Language,
@@ -261,6 +307,36 @@ function extractRoutes(filePath: string, language: Language, content: string): S
     }
   }
   return routes;
+}
+
+function extractHttpCalls(content: string, startLine: number): Array<{ method: string; path: string; line: number }> {
+  const calls: Array<{ method: string; path: string; line: number }> = [];
+  const regexes: Array<{ regex: RegExp; method?: (match: RegExpExecArray) => string; urlGroup: number }> = [
+    { regex: /\bfetch\(\s*["'`]([^"'`]+)["'`](?:[\s\S]{0,180}?\bmethod\s*:\s*["'`](GET|POST|PUT|PATCH|DELETE)["'`])?/gi, method: (match) => match[2] ?? "GET", urlGroup: 1 },
+    { regex: /\baxios\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/gi, method: (match) => match[1], urlGroup: 2 },
+    { regex: /\b(?:http|https)\.(get|request)\(\s*["'`]([^"'`]+)["'`]/gi, method: (match) => (match[1].toLowerCase() === "get" ? "GET" : "ANY"), urlGroup: 2 }
+  ];
+  for (const { regex, method, urlGroup } of regexes) {
+    for (const match of content.matchAll(regex)) {
+      const pathValue = normalizeHttpPath(match[urlGroup]);
+      if (!pathValue) continue;
+      calls.push({
+        method: method?.(match).toUpperCase() ?? "ANY",
+        path: pathValue,
+        line: startLine + offsetToLine(content, match.index ?? 0) - 1
+      });
+    }
+  }
+  return calls;
+}
+
+function normalizeHttpPath(value: string | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  const pathOnly = /^[a-z]+:\/\//i.test(trimmed) ? new URL(trimmed).pathname : trimmed.split(/[?#]/, 1)[0];
+  return pathOnly.startsWith("/") ? pathOnly.replace(/\/+$/, "") || "/" : null;
 }
 
 function extractMarkdown(filePath: string, lines: string[]): SymbolNode[] {

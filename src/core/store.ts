@@ -281,7 +281,7 @@ export class MemoryStore {
   }
 
   deleteDerivedEdges(): void {
-    this.db.prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL', 'SIMILAR_TO', 'SEMANTICALLY_RELATED')").run();
+    this.db.prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL', 'HTTP_CALLS', 'SIMILAR_TO', 'SEMANTICALLY_RELATED')").run();
   }
 
   counts(): { symbols: number; edges: number } {

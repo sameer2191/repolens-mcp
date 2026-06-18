@@ -21,7 +21,7 @@ Result:
 
 - TypeScript build passed.
 - Node test suite passed: 8 tests, 0 failures.
-- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, symbol search, code search, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Covered decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, symbol search, code search, semantic search, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -37,17 +37,17 @@ node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db
 
 Result:
 
-- Files discovered: 35
-- Files indexed: 35
+- Files discovered: 36
+- Files indexed: 36
 - Files skipped: 0
-- Symbols: 269
-- Edges: 901
-- Lines indexed: 5,804
-- Full index elapsed: 159 ms
-- No-op incremental elapsed: 15 ms
-- No-op incremental unchanged files: 35
-- Graph package: `.repolens/self.rlgz` (257,127 bytes from a 1,130,496-byte SQLite snapshot)
-- Imported package totals: 35 files, 269 symbols, 901 edges
+- Symbols: 275
+- Edges: 933
+- Lines indexed: 5,901
+- Full index elapsed: 174 ms
+- No-op incremental elapsed: 25 ms
+- No-op incremental unchanged files: 36
+- Graph package: `.repolens/self.rlgz` (262,374 bytes from a 1,163,264-byte SQLite snapshot)
+- Imported package totals: 36 files, 275 symbols, 933 edges
 - Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -118,15 +118,15 @@ Result:
 - Symbols: 5,234
 - Edges: 30,324
 - Lines indexed: 96,330
-- Full index elapsed: 11,508 ms
-- No-op incremental elapsed: 198 ms
+- Full index elapsed: 11,863 ms
+- No-op incremental elapsed: 273 ms
 - No-op incremental unchanged files: 852
 - No-op incremental removed files: 0
 - Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (331 KB)
 - Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (8.8 KB)
 - Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html`
 - Graph JSON: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`
-- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (4,842,960 bytes from a 40,456,192-byte SQLite snapshot)
+- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (4,847,389 bytes from a 40,464,384-byte SQLite snapshot)
 - Imported graph package totals: 816 files, 5,234 symbols, 30,324 edges
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
 - Import-resolved dependency cycles: 0
@@ -156,9 +156,9 @@ Graph schema:
 | `DEFINES` edges | 4,252 |
 | `CALLS_LOCAL` edges | 3,163 |
 | `IMPORTS` edges | 1,321 |
+| `DECLARES` edges | 166 |
 | `SIMILAR_TO` edges | 1,193 |
 | `SEMANTICALLY_RELATED` edges | 118 |
-| `DECLARES` edges | 166 |
 
 Incremental refresh:
 
@@ -278,6 +278,16 @@ node --experimental-sqlite dist/src/cli.js query-graph \
 
 Confirmed node and one-hop relationship queries with `WHERE`, `RETURN`, edge aliases, and `LIMIT` on the large validation database.
 
+HTTP route-call links:
+
+```bash
+node --experimental-sqlite dist/src/cli.js query-graph \
+  "MATCH (a)-[r:HTTP_CALLS]->(b:Route) RETURN a.name,b.name,r.type LIMIT 5" \
+  --db .repolens/self.db
+```
+
+Confirmed `loadOrders -> GET /orders` and `submitOrder -> POST /orders` edges in the self-validation fixture graph.
+
 Dependency cycles:
 
 ```bash
@@ -359,7 +369,7 @@ node --experimental-sqlite dist/src/cli.js watch /Users/sameer/Desktop/testing \
   --runs 2
 ```
 
-Confirmed two watch-mode incremental passes over the large validation database preserved 5,234 symbols and 30,324 edges in 190 ms and 119 ms. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
+Confirmed two watch-mode incremental passes over the large validation database preserved 5,234 symbols and 30,324 edges in 120 ms and 115 ms. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
 
 Index lock:
 

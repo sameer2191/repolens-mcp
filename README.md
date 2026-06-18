@@ -6,13 +6,14 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 20 tools for indexing, code search, symbol search, semantic search, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 20 tools for indexing, code search, symbol search, semantic search, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries, route-call links, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI.
 - **Operational dashboard**: browse graph previews, structural filters, schema counts, dead-code candidates, review signals, and report links without a frontend build.
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
+- **Route-call edges**: connects literal `fetch`/Axios/Node HTTP calls to indexed route nodes with `HTTP_CALLS` edges.
 - **Architecture recommendations**: turns hotspots, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
 - **Validation evidence**: tests, CI, CodeQL, docs, local dashboard, and a big-repo validation workflow.
@@ -90,6 +91,7 @@ repolens-mcp mcp
 The extractor is intentionally compact and extensible:
 
 - TypeScript and JavaScript: classes, interfaces, types, functions, const functions, imports, Express-style routes.
+- HTTP call linking: literal `fetch`, Axios, and Node `http` calls are linked to matching route nodes as `HTTP_CALLS`.
 - Swift: classes, structs, enums, protocols, actors, functions, and imports.
 - Python: classes, functions, imports, route decorators.
 - Go, Java, Rust: common functions, types, classes, traits, structs, imports.

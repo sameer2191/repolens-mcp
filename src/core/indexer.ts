@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { addCallEdges, extractFromFile } from "./extractor.js";
+import { addCallEdges, addHttpEdges, extractFromFile } from "./extractor.js";
 import { sha256 } from "./hash.js";
 import { shouldIgnoreDirectory, shouldIgnoreFile } from "./ignore.js";
 import { detectLanguage, isTextCandidate, normalizeSlashes } from "./language.js";
@@ -146,10 +146,12 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
 
     if (graphNeedsRebuild) {
       const callEdges = addCallEdges(allSymbols, fileContents);
+      const httpEdges = addHttpEdges(allSymbols, fileContents);
       const semanticEdges = buildSemanticEdges(allSymbols, fileContents);
       store.transaction(() => {
         store.deleteDerivedEdges();
         for (const edge of callEdges) store.insertEdge(edge);
+        for (const edge of httpEdges) store.insertEdge(edge);
         for (const edge of semanticEdges) store.insertEdge(edge);
       });
     }

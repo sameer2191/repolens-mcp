@@ -16,7 +16,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
   const result = await indexRepository({ root: fixture, dbPath });
 
   assert.equal(result.mode, "full");
-  assert.equal(result.filesIndexed, 5);
+  assert.equal(result.filesIndexed, 6);
   assert.equal(result.filesUnchanged, 0);
   assert.equal(result.filesRemoved, 0);
   assert.ok(result.symbols >= 14);
@@ -44,6 +44,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(arch.entrypoints.some((entry) => entry.path.includes("server.ts")));
     assert.ok(arch.nodeLabels.some((label) => label.kind === "function"));
     assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "CALLS"));
+    assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "HTTP_CALLS"));
     assert.ok(arch.topSymbols.some((symbol) => symbol.name === "createOrder"));
     assert.ok(Array.isArray(arch.dependencyCycles));
     assert.ok(Array.isArray(arch.recommendations));
@@ -69,6 +70,9 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const callQuery = store.queryGraph("MATCH (a)-[r:CALLS]->(b:Function) WHERE b.name = 'createOrder' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(callQuery.rows.some((row) => row["b.name"] === "createOrder" && row["r.type"] === "CALLS"));
+
+    const httpQuery = store.queryGraph("MATCH (a)-[r:HTTP_CALLS]->(b:Route) WHERE b.name CONTAINS '/orders' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(httpQuery.rows.some((row) => row["a.name"] === "loadOrders" && row["r.type"] === "HTTP_CALLS"));
 
     assert.throws(() => store.queryGraph("MATCH (f) DELETE f RETURN f.name"), /read-only/);
 
