@@ -1,5 +1,10 @@
 # RepoLens MCP
 
+[![CI](https://github.com/sameer2191/repolens-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sameer2191/repolens-mcp/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/sameer2191/repolens-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/sameer2191/repolens-mcp/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D24-339933.svg)](package.json)
+
 Local-first repository intelligence for AI coding agents. Index a repo into SQLite, expose architecture-aware MCP tools, and inspect code relationships in a browser dashboard.
 
 RepoLens MCP is an original TypeScript implementation built around fast local verification, readable internals, and reviewable engineering evidence. It focuses on the workflows engineers actually need during AI-assisted development: finding code, tracing symbols, checking impact, and preserving architecture decisions.

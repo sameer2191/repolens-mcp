@@ -19,5 +19,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
-      - run: node --experimental-sqlite dist/src/cli.js index . --db .codebase-memory/ci.db --max-file-bytes 250000
-      - run: node --experimental-sqlite dist/src/cli.js architecture --db .codebase-memory/ci.db
+      - run: npm pack --dry-run --json
+      - run: node --experimental-sqlite dist/src/cli.js index . --db .repolens/ci.db --max-file-bytes 250000
+      - run: node --experimental-sqlite dist/src/cli.js architecture --db .repolens/ci.db

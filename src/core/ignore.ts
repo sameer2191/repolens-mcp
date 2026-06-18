@@ -12,7 +12,6 @@ const ignoredDirectories = new Set([
   ".turbo",
   ".cache",
   ".repolens",
-  ".codebase-memory",
   ".pnpm-store",
   "__pycache__",
   ".pytest_cache",

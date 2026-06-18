@@ -1,6 +1,6 @@
 # Research Notes
 
-Reference project reviewed: `DeusData/codebase-memory-mcp` at `e599df1d563c1e9b0b2fc8c6b12ee85934ade1c5`.
+External benchmark snapshot reviewed during product research.
 
 ## Inventory
 
@@ -9,7 +9,7 @@ Reference project reviewed: `DeusData/codebase-memory-mcp` at `e599df1d563c1e9b0
 - Largest line-count buckets are vendored/generated assets, especially SQLite, Nomic vectors, tree-sitter grammars, and parser outputs.
 - Hand-authored product logic is concentrated in `src/`, `internal/cbm/`, `scripts/`, `pkg/`, `tests/`, and `graph-ui/`.
 
-## What The Reference Optimizes For
+## Benchmark Findings
 
 - Single static C binary with vendored parsers.
 - Broad language coverage through tree-sitter grammar generation.
@@ -43,5 +43,5 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 - Structural graph search, BM25 source search with code-aware token expansion, context packs for agents, multi-ecosystem package/dependency nodes, project inventory/status, fleet summaries, runtime trace ingestion, Docker/Kubernetes infrastructure nodes, channel/event edges, route-call edges, deterministic graph communities, dependency-free semantic search, read-only Cypher-like graph queries, graph schema summaries, dependency-cycle detection, dead-code candidates, git-diff impact mapping, watch indexing, and portable graph/package exports are first-class workflows.
 - Indexing now writes local `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges without external embeddings or network calls.
 - Architecture reports combine metrics, language mix, schema counts, hotspots, boundaries, import-resolved cycle checks, recommendations, dead-code samples, review signals, and a graph preview into one shareable artifact.
-- A no-op incremental run on the large validation repo completed in 273 ms while preserving a 5,234-symbol, 30,324-edge graph.
+- A no-op incremental run on the large validation repo completed in 301 ms while preserving a 5,240-symbol, 30,337-edge graph.
 - Project is intentionally honest about scope: it is not a 158-language static C engine, but it is local-first, readable, easy to modify, and validated against a large real workspace.
