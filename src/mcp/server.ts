@@ -14,6 +14,7 @@ import {
   getProjectStatus,
   graphSnapshot,
   impactAnalysis,
+  ingestTraces,
   jsonBlock,
   listProjects,
   listDecisions,
@@ -278,6 +279,34 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ limit, dbPath }) => text(findDependencyCycles(limit, dbPath))
+  );
+
+  server.registerTool(
+    "ingest_traces",
+    {
+      description: "Ingest observed runtime HTTP, event, or symbol edges into the graph as OBSERVED_* relationships.",
+      inputSchema: {
+        traces: z.array(
+          z.object({
+            source: z.string().optional(),
+            sourceFile: z.string().optional(),
+            target: z.string().optional(),
+            targetFile: z.string().optional(),
+            type: z.enum(["http", "event", "edge"]).optional(),
+            method: z.string().optional(),
+            path: z.string().optional(),
+            channel: z.string().optional(),
+            direction: z.enum(["emit", "listen"]).optional(),
+            edgeType: z.string().optional(),
+            count: z.number().positive().optional(),
+            observedAt: z.string().optional(),
+            metadata: z.record(z.string(), z.unknown()).optional()
+          })
+        ),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ traces, dbPath }) => text(ingestTraces(traces, dbPath))
   );
 
   server.registerTool(

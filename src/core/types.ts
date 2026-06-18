@@ -63,6 +63,29 @@ export interface Edge {
   metadata?: Record<string, unknown>;
 }
 
+export interface RuntimeTrace {
+  source?: string;
+  sourceFile?: string;
+  target?: string;
+  targetFile?: string;
+  type?: "http" | "event" | "edge";
+  method?: string;
+  path?: string;
+  channel?: string;
+  direction?: "emit" | "listen";
+  edgeType?: string;
+  count?: number;
+  observedAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TraceIngestResult {
+  tracesReceived: number;
+  edgesInserted: number;
+  edges: Edge[];
+  unresolved: Array<{ trace: RuntimeTrace; reason: string }>;
+}
+
 export interface CodeMatch {
   filePath: string;
   language: Language;

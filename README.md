@@ -6,7 +6,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 24 tools for indexing, project inventory/status, BM25 code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 25 tools for indexing, project inventory/status, BM25 code search, symbol search, semantic search, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Codex-ready setup**: `doctor` inspects the local Codex MCP configuration, and `install-codex` can add a managed MCP block with dry-run and force safeguards.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog**: `list-projects`, `project-status`, and `delete-project` track indexed repositories across local workspaces without mixing their graph databases.
@@ -18,6 +18,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
 - **Route-call edges**: connects literal `fetch`/Axios/Node HTTP calls to indexed route nodes with `HTTP_CALLS` edges.
+- **Runtime trace ingestion**: imports observed HTTP, event, or symbol traces as `OBSERVED_*` graph edges with counts and timestamps.
 - **Channel/event edges**: detects EventEmitter, Socket.IO-style, DOM custom event, Python decorator/call, and Swift `NotificationCenter` channels with `EMITS` and `LISTENS_ON` edges.
 - **Manifest dependency graph**: extracts package and dependency nodes from npm, Composer, Python, Go, Cargo, Maven, Gradle, Dart, Elixir, Ruby, and `requirements.txt` manifests.
 - **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
@@ -62,6 +63,7 @@ repolens-mcp semantic "live session repository" [--limit n]
 repolens-mcp query-graph "MATCH (a)-[:CALLS]->(b) RETURN a.name,b.name LIMIT 5"
 repolens-mcp dead-code [--db path]
 repolens-mcp cycles [--db path] [--limit n]
+repolens-mcp ingest-traces traces.json [--db path]
 repolens-mcp changes [repo] [--db path]
 repolens-mcp report [--db path] [--format markdown|html] [--graph-limit n] [--out report.html]
 repolens-mcp export-graph --out graph.html [--db path]
@@ -97,6 +99,7 @@ repolens-mcp mcp
 | `query_graph` | Run a read-only Cypher-like query over symbols and one-hop edges. |
 | `find_dead_code` | Find non-exported functions and methods with no inbound call edges. |
 | `find_dependency_cycles` | Find import-resolved dependency cycles between architecture clusters. |
+| `ingest_traces` | Add observed runtime HTTP, event, or symbol edges as `OBSERVED_*` relationships. |
 | `detect_changes` | Map uncommitted git changes to indexed graph impact. |
 | `architecture_report` | Generate a markdown or HTML architecture report from the indexed graph. |
 | `remember_decision` | Persist an ADR-style architecture decision. |
@@ -149,6 +152,7 @@ node --experimental-sqlite dist/src/cli.js snippet createOrder --db /tmp/memory.
 node --experimental-sqlite dist/src/cli.js semantic "order checkout flow" --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js cycles --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js query-graph "MATCH (f:Function) RETURN f.name,f.filePath LIMIT 5" --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js ingest-traces traces.json --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js report --db /tmp/memory.db --format html --out report.html
 node --experimental-sqlite dist/src/cli.js export-graph --db /tmp/memory.db --out graph.html --limit 1000
 node --experimental-sqlite dist/src/cli.js pack-graph --db /tmp/memory.db --out graph.rlgz --label validation

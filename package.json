@@ -1,7 +1,7 @@
 {
   "name": "repolens-mcp",
   "version": "1.0.0",
-  "description": "Local-first repository intelligence MCP server with Codex setup, project catalog, incremental indexing, BM25 code search, multi-ecosystem manifest parsing, Docker/Kubernetes graph indexing, channel/event graph edges, watch mode, graph search, graph communities, semantic search, route-call links, read-only graph queries, source snippets, dependency-cycle checks, architecture reports, graph packages, ADR memory, graph export, and a dashboard.",
+  "description": "Local-first repository intelligence MCP server with Codex setup, project catalog, incremental indexing, BM25 code search, runtime trace ingestion, multi-ecosystem manifest parsing, Docker/Kubernetes graph indexing, channel/event graph edges, watch mode, graph search, graph communities, semantic search, route-call links, read-only graph queries, source snippets, dependency-cycle checks, architecture reports, graph packages, ADR memory, graph export, and a dashboard.",
   "type": "module",
   "bin": {
     "repolens-mcp": "./dist/src/cli.js"

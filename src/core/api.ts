@@ -6,7 +6,7 @@ import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
 import { watchRepository } from "./watcher.js";
 import type { ArchitectureReportOptions } from "./report.js";
-import type { DecisionRecord, GraphSearchOptions, IndexOptions, WatchIndexOptions } from "./types.js";
+import type { DecisionRecord, GraphSearchOptions, IndexOptions, RuntimeTrace, WatchIndexOptions } from "./types.js";
 
 export async function runIndex(options: IndexOptions) {
   const result = await indexRepository(options);
@@ -96,6 +96,10 @@ export function findDeadCode(limit?: number, dbPath?: string) {
 
 export function findDependencyCycles(limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.dependencyCycles(limit));
+}
+
+export function ingestTraces(traces: RuntimeTrace[], dbPath?: string) {
+  return withStore(dbPath, (store) => store.ingestTraces(traces));
 }
 
 export function detectChanges(root?: string, limit?: number, dbPath?: string) {

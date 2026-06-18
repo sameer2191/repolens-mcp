@@ -15,6 +15,7 @@ import {
   getProjectStatus,
   graphSnapshot,
   impactAnalysis,
+  ingestTraces,
   jsonBlock,
   listProjects,
   listDecisions,
@@ -146,6 +147,9 @@ async function main(): Promise<void> {
       break;
     case "cycles":
       print(findDependencyCycles(numberFlag(args, "limit"), stringFlag(args, "db")));
+      break;
+    case "ingest-traces":
+      print(ingestTraces(await readTraceInput(required(args.positional[0] ?? stringFlag(args, "input"), "trace JSON or file")), stringFlag(args, "db")));
       break;
     case "changes":
       print(detectChanges(args.positional[0] ? path.resolve(args.positional[0]) : undefined, numberFlag(args, "limit"), stringFlag(args, "db")));
@@ -307,6 +311,18 @@ function print(value: unknown): void {
   process.stdout.write(`${jsonBlock(value)}\n`);
 }
 
+async function readTraceInput(input: string) {
+  const raw = await fs.readFile(path.resolve(input), "utf8").catch(() => input);
+  const parsed = JSON.parse(raw) as unknown;
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  if (parsed && typeof parsed === "object" && Array.isArray((parsed as { traces?: unknown }).traces)) {
+    return (parsed as { traces: unknown[] }).traces;
+  }
+  throw new Error("Trace input must be a JSON array or an object with a traces array.");
+}
+
 function currentCliPath(): string {
   return path.resolve(process.argv[1] ?? "repolens-mcp");
 }
@@ -352,6 +368,7 @@ Usage:
   repolens-mcp query-graph "MATCH (a)-[:CALLS]->(b) RETURN a.name,b.name LIMIT 5" [--db path]
   repolens-mcp dead-code [--db path] [--limit n]
   repolens-mcp cycles [--db path] [--limit n]
+  repolens-mcp ingest-traces traces.json [--db path]
   repolens-mcp changes [repo] [--db path] [--limit n]
   repolens-mcp decision --title "ADR title" --body "Decision body" [--tags a,b]
   repolens-mcp decisions [--db path]

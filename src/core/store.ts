@@ -21,7 +21,9 @@ import type {
   IndexedFile,
   Language,
   SemanticSearchMatch,
-  SymbolNode
+  SymbolNode,
+  RuntimeTrace,
+  TraceIngestResult
 } from "./types.js";
 
 interface CountRow {
@@ -729,6 +731,77 @@ export class MemoryStore {
     };
   }
 
+  ingestTraces(traces: RuntimeTrace[]): TraceIngestResult {
+    const edges: Edge[] = [];
+    const unresolved: TraceIngestResult["unresolved"] = [];
+    const observedAt = new Date().toISOString();
+
+    for (const trace of traces) {
+      const type = trace.type ?? inferTraceType(trace);
+      if (type === "http") {
+        const source = this.resolveTraceEndpoint(trace.source, trace.sourceFile);
+        const route = this.findRoute(trace.method ?? "ANY", trace.path ?? trace.target ?? "");
+        if (!source || !route) {
+          unresolved.push({ trace, reason: !source ? "source symbol not found" : "route target not found" });
+          continue;
+        }
+        edges.push({
+          source,
+          target: route.qualifiedName,
+          type: "OBSERVED_HTTP_CALLS",
+          weight: traceWeight(trace),
+          metadata: traceMetadata(trace, observedAt, { method: String(route.metadata?.method ?? trace.method ?? "ANY"), path: String(route.metadata?.path ?? trace.path ?? "") })
+        });
+        continue;
+      }
+
+      if (type === "event") {
+        const source = this.resolveTraceEndpoint(trace.source, trace.sourceFile);
+        const channel = normalizeObservedChannel(trace.channel ?? trace.target);
+        if (!source || !channel) {
+          unresolved.push({ trace, reason: !source ? "source symbol not found" : "channel target not found" });
+          continue;
+        }
+        const channelSymbol = this.ensureRuntimeChannel(channel);
+        edges.push({
+          source,
+          target: channelSymbol.qualifiedName,
+          type: trace.direction === "listen" ? "OBSERVED_LISTENS_ON" : "OBSERVED_EMITS",
+          weight: traceWeight(trace),
+          metadata: traceMetadata(trace, observedAt, { channel })
+        });
+        continue;
+      }
+
+      const source = this.resolveTraceEndpoint(trace.source, trace.sourceFile);
+      const target = this.resolveTraceEndpoint(trace.target, trace.targetFile);
+      if (!source || !target) {
+        unresolved.push({ trace, reason: !source ? "source symbol not found" : "target symbol not found" });
+        continue;
+      }
+      edges.push({
+        source,
+        target,
+        type: normalizeObservedEdgeType(trace.edgeType ?? "OBSERVED_CALLS"),
+        weight: traceWeight(trace),
+        metadata: traceMetadata(trace, observedAt)
+      });
+    }
+
+    this.transaction(() => {
+      for (const edge of edges) {
+        this.insertEdge(edge);
+      }
+    });
+
+    return {
+      tracesReceived: traces.length,
+      edgesInserted: edges.length,
+      edges,
+      unresolved
+    };
+  }
+
   communities(limit = 20, minMembers = 4): GraphCommunity[] {
     const nodeRows = this.db
       .prepare(
@@ -1170,6 +1243,83 @@ export class MemoryStore {
     };
   }
 
+  private resolveTraceEndpoint(identifier: string | undefined, filePath?: string): string | null {
+    const split = splitTraceIdentifier(identifier);
+    const scopedFile = filePath ?? split.filePath;
+    const name = split.name;
+
+    if (scopedFile) {
+      if (!name) {
+        const file = this.db.prepare("SELECT path FROM files WHERE path = ? LIMIT 1").get(scopedFile) as { path: string } | undefined;
+        return file ? `${file.path}:file` : null;
+      }
+      const row = this.db
+        .prepare(
+          `SELECT * FROM symbols
+           WHERE file_path = ? AND (name = ? OR qualified_name = ?)
+           ORDER BY exported DESC, start_line ASC
+           LIMIT 1`
+        )
+        .get(scopedFile, name, name) as SymbolRow | undefined;
+      if (row) {
+        return rowToSymbol(row).qualifiedName;
+      }
+      return null;
+    }
+
+    if (!name) {
+      return null;
+    }
+    const trimmed = name.trim();
+    const symbol = this.getSymbol(trimmed) ?? this.searchSymbols(trimmed, undefined, 1)[0];
+    if (symbol) {
+      return symbol.qualifiedName;
+    }
+    const file = this.db.prepare("SELECT path FROM files WHERE path = ? LIMIT 1").get(trimmed) as { path: string } | undefined;
+    return file ? `${file.path}:file` : null;
+  }
+
+  private findRoute(method: string, routePath: string): SymbolNode | null {
+    const normalizedPath = normalizeObservedHttpPath(routePath);
+    if (!normalizedPath) {
+      return null;
+    }
+    const normalizedMethod = method.toUpperCase();
+    const rows = this.db
+      .prepare("SELECT * FROM symbols WHERE kind = 'route' ORDER BY name ASC")
+      .all() as unknown as SymbolRow[];
+    for (const row of rows) {
+      const symbol = rowToSymbol(row);
+      const metadataPath = normalizeObservedHttpPath(String(symbol.metadata?.path ?? ""));
+      const metadataMethod = String(symbol.metadata?.method ?? "ANY").toUpperCase();
+      if (metadataPath === normalizedPath && (metadataMethod === normalizedMethod || normalizedMethod === "ANY" || metadataMethod === "ANY")) {
+        return symbol;
+      }
+    }
+    return null;
+  }
+
+  private ensureRuntimeChannel(channel: string): SymbolNode {
+    const qualifiedName = `channel:${channel}`;
+    const existing = this.getSymbol(qualifiedName);
+    if (existing) {
+      return existing;
+    }
+    const symbol: SymbolNode = {
+      filePath: "__channels__",
+      language: "unknown",
+      kind: "channel",
+      name: channel,
+      qualifiedName,
+      startLine: 1,
+      endLine: 1,
+      exported: true,
+      metadata: { channel, observed: true }
+    };
+    this.insertSymbol(symbol);
+    return symbol;
+  }
+
   private nodeLabels(): Array<{ kind: string; count: number }> {
     return this.db
       .prepare("SELECT kind, count(*) AS count FROM symbols GROUP BY kind ORDER BY count DESC, kind ASC")
@@ -1437,6 +1587,69 @@ export class MemoryStore {
 
 export function defaultDbPath(root: string): string {
   return path.join(root, ".repolens", "memory.db");
+}
+
+function inferTraceType(trace: RuntimeTrace): "http" | "event" | "edge" {
+  if (trace.method || trace.path) {
+    return "http";
+  }
+  if (trace.channel) {
+    return "event";
+  }
+  return "edge";
+}
+
+function traceWeight(trace: RuntimeTrace): number {
+  const count = trace.count ?? 1;
+  return Math.max(1, Math.min(1000, count));
+}
+
+function traceMetadata(trace: RuntimeTrace, defaultObservedAt: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    observed: true,
+    observedAt: trace.observedAt ?? defaultObservedAt,
+    count: trace.count ?? 1,
+    ...extra,
+    ...(trace.metadata ?? {})
+  };
+}
+
+function normalizeObservedHttpPath(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  try {
+    const parsed = new URL(trimmed, "http://repolens.local");
+    return parsed.pathname || "/";
+  } catch {
+    return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  }
+}
+
+function normalizeObservedChannel(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.replace(/^["'`]|["'`]$/g, "");
+}
+
+function splitTraceIdentifier(identifier: string | undefined): { filePath?: string; name?: string } {
+  const trimmed = identifier?.trim();
+  if (!trimmed) {
+    return {};
+  }
+  const hash = trimmed.lastIndexOf("#");
+  if (hash > 0 && hash < trimmed.length - 1) {
+    return { filePath: trimmed.slice(0, hash), name: trimmed.slice(hash + 1) };
+  }
+  return { name: trimmed };
+}
+
+function normalizeObservedEdgeType(value: string): string {
+  const normalized = value.trim().toUpperCase().replace(/[^A-Z0-9_]+/g, "_");
+  return normalized.startsWith("OBSERVED_") ? normalized : `OBSERVED_${normalized || "CALLS"}`;
 }
 
 function rowToSymbol(row: SymbolRow): SymbolNode {

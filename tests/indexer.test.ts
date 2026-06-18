@@ -162,6 +162,18 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     const httpQuery = store.queryGraph("MATCH (a)-[r:HTTP_CALLS]->(b:Route) WHERE b.name CONTAINS '/orders' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(httpQuery.rows.some((row) => row["a.name"] === "loadOrders" && row["r.type"] === "HTTP_CALLS"));
 
+    const observed = store.ingestTraces([
+      { type: "http", source: "submitOrder", sourceFile: "src/client.ts", method: "POST", path: "/orders", count: 3, observedAt: "2026-06-18T00:00:00.000Z" },
+      { type: "event", source: "notifyOrderCreated", sourceFile: "src/client.ts", channel: "order.created", direction: "emit", count: 2 }
+    ]);
+    assert.equal(observed.tracesReceived, 2);
+    assert.equal(observed.edgesInserted, 2);
+    assert.equal(observed.unresolved.length, 0);
+    const observedHttp = store.queryGraph("MATCH (a)-[r:OBSERVED_HTTP_CALLS]->(b:Route) WHERE b.name CONTAINS '/orders' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(observedHttp.rows.some((row) => row["a.name"] === "submitOrder" && row["r.type"] === "OBSERVED_HTTP_CALLS"));
+    const observedEvent = store.queryGraph("MATCH (a)-[r:OBSERVED_EMITS]->(b:Channel) WHERE b.name = 'order.created' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(observedEvent.rows.some((row) => row["a.name"] === "notifyOrderCreated" && row["r.type"] === "OBSERVED_EMITS"));
+
     assert.throws(() => store.queryGraph("MATCH (f) DELETE f RETURN f.name"), /read-only/);
 
     const swiftSymbols = store.searchGraph({ kind: "class", filePattern: "ios" });
