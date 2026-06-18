@@ -72,6 +72,15 @@ From a local clone, the installer runs the same build and Codex checks:
 ./install.sh --uninstall-agents --dry-run
 ```
 
+Windows PowerShell uses the same installer flow:
+
+```powershell
+.\install.ps1 -InstallCodex -DryRun
+.\install.ps1 -InstallCodex
+.\install.ps1 -InstallAgents -DryRun
+.\install.ps1 -UninstallAgents -DryRun
+```
+
 ## CLI
 
 ```bash
@@ -207,6 +216,8 @@ Supported result clauses include `RETURN DISTINCT`, `count(...)`, `ORDER BY`, `S
 ```bash
 npm run verify
 npm run package:check
+npm run audit:prod
+GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run security:github
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js benchmark /path/to/big/repo --db /tmp/benchmark.db
 node --experimental-sqlite dist/src/cli.js list-projects

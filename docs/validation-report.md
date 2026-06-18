@@ -28,10 +28,13 @@ Result:
 Commands:
 
 ```bash
+npm run audit:prod
 npm pack --dry-run --json
 npm run package:check
+GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run security:github
 node --experimental-sqlite dist/src/cli.js demo
 bash -n install.sh
+pwsh -NoLogo -NoProfile -Command '$parseErrors = $null; [System.Management.Automation.Language.Parser]::ParseFile("install.ps1", [ref]$null, [ref]$parseErrors) | Out-Null; if ($parseErrors.Count) { $parseErrors; exit 1 }'
 node --experimental-sqlite dist/src/cli.js agent-setup --target /tmp/repolens-agent-smoke --agents codex,claude,gemini --db .repolens/memory.db
 node --experimental-sqlite dist/src/cli.js uninstall-codex --dry-run
 node --experimental-sqlite dist/src/cli.js uninstall-agents --target /tmp/repolens-agent-uninstall-smoke --agents codex
@@ -45,18 +48,22 @@ ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].each { |file| YAML.load_
 
 Result:
 
+- Production dependency audit passed with `npm run audit:prod`: 0 vulnerabilities.
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 175,517 bytes packed, 901,830 bytes unpacked, 79 runtime/doc entries.
-- Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `docs/`, `llms.txt`, `scripts/`, `package.json`, `server.json`, and `install.sh`; compiled tests, source TypeScript, local graph memory, SQLite databases, graph packages, and fixtures are excluded.
-- Package contents gate passed: 79 files inspected.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 179,010 bytes packed, 915,688 bytes unpacked, 81 runtime/doc entries.
+- Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `docs/`, `llms.txt`, `scripts/`, `package.json`, `server.json`, `install.sh`, and `install.ps1`; compiled tests, source TypeScript, local graph memory, SQLite databases, graph packages, and fixtures are excluded.
+- Package contents gate passed: 81 files inspected.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
+- PowerShell installer parser check is enforced in CI for `install.ps1`; it mirrors the Unix installer's Node 24 check, npm/build flow, doctor command, Codex install/uninstall, agent install/uninstall, `-DryRun`, `-Force`, `-Db`, `-Agents`, `-Target`, and `-SkipNpm` options. Local macOS validation could not execute `pwsh` because it is not installed in this environment.
+- GitHub security summary script reported 0 actionable open alerts, 0 CodeQL alerts, 0 Dependabot alerts, 0 secret-scanning alerts, 3 OpenSSF Scorecard process signals, and 0 other code-scanning alerts.
 - `agent-setup` dry-run rendered the expected guide and instruction targets for Codex, Claude, and Gemini without writing files.
 - `config set/get/reset` persisted startup defaults in an isolated temp config file and removed the managed key cleanly.
 - `uninstall-codex --dry-run` detected the managed Codex block without writing, and `uninstall-agents` removed generated managed blocks from a temporary project target.
 - `benchmark` on the fixture repository ran a full index plus no-op incremental index, returned graph totals and throughput, and reported 0 medium/high secret findings.
-- Release workflow added for version tags and manual runs; it runs install, verification, demo indexing, `npm pack --json`, CycloneDX SBOM generation, SHA-256 checksum generation for the tarball and SBOM, artifact upload, and GitHub release asset publishing for tag builds.
-- Release workflow now also requests `id-token: write` and `attestations: write`, then calls `actions/attest-build-provenance@v2` for the tarball, SBOM, and checksum manifest before uploading release artifacts.
+- Release workflow added for version tags and manual runs. It now separates unprivileged `verify-package` work from privileged `publish` work: package verification runs install, verification, dependency audit, demo indexing, `npm pack --json`, CycloneDX SBOM generation, SHA-256 checksum generation, and artifact upload with read-only contents plus `security-events: read`; tag publishing downloads the verified artifact in a separate job with `contents: write`, `id-token: write`, and `attestations: write`.
+- Release publishing calls `actions/attest-build-provenance@v2` for the tarball, SBOM, and checksum manifest, uploads GitHub release assets for tags, and publishes the tarball to npm with provenance.
+- Tag release publishing now fails when `NPM_TOKEN` is missing instead of silently skipping npm publication.
 - Release workflow runs `npm run release:codeql-gate` with `security-events: read` before packaging/publishing; live validation returned `CodeQL alert gate passed: 0 open CodeQL alerts.`
 - OpenSSF Scorecard workflow added with SARIF upload to GitHub code scanning.
 - Live GitHub security check reported 0 open Dependabot alerts, 0 open secret-scanning alerts, and 0 open CodeQL alerts. The remaining 3 open code-scanning alerts are OpenSSF Scorecard process signals: `MaintainedID`, `CodeReviewID`, and `CIIBestPracticesID`.

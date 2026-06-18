@@ -42,6 +42,17 @@ The npm package is intentionally limited to runtime JavaScript, user-facing docs
 ```bash
 npm run build
 npm run package:check
+npm run audit:prod
 ```
 
 The package contents gate fails if local graph memory, SQLite databases, graph packages, private fixture folders, source TypeScript, or test output would be published.
+
+## GitHub Security Checks
+
+Maintainers with repository access can run:
+
+```bash
+GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run security:github
+```
+
+Use this before release or security-sensitive pull requests to distinguish actionable CodeQL, Dependabot, and secret-scanning alerts from OpenSSF Scorecard process signals.

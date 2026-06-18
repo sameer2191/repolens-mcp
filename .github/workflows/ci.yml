@@ -13,14 +13,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24"
           cache: npm
       - run: npm ci
       - run: npm run verify
+      - run: npm run audit:prod
       - run: npm pack --dry-run --json
       - run: npm run package:check
+      - run: pwsh -NoLogo -NoProfile -Command '$parseErrors = $null; [System.Management.Automation.Language.Parser]::ParseFile("install.ps1", [ref]$null, [ref]$parseErrors) | Out-Null; if ($parseErrors.Count) { $parseErrors; exit 1 }'
       - run: npm sbom --sbom-format cyclonedx --json > sbom.cyclonedx.json
       - run: test -s sbom.cyclonedx.json
       - run: node --experimental-sqlite dist/src/cli.js index . --db .repolens/ci.db --max-file-bytes 250000
