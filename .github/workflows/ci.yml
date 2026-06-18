@@ -20,5 +20,7 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: npm pack --dry-run --json
+      - run: npm sbom --sbom-format cyclonedx --json > sbom.cyclonedx.json
+      - run: test -s sbom.cyclonedx.json
       - run: node --experimental-sqlite dist/src/cli.js index . --db .repolens/ci.db --max-file-bytes 250000
       - run: node --experimental-sqlite dist/src/cli.js architecture --db .repolens/ci.db

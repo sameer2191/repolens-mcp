@@ -34,6 +34,7 @@ bash -n install.sh
 node --experimental-sqlite dist/src/cli.js agent-setup --target /tmp/repolens-agent-smoke --agents codex,claude,gemini --db .repolens/memory.db
 node --experimental-sqlite dist/src/cli.js uninstall-codex --dry-run
 node --experimental-sqlite dist/src/cli.js uninstall-agents --target /tmp/repolens-agent-uninstall-smoke --agents codex
+npm sbom --sbom-format cyclonedx --json
 ```
 
 Result:
@@ -41,11 +42,12 @@ Result:
 - Package dry run passed for `repolens-mcp@1.0.0`.
 - Packed artifact: `repolens-mcp-1.0.0.tgz`, 111,530 bytes packed, 565,602 bytes unpacked, 62 runtime entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `package.json`, `server.json`, and `install.sh`; compiled tests and fixtures are excluded.
+- CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
 - `agent-setup` dry-run rendered the expected guide and instruction targets for Codex, Claude, and Gemini without writing files.
 - `uninstall-codex --dry-run` detected the managed Codex block without writing, and `uninstall-agents` removed generated managed blocks from a temporary project target.
-- Release workflow added for version tags and manual runs; it runs install, verification, demo indexing, `npm pack --json`, SHA-256 checksum generation, artifact upload, and GitHub release asset publishing for tag builds.
-- CI now also checks `npm pack --dry-run --json` and self-indexes into `.repolens/ci.db`.
+- Release workflow added for version tags and manual runs; it runs install, verification, demo indexing, `npm pack --json`, CycloneDX SBOM generation, SHA-256 checksum generation for the tarball and SBOM, artifact upload, and GitHub release asset publishing for tag builds.
+- CI now also checks `npm pack --dry-run --json`, generates a CycloneDX SBOM, and self-indexes into `.repolens/ci.db`.
 
 ## Self Index
 

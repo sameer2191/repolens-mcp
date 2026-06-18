@@ -31,7 +31,7 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 - Browser dashboard without a bundler so the project is easy to build and inspect.
 - Dashboard APIs expose architecture, fleet summaries, graph schema, graph search, semantic search, read-only graph queries, source snippets, import-resolved dependency cycles, dead-code candidates, graph previews, code search, and live Markdown/HTML architecture reports from the same local server.
 - Self-contained graph and architecture report exports for sharing HTML or Markdown artifacts without running a server, plus compressed checksummed `.rlgz` graph packages for reusing a SQLite graph without reindexing.
-- CI that runs type-check, tests, self-indexing, and architecture output.
+- CI that runs type-check, tests, package dry-run, CycloneDX SBOM generation, self-indexing, and architecture output.
 
 ## Improvements To Highlight
 
