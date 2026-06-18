@@ -23,11 +23,25 @@ Pull requests should include:
 - Tests or a validation note for behavior changes.
 - Documentation updates for new CLI flags, MCP tools, graph fields, or security behavior.
 - Screenshots or generated report paths when dashboard or report output changes.
+- `npm run package:check` when package contents, shipped docs, install files, or release behavior changes.
 
 Avoid committing local `.repolens` databases, graph exports containing private source metadata, generated dependency folders, or fixture data from private repositories.
+
+Use pull requests for changes that affect published behavior. The protected `main` branch is expected to keep `verify` and CodeQL `Analyze` green before merge.
 
 ## Security-Sensitive Changes
 
 Changes that touch indexing, import resolution, file walking, graph package import/export, dashboard APIs, secret scanning, install scripts, or GitHub workflows need extra review. Include the threat model in the pull request body and add regression coverage for traversal, unsafe deserialization, unredacted secret output, or workflow permission changes when applicable.
 
 Report vulnerabilities through the process in [SECURITY.md](SECURITY.md), not public issues.
+
+## Package Boundary
+
+The npm package is intentionally limited to runtime JavaScript, user-facing docs, the server manifest, the installer, and license/security files. Before publishing or changing the `files` list, run:
+
+```bash
+npm run build
+npm run package:check
+```
+
+The package contents gate fails if local graph memory, SQLite databases, graph packages, private fixture folders, source TypeScript, or test output would be published.

@@ -1,0 +1,56 @@
+# RepoLens MCP
+
+RepoLens MCP is a local-first repository intelligence server for AI coding agents. It indexes source code into a local SQLite graph, exposes the graph through MCP tools and CLI commands, and keeps generated repository memory on the developer machine.
+
+## Use When
+
+- You need architecture context before changing a codebase.
+- You need symbol, reference, route, dependency, or impact lookup without manually reading every file.
+- You want a repeatable full/incremental benchmark for a repository graph.
+- You need a portable `.rlgz` graph package for local sharing or bootstrap.
+- You want redacted secret-scan results, package/dependency graph data, runtime trace edges, or architecture reports.
+
+## Primary Commands
+
+```bash
+npm ci
+npm run build
+node --experimental-sqlite dist/src/cli.js index . --db .repolens/memory.db
+node --experimental-sqlite dist/src/cli.js benchmark . --db .repolens/benchmark.db
+node --experimental-sqlite dist/src/cli.js architecture --db .repolens/memory.db
+node --experimental-sqlite dist/src/cli.js serve --db .repolens/memory.db
+```
+
+## MCP Entry
+
+Run the MCP server with:
+
+```bash
+node --experimental-sqlite dist/src/cli.js mcp
+```
+
+The server exposes tools for indexing, benchmarking, config management, project cataloging, fleet summaries, cross-repo graphing, code search, secret scanning, symbol/reference lookup, graph schema, graph search, semantic/vector search, context packs, read-only graph queries, trace ingestion, impact analysis, architecture reports, ADR memory, and graph package import/export.
+
+## Local Data Rules
+
+- Generated databases and graph packages can contain derived source metadata.
+- Do not publish `.repolens/`, SQLite database files, WAL/shm sidecars, graph packages, or local memory folders without manual review.
+- Use `scan-secrets` before sharing graph-derived reports from private repositories.
+- Published npm contents are checked by `npm run package:check`.
+
+## Validation Commands
+
+```bash
+npm run verify
+npm run package:check
+npm audit --omit=dev
+GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN=<token> npm run release:codeql-gate
+```
+
+## Documentation
+
+- `README.md`: user-facing overview, CLI, MCP tools, extraction coverage, validation commands.
+- `docs/agent-guide.md`: practical guide for using RepoLens from an agent workflow.
+- `docs/validation-report.md`: current local validation evidence.
+- `docs/research-notes.md`: product research and scope decisions.
+- `SECURITY.md`: vulnerability reporting and local-data handling policy.

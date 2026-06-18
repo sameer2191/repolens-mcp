@@ -29,6 +29,7 @@ Commands:
 
 ```bash
 npm pack --dry-run --json
+npm run package:check
 node --experimental-sqlite dist/src/cli.js demo
 bash -n install.sh
 node --experimental-sqlite dist/src/cli.js agent-setup --target /tmp/repolens-agent-smoke --agents codex,claude,gemini --db .repolens/memory.db
@@ -45,8 +46,9 @@ ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].each { |file| YAML.load_
 Result:
 
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 157,856 bytes packed, 834,289 bytes unpacked, 71 runtime entries.
-- Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `package.json`, `server.json`, and `install.sh`; compiled tests and fixtures are excluded.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 175,517 bytes packed, 901,830 bytes unpacked, 79 runtime/doc entries.
+- Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `docs/`, `llms.txt`, `scripts/`, `package.json`, `server.json`, and `install.sh`; compiled tests, source TypeScript, local graph memory, SQLite databases, graph packages, and fixtures are excluded.
+- Package contents gate passed: 79 files inspected.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
 - `agent-setup` dry-run rendered the expected guide and instruction targets for Codex, Claude, and Gemini without writing files.
@@ -57,7 +59,8 @@ Result:
 - Release workflow now also requests `id-token: write` and `attestations: write`, then calls `actions/attest-build-provenance@v2` for the tarball, SBOM, and checksum manifest before uploading release artifacts.
 - Release workflow runs `npm run release:codeql-gate` with `security-events: read` before packaging/publishing; live validation returned `CodeQL alert gate passed: 0 open CodeQL alerts.`
 - OpenSSF Scorecard workflow added with SARIF upload to GitHub code scanning.
-- CI now also checks `npm pack --dry-run --json`, generates a CycloneDX SBOM, and self-indexes into `.repolens/ci.db`.
+- Live GitHub security check reported 0 open Dependabot alerts, 0 open secret-scanning alerts, and 0 open CodeQL alerts. The remaining 3 open code-scanning alerts are OpenSSF Scorecard process signals: `MaintainedID`, `CodeReviewID`, and `CIIBestPracticesID`.
+- CI now also checks `npm pack --dry-run --json`, `npm run package:check`, generates a CycloneDX SBOM, and self-indexes into `.repolens/ci.db`.
 
 ## Self Index
 
@@ -78,22 +81,22 @@ node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db
 
 Result:
 
-- Files discovered: 78
-- Files indexed: 77
-- Files skipped: 1
-- Symbols: 921
-- Edges: 3,977
-- Lines indexed: 15,603 source rows; architecture totals report 17,177 physical lines.
-- Full index elapsed: 2,529 ms
-- No-op incremental elapsed: 108 ms
-- No-op incremental unchanged files: 78
-- Benchmark command: full index 77/78 files in 2,410 ms, no-op incremental in 14 ms, 31.95 files/s full throughput, 5,571.43 discovered files/s incremental throughput, and 0 medium/high secret findings across 13,425 scanned lines.
-- Full-text code-search rows: 15,603 `code_lines` rows and 15,603 `code_fts` rows
-- Local vector rows: 709 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
+- Files discovered: 81
+- Files indexed: 79
+- Files skipped: 2
+- Symbols: 933
+- Edges: 3,988
+- Lines indexed: 15,823 source rows; architecture totals report 17,450 physical lines.
+- Full index elapsed: 2,644 ms
+- No-op incremental elapsed: 24 ms
+- No-op incremental unchanged files: 81
+- Benchmark command: full index 79/81 files in 2,672 ms, no-op incremental in 17 ms, 29.57 files/s full throughput, 4,764.71 discovered files/s incremental throughput, and 0 medium/high secret findings across 13,645 scanned lines.
+- Full-text code-search rows: 15,823 `code_lines` rows and 15,823 `code_fts` rows
+- Local vector rows: 719 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
 - Reference lookup: `references vectorSearch` returned the API definition plus exact identifier references in `src/core/api.ts`, `src/cli.ts`, and docs.
 - MCP server tools registered: 37
 - Persistent config smoke test: `config set auto-index full`, `config get autoIndex`, and `config reset auto-index` worked against an isolated temp config file.
-- Redacted secret scan: 0 high/medium-confidence findings across 13,425 indexed non-test lines.
+- Redacted secret scan: 0 high/medium-confidence findings across 13,645 indexed non-test lines.
 - Channel graph rows: 11 `channel` nodes, 2 `EMITS` edges, and 15 `LISTENS_ON` edges
 - HTTP call graph rows: 14 `http_call` nodes, 14 `CALLS_HTTP_ENDPOINT` edges, and 4 generated `HTTP_CALLS` route edges
 - Type relationship rows: 425 `USES_TYPE` edges, 5 `INHERITS` edges, and 1 `IMPLEMENTS` edge.
@@ -105,12 +108,12 @@ Result:
 - Git history hotspots: architecture summaries and reports rank high-churn files, including `src/core/store.ts` at 27 commits and 3,954 changed lines, and include a history-aware recommendation before risky edits.
 - MCP startup auto-index: `REPOLENS_AUTO_INDEX=1` performed an incremental startup refresh on the fixture repo, and `REPOLENS_AUTO_INDEX=full` performed a full startup rebuild through the same `runIndex` path.
 - Graph package bootstrap: a missing database imported `.repolens/graph.rlgz`, reported the `bootstrapPackage` metadata, then ran an incremental refresh with unchanged files instead of rebuilding from scratch; `bootstrapPackage: false` kept the full rebuild path.
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 77 files, 921 symbols, and 3,977 edges; the latest run discovered 78 files with 1 skipped by policy.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 79 files, 933 symbols, and 3,988 edges; the latest run discovered 81 files with 2 skipped by policy.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, agent setup helpers, and fixture route/client communities.
 - Graph package import: `.repolens/self.rlgz` restored the self graph snapshot successfully with checksum verification.
-- Graph package: `.repolens/self.rlgz` is 3,266,716 bytes from a 11,354,112-byte SQLite snapshot, SHA-256 `68295db63a1627e5d95459226e759dfa87e6006faf86651fb46a9c347bd741dc`.
-- Imported package totals: 77 files, 921 symbols, 3,977 edges, plus 709 persisted vector rows at 384 dimensions.
+- Graph package: `.repolens/self.rlgz` is 1,829,065 bytes from an 8,011,776-byte SQLite snapshot, SHA-256 `74a6cd34f17f257b91369dfb4c2a4b30b9c762bc5ff8f10ec20c9dce372c9e8c`.
+- Imported package totals: 79 files, 933 symbols, 3,988 edges, plus 719 persisted vector rows at 384 dimensions.
 - Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, `tests/mcp-server.test.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -118,6 +121,54 @@ Result:
 ## Big Repo Validation
 
 Target: `/Users/sameer/Desktop/testing`
+
+Latest repeatable benchmark refresh:
+
+```bash
+node --experimental-sqlite dist/src/cli.js benchmark /Users/sameer/Desktop/testing \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark.db \
+  --max-file-bytes 750000 \
+  --label testing-benchmark
+
+node --experimental-sqlite dist/src/cli.js report \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark.db \
+  --format html \
+  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-report.html
+
+node --experimental-sqlite dist/src/cli.js export-graph \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark.db \
+  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-graph.html \
+  --limit 1500
+
+node --experimental-sqlite dist/src/cli.js pack-graph \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark.db \
+  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-graph.rlgz \
+  --label testing-benchmark
+
+node --experimental-sqlite dist/src/cli.js unpack-graph \
+  /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-graph.rlgz \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-import-check.db \
+  --overwrite
+```
+
+Latest benchmark result:
+
+- Benchmark DB: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark.db`
+- Files discovered: 853
+- Files indexed: 818
+- Files skipped: 35
+- Symbols: 5,812
+- Edges: 38,645
+- Lines: 100,100
+- Full index elapsed: 16,484 ms
+- No-op incremental elapsed: 233 ms
+- No-op incremental unchanged files: 853
+- Throughput: 49.62 files/s and 352.58 symbols/s for full indexing; 3,660.94 discovered files/s for no-op incremental indexing.
+- Redacted secret scan: 0 high-confidence and 0 medium-confidence findings across 61,746 indexed non-test lines.
+- Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-graph.html` (1,500 nodes, 1,500 edges)
+- HTML report: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-report.html`
+- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-graph.rlgz` (10,955,684 bytes from a 73,871,360-byte SQLite snapshot, SHA-256 `6be8fdf102af01114dfa5ddc49f5923935aa597be1887a57c29460a78831ebf0`)
+- Imported benchmark graph package totals: 818 indexed files, 5,812 symbols, and 38,645 edges.
 
 Command:
 
@@ -713,4 +764,4 @@ Confirmed modified files map back to indexed symbols and produced a medium risk 
 
 ## Conclusion
 
-The project builds, tests, indexes itself, benchmarks full and no-op incremental graph creation, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, bootstraps missing databases from shared graph packages, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a lock-protected local catalog, summarizes indexed fleets across languages/routes/HTTP calls/dependencies with inferred service links, generates cross-repo fleet graphs for shared dependencies, route overlaps, and consumer/provider HTTP edges, runs redacted secret scans, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, renders and removes managed multi-agent MCP setup guidance, supports explicit MCP startup auto-indexing through env vars or persistent local config, and exposes graph schema, structural search, indexed reference lookup, typed inheritance/implementation/use relationships, semantic search, local vector search, generated similarity/semantic edges, read-only graph queries, focused trace modes for calls/data flow/cross-service edges, import-resolved dependency cycles, architecture recommendations, git-history hotspots, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. GitHub security posture now includes branch protection, private vulnerability reporting, CodeQL/Scorecard/Dependabot/secret scanning, property-based resolver fuzzing, MCP JSON-RPC robustness fuzzing, and a release gate that blocks publication on open CodeQL alerts. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, benchmarks full and no-op incremental graph creation, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, bootstraps missing databases from shared graph packages, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a lock-protected local catalog, summarizes indexed fleets across languages/routes/HTTP calls/dependencies with inferred service links, generates cross-repo fleet graphs for shared dependencies, route overlaps, and consumer/provider HTTP edges, runs redacted secret scans, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, renders and removes managed multi-agent MCP setup guidance, supports explicit MCP startup auto-indexing through env vars or persistent local config, and exposes graph schema, structural search, indexed reference lookup, typed inheritance/implementation/use relationships, semantic search, local vector search, generated similarity/semantic edges, read-only graph queries, focused trace modes for calls/data flow/cross-service edges, import-resolved dependency cycles, architecture recommendations, git-history hotspots, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. GitHub security posture now includes branch protection, private vulnerability reporting, CodeQL/Scorecard/Dependabot/secret scanning, property-based resolver fuzzing, MCP JSON-RPC robustness fuzzing, a package contents gate for release artifacts, and a release gate that blocks publication on open CodeQL alerts. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.

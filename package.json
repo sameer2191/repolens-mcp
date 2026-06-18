@@ -9,6 +9,11 @@
   "files": [
     "dist/src",
     "README.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "docs",
+    "llms.txt",
+    "scripts",
     "LICENSE",
     "server.json",
     "install.sh"
@@ -20,6 +25,7 @@
     "test:src": "npm run build && npm test",
     "lint": "tsc --noEmit",
     "verify": "npm run build && npm test",
+    "package:check": "node scripts/package-contents-gate.mjs",
     "release:codeql-gate": "node scripts/codeql-alert-gate.mjs",
     "demo": "npm run build && node --experimental-sqlite dist/src/cli.js demo"
   },

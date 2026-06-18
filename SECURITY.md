@@ -22,6 +22,19 @@ repolens-mcp search api_key
 
 before committing any generated memory artifacts.
 
+## Published Package Boundary
+
+The npm package is restricted to runtime JavaScript, public documentation, the server manifest, installer, license, contribution guide, and security policy. The CI package gate checks the dry-run tarball and blocks local graph artifacts such as `.repolens/`, SQLite database files, WAL/shm sidecars, graph packages, and legacy local memory folders.
+
+Run this before publishing or reviewing release-file changes:
+
+```bash
+npm run build
+npm run package:check
+```
+
+Release publishing also runs a CodeQL alert gate before package creation.
+
 ## Reporting A Vulnerability
 
 Use GitHub's private vulnerability reporting for this repository when available:
