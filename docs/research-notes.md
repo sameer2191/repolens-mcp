@@ -25,10 +25,10 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 
 - Node 24 plus native SQLite for a dependency-light local graph store.
 - Stable MCP SDK v1 package rather than the pre-alpha v2 branch.
-- Clear CLI commands and MCP tools for indexing, search, graph schema, structural graph search, architecture summaries, tracing, impact analysis, dead-code candidates, git-change impact, and architecture decisions.
+- Clear CLI commands and MCP tools for indexing, search, graph schema, structural graph search, architecture reports, architecture summaries, tracing, impact analysis, dead-code candidates, git-change impact, and architecture decisions.
 - Incremental indexing skips unchanged files, prunes removed files, and avoids call-edge rebuilds when there is no repository delta.
 - Browser dashboard without a bundler so the project is easy to build and inspect.
-- Self-contained graph export for sharing an HTML or JSON snapshot without running a server.
+- Self-contained graph and architecture report exports for sharing HTML or Markdown artifacts without running a server.
 - CI that runs type-check, tests, self-indexing, and architecture output.
 
 ## Improvements To Highlight
@@ -38,5 +38,6 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 - Dashboard API and HTML are included in the same binary entrypoint, avoiding a separate frontend build.
 - Swift extraction and big-repo validation now cover a mixed mobile/web monorepo, not only TypeScript services.
 - Structural graph search, graph schema summaries, dead-code candidates, git-diff impact mapping, and portable graph exports are first-class CLI/MCP workflows.
+- Architecture reports combine metrics, language mix, schema counts, hotspots, boundaries, dead-code samples, review signals, and a graph preview into one shareable artifact.
 - A no-op incremental run on the large validation repo completed in 254 ms while preserving a 5,234-symbol, 29,013-edge graph.
 - Project is intentionally honest about scope: it is not a 158-language static C engine, but it is local-first, readable, easy to modify, and validated against a large real workspace.

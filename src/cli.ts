@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  architectureReport,
   detectChanges,
   findDeadCode,
   getArchitecture,
@@ -18,6 +19,7 @@ import {
   searchSymbols,
   traceSymbol
 } from "./core/api.js";
+import type { ReportFormat } from "./core/report.js";
 import { defaultDbPath } from "./core/store.js";
 import { serveDashboard } from "./dashboard/server.js";
 import { startMcpServer } from "./mcp/server.js";
@@ -115,6 +117,27 @@ async function main(): Promise<void> {
     case "graph":
       print(graphSnapshot(numberFlag(args, "limit"), stringFlag(args, "db")));
       break;
+    case "report": {
+      const format = (stringFlag(args, "format") as ReportFormat | undefined) ?? (stringFlag(args, "out")?.endsWith(".html") ? "html" : "markdown");
+      const body = architectureReport(
+        {
+          format,
+          graphLimit: numberFlag(args, "graph-limit"),
+          title: stringFlag(args, "title")
+        },
+        stringFlag(args, "db")
+      );
+      const out = stringFlag(args, "out");
+      if (out) {
+        const outPath = path.resolve(out);
+        await fs.mkdir(path.dirname(outPath), { recursive: true });
+        await fs.writeFile(outPath, body);
+        print({ out: outPath, format });
+      } else {
+        process.stdout.write(body);
+      }
+      break;
+    }
     case "export-graph": {
       const out = path.resolve(required(stringFlag(args, "out") ?? args.positional[0], "out"));
       const graph = graphSnapshot(numberFlag(args, "limit"), stringFlag(args, "db")) as {
@@ -243,6 +266,7 @@ Usage:
   repolens-mcp decision --title "ADR title" --body "Decision body" [--tags a,b]
   repolens-mcp decisions [--db path]
   repolens-mcp graph [--db path]
+  repolens-mcp report [--db path] [--format markdown|html] [--graph-limit n] [--out report.html]
   repolens-mcp export-graph --out graph.html [--db path] [--limit n]
   repolens-mcp serve [--db path] [--port 9749]
   repolens-mcp mcp

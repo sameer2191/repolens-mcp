@@ -6,10 +6,10 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 13 tools for indexing, code search, symbol search, graph schema, structural graph search, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, and graph snapshots.
+- **MCP-native**: exposes 14 tools for indexing, code search, symbol search, graph schema, structural graph search, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, and graph snapshots.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
-- **Portable graph artifacts**: export a self-contained HTML graph or JSON snapshot from the CLI.
+- **Portable graph and report artifacts**: export self-contained HTML graph snapshots and architecture reports from the CLI.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
 - **Validation evidence**: tests, CI, CodeQL, docs, local dashboard, and a big-repo validation workflow.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
@@ -40,6 +40,7 @@ repolens-mcp schema [--db path]
 repolens-mcp search-graph [query] [--kind function] [--relationship CALLS]
 repolens-mcp dead-code [--db path]
 repolens-mcp changes [repo] [--db path]
+repolens-mcp report [--db path] [--format markdown|html] [--out report.html]
 repolens-mcp export-graph --out graph.html [--db path]
 repolens-mcp decision --title "Use SQLite" --body "Keep memory local."
 repolens-mcp serve [--port 9749]
@@ -60,6 +61,7 @@ repolens-mcp mcp
 | `search_graph` | Search structurally by query, kind, regex, relationship, file scope, or degree. |
 | `find_dead_code` | Find non-exported functions and methods with no inbound call edges. |
 | `detect_changes` | Map uncommitted git changes to indexed graph impact. |
+| `architecture_report` | Generate a markdown or HTML architecture report from the indexed graph. |
 | `remember_decision` | Persist an ADR-style architecture decision. |
 | `list_decisions` | Retrieve saved decisions. |
 | `graph_snapshot` | Export compact graph data for dashboards or reviews. |
@@ -85,6 +87,7 @@ node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/mem
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js report --db /tmp/memory.db --format html --out report.html
 node --experimental-sqlite dist/src/cli.js export-graph --db /tmp/memory.db --out graph.html --limit 1000
 ```
 
@@ -123,6 +126,5 @@ flowchart LR
 ## Roadmap
 
 - Tree-sitter adapters for deeper language parsing.
-- Incremental indexing keyed by file hash.
 - Import resolver for monorepos and workspace packages.
 - Semantic ranking and richer cross-repo queries.

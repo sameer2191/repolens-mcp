@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import {
+  architectureReport,
   detectChanges,
   findDeadCode,
   getArchitecture,
@@ -195,6 +196,20 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ limit, dbPath }) => text(graphSnapshot(limit, dbPath))
+  );
+
+  server.registerTool(
+    "architecture_report",
+    {
+      description: "Generate a self-contained architecture report from the indexed graph as markdown or HTML.",
+      inputSchema: {
+        format: z.enum(["markdown", "html"]).default("markdown"),
+        graphLimit: z.number().int().positive().max(1000).optional(),
+        title: z.string().optional(),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ format, graphLimit, title, dbPath }) => text(architectureReport({ format, graphLimit, title }, dbPath))
   );
 
   const transport = new StdioServerTransport();

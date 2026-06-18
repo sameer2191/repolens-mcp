@@ -1,6 +1,6 @@
 {
   "name": "repolens-mcp",
-  "description": "Local-first MCP server that incrementally indexes repositories into SQLite and exposes architecture, graph search, change impact, dead-code candidates, graph snapshots, and ADR memory tools.",
+  "description": "Local-first MCP server that incrementally indexes repositories into SQLite and exposes architecture reports, graph search, change impact, dead-code candidates, graph snapshots, and ADR memory tools.",
   "command": "npx",
   "args": ["-y", "repolens-mcp", "mcp"],
   "env": {

@@ -1,6 +1,8 @@
 import path from "node:path";
 import { indexRepository } from "./indexer.js";
+import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
+import type { ArchitectureReportOptions } from "./report.js";
 import type { DecisionRecord, GraphSearchOptions, IndexOptions } from "./types.js";
 
 export async function runIndex(options: IndexOptions) {
@@ -64,6 +66,14 @@ export function listDecisions(limit?: number, dbPath?: string) {
 
 export function graphSnapshot(limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.graph(limit));
+}
+
+export function architectureReport(options: ArchitectureReportOptions = {}, dbPath?: string) {
+  return withStore(dbPath, (store) => {
+    const architecture = store.architecture();
+    const graph = store.graph(options.graphLimit);
+    return buildArchitectureReport(architecture, graph, options);
+  });
 }
 
 export function jsonBlock(value: unknown): string {

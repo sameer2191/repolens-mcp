@@ -35,14 +35,14 @@ node --experimental-sqlite dist/src/cli.js architecture --db .repolens/self.db
 
 Result:
 
-- Files discovered: 31
-- Files indexed: 31
+- Files discovered: 32
+- Files indexed: 32
 - Files skipped: 0
-- Symbols: 181
-- Edges: 421
-- Full index elapsed: 106 ms
+- Symbols: 199
+- Edges: 517
+- Full index elapsed: 225 ms
 - No-op incremental elapsed: 15 ms
-- No-op incremental unchanged files: 31
+- No-op incremental unchanged files: 32
 - Language mix: TypeScript, Markdown, JSON, YAML, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 
@@ -68,6 +68,18 @@ node --experimental-sqlite dist/src/cli.js architecture \
 node --experimental-sqlite dist/src/cli.js schema \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
 
+node --experimental-sqlite dist/src/cli.js report \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --format html \
+  --graph-limit 1000 \
+  --out /Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html
+
+node --experimental-sqlite dist/src/cli.js report \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --format markdown \
+  --graph-limit 200 \
+  --out /Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md
+
 node --experimental-sqlite dist/src/cli.js export-graph \
   --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
   --limit 1000 \
@@ -86,6 +98,8 @@ Result:
 - No-op incremental elapsed: 254 ms
 - No-op incremental unchanged files: 852
 - No-op incremental removed files: 0
+- Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (330 KB)
+- Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (7.5 KB)
 - Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html`
 - Graph JSON: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
@@ -183,6 +197,18 @@ node --experimental-sqlite dist/src/cli.js schema \
 ```
 
 Confirmed Swift, TypeScript, Markdown, SQL, JSON, shell, JavaScript, YAML, and unknown text coverage with node-label and edge-type counts.
+
+Architecture report:
+
+```bash
+node --experimental-sqlite dist/src/cli.js report \
+  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --format html \
+  --graph-limit 1000 \
+  --out /Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html
+```
+
+Confirmed HTML and Markdown reports with summary metrics, language tables, graph schema counts, hotspots, top symbols, architecture boundaries, dead-code samples, review signals, and graph samples.
 
 Structural graph search:
 

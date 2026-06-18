@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { architectureReport } from "../src/core/api.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
 
@@ -52,6 +53,16 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const deadCode = store.findDeadCode();
     assert.ok(deadCode.some((candidate) => candidate.symbol.name === "normalizeOrder"));
+
+    const markdownReport = architectureReport({ graphLimit: 50 }, dbPath);
+    assert.match(markdownReport, /# RepoLens Architecture Report/);
+    assert.match(markdownReport, /## Graph Schema/);
+    assert.match(markdownReport, /createOrder/);
+
+    const htmlReport = architectureReport({ format: "html", graphLimit: 50 }, dbPath);
+    assert.match(htmlReport, /<!doctype html>/);
+    assert.match(htmlReport, /RepoLens Architecture Report/);
+    assert.match(htmlReport, /CheckoutViewModel/);
   } finally {
     store.close();
   }
