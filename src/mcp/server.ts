@@ -6,6 +6,7 @@ import {
   contextPack,
   deleteProject,
   detectChanges,
+  fleetSummary,
   findDeadCode,
   findCommunities,
   findDependencyCycles,
@@ -109,6 +110,17 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ identifier, deleteDb }) => text(await deleteProject(identifier, deleteDb))
+  );
+
+  server.registerTool(
+    "fleet_summary",
+    {
+      description: "Summarize all indexed RepoLens projects across the local catalog, including aggregate languages, routes, packages, shared dependencies, and route overlaps.",
+      inputSchema: {
+        limit: z.number().int().positive().max(500).optional()
+      }
+    },
+    async ({ limit }) => text(await fleetSummary(limit))
   );
 
   server.registerTool(

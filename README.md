@@ -6,10 +6,10 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 26 tools for indexing, project inventory/status, BM25 code search, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 27 tools for indexing, project inventory/status, fleet summaries, BM25 code search, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Codex-ready setup**: `doctor` inspects the local Codex MCP configuration, and `install-codex` can add a managed MCP block with dry-run and force safeguards.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
-- **Project catalog**: `list-projects`, `project-status`, and `delete-project` track indexed repositories across local workspaces without mixing their graph databases.
+- **Project catalog and fleet summaries**: `list-projects`, `project-status`, `fleet-summary`, and `delete-project` track indexed repositories, aggregate languages/routes/dependencies, and highlight shared dependency or route overlap across local workspaces.
 - **Incremental refreshes**: skip unchanged files, prune removed files, and preserve the existing graph when a repo has not changed.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI.
@@ -46,10 +46,11 @@ The dashboard includes code search, graph search, graph schema tables, hotspot a
 ## CLI
 
 ```bash
-repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental]
+repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name]
 repolens-mcp list-projects [--limit n]
 repolens-mcp project-status [root-or-db-or-label]
 repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
+repolens-mcp fleet-summary [--limit n]
 repolens-mcp architecture [--db path]
 repolens-mcp search <query> [--db path]
 repolens-mcp symbols <query> [--kind function]
@@ -88,6 +89,7 @@ repolens-mcp mcp
 | `list_projects` | List repositories indexed through RepoLens on this machine. |
 | `index_status` | Return the latest indexed status for a root, database path, label, or project folder name. |
 | `delete_project` | Remove a project from the local catalog, with optional safe `.repolens` DB cleanup. |
+| `fleet_summary` | Aggregate indexed projects by language, package, dependency, route, and overlap. |
 | `search_code` | Search indexed source lines with BM25 ranking and code-aware token expansion. |
 | `search_symbols` | Search functions, classes, routes, resources, headings, and package nodes. |
 | `get_code_snippet` | Return source lines around a symbol, qualified name, file path, or `path:line` target. |
@@ -147,6 +149,7 @@ npm run verify
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js list-projects
 node --experimental-sqlite dist/src/cli.js project-status /path/to/big/repo
+node --experimental-sqlite dist/src/cli.js fleet-summary
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
@@ -211,4 +214,4 @@ flowchart LR
 
 - Tree-sitter adapters for deeper language parsing.
 - Import resolver for monorepos and workspace packages.
-- Semantic ranking and richer cross-repo queries.
+- Richer cross-repo queries and service-link inference.

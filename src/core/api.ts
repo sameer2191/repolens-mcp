@@ -1,6 +1,12 @@
 import path from "node:path";
 import { exportGraphPackage, importGraphPackage } from "./artifact.js";
-import { deleteProject as deleteCatalogProject, getProjectStatus as getCatalogProjectStatus, listProjects as listCatalogProjects, recordProjectIndex } from "./catalog.js";
+import {
+  deleteProject as deleteCatalogProject,
+  fleetSummary as catalogFleetSummary,
+  getProjectStatus as getCatalogProjectStatus,
+  listProjects as listCatalogProjects,
+  recordProjectIndex
+} from "./catalog.js";
 import { indexRepository } from "./indexer.js";
 import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
@@ -33,6 +39,10 @@ export async function getProjectStatus(identifier?: string) {
 
 export async function deleteProject(identifier: string, deleteDb?: boolean) {
   return deleteCatalogProject(identifier, deleteDb);
+}
+
+export async function fleetSummary(limit?: number) {
+  return catalogFleetSummary(limit);
 }
 
 export function withStore<T>(rootOrDbPath: string | undefined, fn: (store: MemoryStore) => T): T {

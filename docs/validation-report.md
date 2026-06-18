@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 13 tests, 0 failures.
-- Covered Codex MCP config rendering/install safeguards, project catalog list/status/delete behavior, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, multi-ecosystem manifest extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, context-pack assembly, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Node test suite passed: 14 tests, 0 failures.
+- Covered Codex MCP config rendering/install safeguards, project catalog list/status/delete behavior, fleet summary aggregation, concurrent catalog writes, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, Swift extraction, multi-ecosystem manifest extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, semantic search, context-pack assembly, generated `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Self Index
 
@@ -41,20 +41,20 @@ Result:
 - Files discovered: 53
 - Files indexed: 53
 - Files skipped: 0
-- Symbols: 445
-- Edges: 1,424
-- Lines indexed: 8,414
-- Full index elapsed: 373 ms
+- Symbols: 458
+- Edges: 1,479
+- Lines indexed: 8,729
+- Full index elapsed: 386 ms
 - No-op incremental elapsed: 28 ms
 - No-op incremental unchanged files: 53
-- Full-text code-search rows: 7,575 `code_lines` rows and 7,575 `code_fts` rows
+- Full-text code-search rows: 7,861 `code_lines` rows and 7,861 `code_fts` rows
 - Channel graph rows: 8 `channel` nodes, 2 `EMITS` edges, and 11 `LISTENS_ON` edges
 - Manifest graph rows: 11 `package` nodes and 26 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 53 files, 445 symbols, and 1,424 edges.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 53 files, 458 symbols, and 1,479 edges.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, and fixture route/client communities.
-- Graph package: `.repolens/self.rlgz` (1,062,411 bytes from a 4,177,920-byte SQLite snapshot)
-- Imported package totals: 53 files, 445 symbols, 1,424 edges
+- Graph package: `.repolens/self.rlgz` (1,270,969 bytes from a 4,677,632-byte SQLite snapshot)
+- Imported package totals: 53 files, 458 symbols, 1,479 edges
 - Language mix: TypeScript, Markdown, JSON, YAML, TOML, XML, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -334,6 +334,16 @@ env REPOLENS_CATALOG=/tmp/repolens-project-catalog-smoke.json node --experimenta
 
 Confirmed the isolated catalog listed the fixture project, returned live totals of 19 files, 80 symbols, and 109 edges from the SQLite graph, then removed the catalog entry and safely deleted `/tmp/repolens-project-catalog/.repolens/smoke.db`.
 
+Fleet summary checks:
+
+```bash
+env REPOLENS_CATALOG=/tmp/repolens-fleet-smoke-locked.json node --experimental-sqlite dist/src/cli.js index tests/fixtures/sample-repo --db /tmp/repolens-fleet-smoke-locked/service-a/.repolens/memory.db --max-file-bytes 750000 --label service-a
+env REPOLENS_CATALOG=/tmp/repolens-fleet-smoke-locked.json node --experimental-sqlite dist/src/cli.js index tests/fixtures/sample-repo --db /tmp/repolens-fleet-smoke-locked/service-b/.repolens/memory.db --max-file-bytes 750000 --label service-b
+env REPOLENS_CATALOG=/tmp/repolens-fleet-smoke-locked.json node --experimental-sqlite dist/src/cli.js fleet-summary --limit 5
+```
+
+Confirmed parallel catalog writes retained both labeled projects. `fleet-summary` returned 2 projects, 38 files, 160 symbols, 218 edges, 6 routes, shared dependency overlap including `express`, and route overlaps including `GET /orders` and `POST /orders`.
+
 Runtime trace ingestion checks:
 
 ```bash
@@ -551,4 +561,4 @@ Confirmed modified files map back to indexed symbols and produced a medium risk 
 
 ## Conclusion
 
-The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a local catalog, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, and exposes graph schema, structural search, semantic search, generated similarity/semantic edges, read-only graph queries, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.
+The project builds, tests, indexes itself, indexes a larger mixed Swift/TypeScript workspace, exports graph artifacts, packages and imports SQLite graph snapshots, serves a local graph dashboard, tracks indexed projects through a lock-protected local catalog, summarizes indexed fleets across languages/routes/dependencies, ingests runtime traces as observed graph edges, assembles context packs for agent workflows, and exposes graph schema, structural search, semantic search, generated similarity/semantic edges, read-only graph queries, import-resolved dependency cycles, architecture recommendations, dead-code candidates, reports, watch-mode refresh, and git-change impact through CLI/MCP paths. It remains intentionally scoped and inspectable, with a clear path to deeper parsing through future tree-sitter adapters.

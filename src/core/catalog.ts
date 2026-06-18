@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { defaultDbPath, MemoryStore } from "./store.js";
-import type { DeleteProjectResult, IndexResult, ProjectRecord, ProjectStatus } from "./types.js";
+import type { DeleteProjectResult, FleetProjectSummary, FleetSummary, IndexResult, Language, ProjectRecord, ProjectStatus, SymbolNode } from "./types.js";
 
 interface CatalogFile {
   version: 1;
@@ -27,9 +27,11 @@ export async function recordProjectIndex(result: IndexResult, label?: string): P
     edges: result.edges,
     elapsedMs: result.elapsedMs
   };
-  const projects = await readProjects();
-  const next = [record, ...projects.filter((project) => !sameProject(project, record))].sort((a, b) => b.indexedAt.localeCompare(a.indexedAt));
-  await writeProjects(next);
+  await withCatalogLock(async () => {
+    const projects = await readProjects();
+    const next = [record, ...projects.filter((project) => !sameProject(project, record))].sort((a, b) => b.indexedAt.localeCompare(a.indexedAt));
+    await writeProjects(next);
+  });
   return record;
 }
 
@@ -44,26 +46,100 @@ export async function getProjectStatus(identifier?: string): Promise<ProjectStat
   return record ? projectStatusForRecord(record) : null;
 }
 
-export async function deleteProject(identifier: string, deleteDb = false): Promise<DeleteProjectResult> {
-  const projects = await readProjects();
-  const matches = projects.filter((project) => projectMatches(project, identifier));
-  const keep = projects.filter((project) => !projectMatches(project, identifier));
-  const deletedDbFiles: string[] = [];
-  const skippedDbFiles: string[] = [];
+export async function fleetSummary(limit = 50): Promise<FleetSummary> {
+  const records = (await readProjects()).sort((a, b) => b.indexedAt.localeCompare(a.indexedAt)).slice(0, clamp(limit, 1, 500));
+  const projects = await Promise.all(records.map(fleetProjectForRecord));
+  const available = projects.filter((project) => project.dbExists && project.totals);
+  const languageMap = new Map<Language, { language: Language; files: number; symbols: number; projects: Set<string> }>();
+  const dependencyProjects = new Map<string, Set<string>>();
+  const routeProjects = new Map<string, Set<string>>();
 
-  if (deleteDb) {
-    for (const project of matches) {
-      const deleted = await deleteDbArtifacts(project);
-      deletedDbFiles.push(...deleted.deleted);
-      skippedDbFiles.push(...deleted.skipped);
+  for (const project of projects) {
+    const projectName = projectLabel(project);
+    for (const language of project.languages) {
+      const current = languageMap.get(language.language) ?? { language: language.language, files: 0, symbols: 0, projects: new Set<string>() };
+      current.files += language.files;
+      current.symbols += language.symbols;
+      current.projects.add(projectName);
+      languageMap.set(language.language, current);
+    }
+    for (const dependency of project.dependencies) {
+      const current = dependencyProjects.get(dependency) ?? new Set<string>();
+      current.add(projectName);
+      dependencyProjects.set(dependency, current);
+    }
+    for (const route of project.routes) {
+      const routeKey = `${route.method ?? "ANY"} ${route.path ?? route.name}`.trim();
+      const current = routeProjects.get(routeKey) ?? new Set<string>();
+      current.add(projectName);
+      routeProjects.set(routeKey, current);
     }
   }
 
-  await writeProjects(keep);
+  const risks = [
+    ...projects.filter((project) => !project.dbExists).map((project) => `${projectLabel(project)} database missing`),
+    ...projects.flatMap((project) => project.risks.map((risk) => `${projectLabel(project)}: ${risk}`))
+  ];
+
+  return {
+    generatedAt: new Date().toISOString(),
+    catalogPath: catalogPath(),
+    totals: {
+      projects: projects.length,
+      availableProjects: available.length,
+      files: sum(available, (project) => project.totals?.files ?? 0),
+      symbols: sum(available, (project) => project.totals?.symbols ?? 0),
+      edges: sum(available, (project) => project.totals?.edges ?? 0),
+      routes: sum(projects, (project) => project.routes.length),
+      packages: new Set(projects.flatMap((project) => project.packages)).size,
+      dependencies: new Set(projects.flatMap((project) => project.dependencies)).size
+    },
+    projects,
+    languages: [...languageMap.values()]
+      .map((language) => ({ language: language.language, files: language.files, symbols: language.symbols, projects: language.projects.size }))
+      .sort((a, b) => b.symbols - a.symbols || b.files - a.files || a.language.localeCompare(b.language)),
+    sharedDependencies: [...dependencyProjects.entries()]
+      .map(([name, projectSet]) => ({ name, projects: [...projectSet].sort(), count: projectSet.size }))
+      .filter((dependency) => dependency.count > 1)
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      .slice(0, 50),
+    routeOverlaps: [...routeProjects.entries()]
+      .map(([route, projectSet]) => ({ route, projects: [...projectSet].sort(), count: projectSet.size }))
+      .filter((route) => route.count > 1)
+      .sort((a, b) => b.count - a.count || a.route.localeCompare(b.route))
+      .slice(0, 50),
+    risks
+  };
+}
+
+export async function deleteProject(identifier: string, deleteDb = false): Promise<DeleteProjectResult> {
+  const deletedDbFiles: string[] = [];
+  const skippedDbFiles: string[] = [];
+  let removed = 0;
+  let remaining = 0;
+
+  await withCatalogLock(async () => {
+    const projects = await readProjects();
+    const matches = projects.filter((project) => projectMatches(project, identifier));
+    const keep = projects.filter((project) => !projectMatches(project, identifier));
+    removed = matches.length;
+    remaining = keep.length;
+
+    if (deleteDb) {
+      for (const project of matches) {
+        const deleted = await deleteDbArtifacts(project);
+        deletedDbFiles.push(...deleted.deleted);
+        skippedDbFiles.push(...deleted.skipped);
+      }
+    }
+
+    await writeProjects(keep);
+  });
+
   return {
     identifier,
-    removed: matches.length,
-    remaining: keep.length,
+    removed,
+    remaining,
     deletedDbFiles: [...new Set(deletedDbFiles)].sort(),
     skippedDbFiles: [...new Set(skippedDbFiles)].sort()
   };
@@ -88,6 +164,82 @@ async function projectStatusForRecord(record: ProjectRecord): Promise<ProjectSta
       staleReason: error instanceof Error ? error.message : String(error)
     };
   }
+}
+
+async function fleetProjectForRecord(record: ProjectRecord): Promise<FleetProjectSummary> {
+  const status = await projectStatusForRecord(record);
+  const risks = [
+    ...(status.staleReason ? [status.staleReason] : []),
+    ...(status.filesSkipped > 0 ? [`${status.filesSkipped} files skipped in latest index`] : [])
+  ];
+
+  if (!status.dbExists || !status.liveTotals) {
+    return {
+      root: status.root,
+      dbPath: status.dbPath,
+      ...(status.label ? { label: status.label } : {}),
+      indexedAt: status.indexedAt,
+      dbExists: status.dbExists,
+      languages: [],
+      routes: [],
+      packages: [],
+      dependencies: [],
+      risks
+    };
+  }
+
+  try {
+    const store = new MemoryStore(status.dbPath);
+    try {
+      const schema = store.graphSchema();
+      const routes = store.searchGraph({ kind: "route", limit: 200 }).map((match) => routeSummary(match.symbol));
+      const packages = uniqueNames(store.searchGraph({ kind: "package", limit: 200 }).map((match) => match.symbol.name));
+      const dependencies = uniqueNames(store.searchGraph({ kind: "dependency", limit: 200 }).map((match) => match.symbol.name));
+      return {
+        root: status.root,
+        dbPath: status.dbPath,
+        ...(status.label ? { label: status.label } : {}),
+        indexedAt: status.indexedAt,
+        dbExists: true,
+        totals: schema.totals,
+        languages: schema.languages,
+        routes,
+        packages,
+        dependencies,
+        risks
+      };
+    } finally {
+      store.close();
+    }
+  } catch (error) {
+    return {
+      root: status.root,
+      dbPath: status.dbPath,
+      ...(status.label ? { label: status.label } : {}),
+      indexedAt: status.indexedAt,
+      dbExists: status.dbExists,
+      totals: status.liveTotals,
+      languages: [],
+      routes: [],
+      packages: [],
+      dependencies: [],
+      risks: [...risks, error instanceof Error ? error.message : String(error)]
+    };
+  }
+}
+
+function routeSummary(symbol: SymbolNode): FleetProjectSummary["routes"][number] {
+  return {
+    name: symbol.name,
+    method: metadataString(symbol, "method") ?? symbol.name.split(/\s+/)[0],
+    path: metadataString(symbol, "path"),
+    filePath: symbol.filePath
+  };
+}
+
+function metadataString(symbol: SymbolNode, key: string): string | undefined {
+  const value = symbol.metadata?.[key];
+  return typeof value === "string" && value.trim() ? value : undefined;
 }
 
 async function deleteDbArtifacts(project: ProjectRecord): Promise<{ deleted: string[]; skipped: string[] }> {
@@ -136,6 +288,18 @@ function sameProject(left: ProjectRecord, right: ProjectRecord): boolean {
   return left.root === right.root && left.dbPath === right.dbPath;
 }
 
+function projectLabel(project: Pick<ProjectRecord, "root" | "label">): string {
+  return project.label ?? path.basename(project.root);
+}
+
+function uniqueNames(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))].sort();
+}
+
+function sum<T>(items: T[], pick: (item: T) => number): number {
+  return items.reduce((total, item) => total + pick(item), 0);
+}
+
 async function readProjects(): Promise<ProjectRecord[]> {
   try {
     const raw = await fs.readFile(catalogPath(), "utf8");
@@ -154,6 +318,52 @@ async function writeProjects(projects: ProjectRecord[]): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const payload: CatalogFile = { version: 1, projects };
   await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`);
+}
+
+async function withCatalogLock<T>(fn: () => Promise<T>): Promise<T> {
+  const filePath = catalogPath();
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  const lockPath = `${filePath}.lock`;
+  const started = Date.now();
+  let handle: fs.FileHandle | null = null;
+
+  while (!handle) {
+    try {
+      handle = await fs.open(lockPath, "wx");
+      await handle.writeFile(JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
+      await removeStaleLock(lockPath);
+      if (Date.now() - started > 5000) {
+        throw new Error(`Timed out waiting for RepoLens catalog lock at ${lockPath}`);
+      }
+      await delay(25);
+    }
+  }
+
+  try {
+    return await fn();
+  } finally {
+    await handle.close().catch(() => undefined);
+    await fs.rm(lockPath, { force: true }).catch(() => undefined);
+  }
+}
+
+async function removeStaleLock(lockPath: string): Promise<void> {
+  try {
+    const stats = await fs.stat(lockPath);
+    if (Date.now() - stats.mtimeMs > 30_000) {
+      await fs.rm(lockPath, { force: true });
+    }
+  } catch {
+    // Another process may have released the lock between open attempts.
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function fileExists(filePath: string): Promise<boolean> {

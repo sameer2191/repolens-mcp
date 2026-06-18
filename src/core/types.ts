@@ -300,6 +300,40 @@ export interface ProjectStatus extends ProjectRecord {
   staleReason?: string;
 }
 
+export interface FleetProjectSummary {
+  root: string;
+  dbPath: string;
+  label?: string;
+  indexedAt: string;
+  dbExists: boolean;
+  totals?: { files: number; symbols: number; edges: number };
+  languages: Array<{ language: Language; files: number; symbols: number }>;
+  routes: Array<{ name: string; method?: string; path?: string; filePath: string }>;
+  packages: string[];
+  dependencies: string[];
+  risks: string[];
+}
+
+export interface FleetSummary {
+  generatedAt: string;
+  catalogPath: string;
+  totals: {
+    projects: number;
+    availableProjects: number;
+    files: number;
+    symbols: number;
+    edges: number;
+    routes: number;
+    packages: number;
+    dependencies: number;
+  };
+  projects: FleetProjectSummary[];
+  languages: Array<{ language: Language; files: number; symbols: number; projects: number }>;
+  sharedDependencies: Array<{ name: string; projects: string[]; count: number }>;
+  routeOverlaps: Array<{ route: string; projects: string[]; count: number }>;
+  risks: string[];
+}
+
 export interface DeleteProjectResult {
   identifier: string;
   removed: number;

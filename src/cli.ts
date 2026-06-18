@@ -7,6 +7,7 @@ import {
   contextPack,
   deleteProject,
   detectChanges,
+  fleetSummary,
   findDeadCode,
   findCommunities,
   findDependencyCycles,
@@ -53,7 +54,8 @@ async function main(): Promise<void> {
         root,
         dbPath: stringFlag(args, "db"),
         incremental: booleanFlag(args, "incremental"),
-        maxFileBytes: numberFlag(args, "max-file-bytes")
+        maxFileBytes: numberFlag(args, "max-file-bytes"),
+        runLabel: stringFlag(args, "label")
       });
       print(result);
       break;
@@ -69,6 +71,7 @@ async function main(): Promise<void> {
         intervalMs: numberFlag(args, "interval-ms"),
         maxRuns: numberFlag(args, "runs"),
         maxFileBytes: numberFlag(args, "max-file-bytes"),
+        runLabel: stringFlag(args, "label"),
         signal: controller.signal,
         onResult: (result) => process.stderr.write(`${jsonBlock({ event: "indexed", ...result })}\n`)
       });
@@ -85,6 +88,10 @@ async function main(): Promise<void> {
       break;
     case "delete-project":
       print(await deleteProject(required(args.positional[0] ?? stringFlag(args, "project"), "project"), booleanFlag(args, "delete-db")));
+      break;
+    case "fleet-summary":
+    case "fleet":
+      print(await fleetSummary(numberFlag(args, "limit")));
       break;
     case "architecture":
       print(getArchitecture(stringFlag(args, "db")));
@@ -354,10 +361,11 @@ function help(): string {
   return `repolens-mcp
 
 Usage:
-  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental]
+  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name]
   repolens-mcp list-projects [--limit n]
   repolens-mcp project-status [root-or-db-or-label]
   repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
+  repolens-mcp fleet-summary [--limit n]
   repolens-mcp architecture [--db path]
   repolens-mcp search <query> [--db path] [--limit n]
   repolens-mcp symbols <query> [--kind function] [--db path]
@@ -366,7 +374,7 @@ Usage:
   repolens-mcp impact <path-or-symbol...> [--db path]
   repolens-mcp schema [--db path]
   repolens-mcp communities [--db path] [--limit n] [--min-size n]
-  repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--max-file-bytes n]
+  repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--max-file-bytes n] [--label name]
   repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern regex] [--file-pattern src/] [--min-degree n] [--db path]
   repolens-mcp semantic "meaningful concept query" [--db path] [--limit n]
   repolens-mcp context-pack "meaningful concept query" [--db path] [--limit n] [--context n]
