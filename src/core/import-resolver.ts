@@ -1,0 +1,229 @@
+import path from "node:path";
+import { extractImports } from "./extractor.js";
+import type { Edge, SymbolNode } from "./types.js";
+
+interface PackageRoot {
+  name: string;
+  root: string;
+}
+
+interface AliasMapping {
+  pattern: string;
+  targets: string[];
+  configFile: string;
+}
+
+interface ResolvedImport {
+  targetFile: string;
+  resolver: "relative" | "workspace-package" | "path-alias" | "source-root";
+  configFile?: string;
+}
+
+export function buildResolvedImportEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
+  const fileSymbols = symbols.filter((symbol) => symbol.kind === "file");
+  const fileByPath = new Map(fileSymbols.map((symbol) => [symbol.filePath, symbol]));
+  const filePaths = new Set(fileByPath.keys());
+  const packageRoots = symbols
+    .filter((symbol) => symbol.kind === "package")
+    .map((symbol) => ({ name: symbol.name, root: path.posix.dirname(symbol.filePath) }))
+    .sort((a, b) => b.name.length - a.name.length);
+  const aliases = pathAliases(fileContents);
+  const edges: Edge[] = [];
+  const seen = new Set<string>();
+
+  for (const fileSymbol of fileSymbols) {
+    const content = fileContents.get(fileSymbol.filePath);
+    if (!content) {
+      continue;
+    }
+    for (const specifier of extractImports(fileSymbol.language, content)) {
+      const resolved = resolveImportFile(fileSymbol.filePath, specifier, filePaths, packageRoots, aliases);
+      if (!resolved || resolved.targetFile === fileSymbol.filePath) {
+        continue;
+      }
+      const key = `${fileSymbol.filePath}\0${specifier}\0${resolved.targetFile}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      edges.push({
+        source: fileSymbol.qualifiedName,
+        target: `${resolved.targetFile}:file`,
+        type: "IMPORTS_FILE",
+        weight: 0.95,
+        metadata: {
+          import: specifier,
+          targetFile: resolved.targetFile,
+          resolver: resolved.resolver,
+          ...(resolved.configFile ? { configFile: resolved.configFile } : {})
+        }
+      });
+    }
+  }
+
+  return edges;
+}
+
+export function resolveImportFile(
+  sourceFile: string,
+  specifier: string,
+  filePaths: Set<string>,
+  packageRoots: PackageRoot[] = [],
+  aliases: AliasMapping[] = []
+): ResolvedImport | null {
+  if (specifier.startsWith(".")) {
+    const targetFile = resolveCandidate(path.posix.normalize(path.posix.join(path.posix.dirname(sourceFile), specifier)), filePaths);
+    return targetFile ? { targetFile, resolver: "relative" } : null;
+  }
+
+  for (const alias of aliases) {
+    const targetFile = resolveAlias(specifier, alias, filePaths);
+    if (targetFile) {
+      return { targetFile, resolver: "path-alias", configFile: alias.configFile };
+    }
+  }
+
+  for (const packageRoot of packageRoots) {
+    if (specifier !== packageRoot.name && !specifier.startsWith(`${packageRoot.name}/`)) {
+      continue;
+    }
+    const subpath = specifier.slice(packageRoot.name.length).replace(/^\//, "");
+    const base = subpath ? path.posix.join(packageRoot.root, subpath) : path.posix.join(packageRoot.root, "src", "index");
+    const targetFile = resolveCandidate(base, filePaths);
+    if (targetFile) {
+      return { targetFile, resolver: "workspace-package" };
+    }
+  }
+
+  if (specifier.startsWith("@/")) {
+    const targetFile = resolveCandidate(path.posix.join("src", specifier.slice(2)), filePaths);
+    if (targetFile) {
+      return { targetFile, resolver: "source-root" };
+    }
+  }
+
+  if (specifier.startsWith("src/") || specifier.startsWith("apps/") || specifier.startsWith("packages/") || specifier.startsWith("services/")) {
+    const targetFile = resolveCandidate(path.posix.normalize(specifier), filePaths);
+    if (targetFile) {
+      return { targetFile, resolver: "source-root" };
+    }
+  }
+
+  return null;
+}
+
+function pathAliases(fileContents: Map<string, string>): AliasMapping[] {
+  const aliases: AliasMapping[] = [];
+  for (const [filePath, content] of fileContents) {
+    const base = path.posix.basename(filePath).toLowerCase();
+    if (!["tsconfig.json", "jsconfig.json"].includes(base)) {
+      continue;
+    }
+    const parsed = parseJsonConfig(content);
+    const compilerOptions = parsed?.compilerOptions;
+    if (!compilerOptions || typeof compilerOptions !== "object") {
+      continue;
+    }
+    const configDir = path.posix.dirname(filePath);
+    const baseUrlValue = typeof compilerOptions.baseUrl === "string" ? compilerOptions.baseUrl : ".";
+    const baseUrl = path.posix.normalize(path.posix.join(configDir === "." ? "" : configDir, baseUrlValue));
+    const paths = compilerOptions.paths;
+    if (!paths || typeof paths !== "object") {
+      continue;
+    }
+    for (const [pattern, rawTargets] of Object.entries(paths as Record<string, unknown>)) {
+      const targets = Array.isArray(rawTargets) ? rawTargets.filter((target): target is string => typeof target === "string") : [];
+      if (targets.length === 0) {
+        continue;
+      }
+      aliases.push({
+        pattern,
+        targets: targets.map((target) => path.posix.normalize(path.posix.join(baseUrl, target))),
+        configFile: filePath
+      });
+    }
+  }
+  return aliases.sort((a, b) => specificity(b.pattern) - specificity(a.pattern));
+}
+
+function resolveAlias(specifier: string, alias: AliasMapping, filePaths: Set<string>): string | null {
+  const star = alias.pattern.indexOf("*");
+  if (star < 0) {
+    if (specifier !== alias.pattern) {
+      return null;
+    }
+    for (const target of alias.targets) {
+      const resolved = resolveCandidate(target, filePaths);
+      if (resolved) {
+        return resolved;
+      }
+    }
+    return null;
+  }
+
+  const prefix = alias.pattern.slice(0, star);
+  const suffix = alias.pattern.slice(star + 1);
+  if (!specifier.startsWith(prefix) || !specifier.endsWith(suffix)) {
+    return null;
+  }
+  const wildcard = specifier.slice(prefix.length, specifier.length - suffix.length);
+  for (const target of alias.targets) {
+    const resolved = resolveCandidate(target.replace("*", wildcard), filePaths);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+function resolveCandidate(base: string, filePaths: Set<string>): string | null {
+  const withoutExtension = stripKnownExtension(base);
+  const candidates = [
+    base,
+    withoutExtension,
+    `${withoutExtension}.ts`,
+    `${withoutExtension}.tsx`,
+    `${withoutExtension}.js`,
+    `${withoutExtension}.jsx`,
+    `${withoutExtension}.mjs`,
+    `${withoutExtension}.cjs`,
+    `${withoutExtension}.swift`,
+    `${withoutExtension}.py`,
+    `${withoutExtension}.go`,
+    `${withoutExtension}.java`,
+    `${withoutExtension}.rs`,
+    `${withoutExtension}/index.ts`,
+    `${withoutExtension}/index.tsx`,
+    `${withoutExtension}/index.js`,
+    `${withoutExtension}/index.jsx`
+  ];
+
+  for (const candidate of candidates.map((item) => path.posix.normalize(item))) {
+    if (filePaths.has(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function parseJsonConfig(content: string): { compilerOptions?: { baseUrl?: unknown; paths?: unknown } } | null {
+  try {
+    return JSON.parse(stripJsonComments(content).replace(/,\s*([}\]])/g, "$1")) as { compilerOptions?: { baseUrl?: unknown; paths?: unknown } };
+  } catch {
+    return null;
+  }
+}
+
+function stripJsonComments(value: string): string {
+  return value
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+function specificity(pattern: string): number {
+  return pattern.replace(/\*/g, "").length;
+}
+
+function stripKnownExtension(value: string): string {
+  return value.replace(/\.(tsx?|jsx?|mjs|cjs|swift|py|go|java|rs|sql|json|ya?ml|md|sh)$/i, "");
+}

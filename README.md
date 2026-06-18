@@ -11,7 +11,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 30 tools for indexing, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, BM25 code search, redacted secret scanning, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 30 tools for indexing, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, BM25 code search, redacted secret scanning, symbol search, semantic search, context packs, source snippets, graph schema, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, tracing, git-change impact, dead-code candidates, ADRs, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
@@ -24,6 +24,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Local semantic graph**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges plus concept search over names, paths, signatures, and symbol bodies.
 - **Context packs for agents**: one query can return semantic matches, graph matches, BM25 code hits, snippets, and nearby edges for focused development context.
 - **Redacted secret scan**: review high-confidence token shapes, sensitive assignments, and environment references from indexed source/config lines without returning raw secret values.
+- **Resolved import graph**: creates `IMPORTS_FILE` edges for relative imports, workspace package names, source-root imports, and `tsconfig`/`jsconfig` path aliases.
 - **Route-call edges**: stores literal HTTP requests as `http_call` nodes, connects callers with `CALLS_HTTP_ENDPOINT`, and links matching in-repo routes with `HTTP_CALLS`.
 - **Runtime trace ingestion**: imports observed HTTP, event, or symbol traces as `OBSERVED_*` graph edges with counts and timestamps.
 - **Channel/event edges**: detects EventEmitter, Socket.IO-style, DOM custom event, Python decorator/call, and Swift `NotificationCenter` channels with `EMITS` and `LISTENS_ON` edges.
@@ -140,7 +141,7 @@ repolens-mcp mcp
 
 The extractor is intentionally compact and extensible:
 
-- TypeScript and JavaScript: classes, interfaces, types, functions, const functions, imports, Express-style routes, and Next.js App Router `app/api/**/route.ts` handlers.
+- TypeScript and JavaScript: classes, interfaces, types, functions, const functions, imports, resolved local import edges, Express-style routes, and Next.js App Router `app/api/**/route.ts` handlers.
 - HTTP call linking: literal `fetch`, Axios, and Node `http` calls become `http_call` nodes with `CALLS_HTTP_ENDPOINT`; matching route nodes also receive `HTTP_CALLS`.
 - GraphQL, gRPC, and OpenAPI: `.graphql`, `.gql`, `.proto`, OpenAPI JSON, and OpenAPI YAML files produce protocol nodes; protobuf `rpc` methods become route nodes using `/Service/Method` paths, and OpenAPI `{id}` path params normalize to `:id`.
 - tRPC: common procedure declarations and client calls become `trpc_procedure` and `trpc_call` nodes.

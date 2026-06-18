@@ -337,7 +337,7 @@ function channelQualifiedName(channel: string): string {
   return `channel:${channel}`;
 }
 
-function extractImports(language: Language, content: string): string[] {
+export function extractImports(language: Language, content: string): string[] {
   const imports = new Set<string>();
   const patternsByLanguage: Partial<Record<Language, RegExp[]>> = {
     typescript: [/from\s+["']([^"']+)["']/g, /import\s*\(\s*["']([^"']+)["']\s*\)/g, /require\(\s*["']([^"']+)["']\s*\)/g],

@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 24 tests, 0 failures.
-- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, release/package dry-run checks, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
+- Node test suite passed: 25 tests, 0 failures.
+- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, incremental refresh, removed-file pruning, watch-mode refresh, index-writer locking, graph package export/import, release/package dry-run checks, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, architecture recommendations, dead-code candidates, architecture summary, and trace behavior on fixture repositories.
 
 ## Package And Release
 
@@ -40,7 +40,7 @@ npm sbom --sbom-format cyclonedx --json
 Result:
 
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 124,070 bytes packed, 635,346 bytes unpacked, 65 runtime entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 127,398 bytes packed, 653,848 bytes unpacked, 68 runtime entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `package.json`, `server.json`, and `install.sh`; compiled tests and fixtures are excluded.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
@@ -65,28 +65,29 @@ node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db
 
 Result:
 
-- Files discovered: 62
-- Files indexed: 62
+- Files discovered: 63
+- Files indexed: 63
 - Files skipped: 0
-- Symbols: 689
-- Edges: 1,982
-- Lines indexed: 12,738
-- Full index elapsed: 843 ms
-- No-op incremental elapsed: 111 ms
-- No-op incremental unchanged files: 62
-- Full-text code-search rows: 11,603 `code_lines` rows and 11,603 `code_fts` rows
+- Symbols: 705
+- Edges: 2,124
+- Lines indexed: 13,114
+- Full index elapsed: 810 ms
+- No-op incremental elapsed: 87 ms
+- No-op incremental unchanged files: 63
+- Full-text code-search rows: 11,947 `code_lines` rows and 11,947 `code_fts` rows
 - MCP server tools registered: 30
-- Redacted secret scan: 0 high/medium-confidence findings across 10,431 indexed non-test lines.
+- Redacted secret scan: 0 high/medium-confidence findings across 10,698 indexed non-test lines.
 - Channel graph rows: 8 `channel` nodes, 2 `EMITS` edges, and 11 `LISTENS_ON` edges
 - HTTP call graph rows: 12 `http_call` nodes, 12 `CALLS_HTTP_ENDPOINT` edges, and 4 generated `HTTP_CALLS` route edges
+- Import graph rows: 59 `IMPORTS_FILE` edges resolving local relative imports and package-local imports to file nodes.
 - Protocol graph rows: 2 `graphql_operation` nodes, 1 `graphql_type` node, 1 `grpc_service` node, 2 `trpc_procedure` nodes, 1 `trpc_call` node, and 8 `route` nodes across fixture and app routes
 - Manifest graph rows: 11 `package` nodes and 26 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
 - Lockfile graph rows: 1 `lockfile` node, 94 `locked_dependency` nodes, and 94 `LOCKS` edges from `package-lock.json`.
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 62 files, 689 symbols, and 1,982 edges.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 63 files, 705 symbols, and 2,124 edges.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, agent setup helpers, and fixture route/client communities.
-- Graph package import: `.repolens/self.rlgz` restored the self graph snapshot successfully with SHA-256 `f216bee184597ac3a2113d3b06bcc012b0b25462d5acb60d1dda1b8e4e7d2fc3`.
-- Imported package totals: 62 files, 689 symbols, 1,982 edges
+- Graph package import: `.repolens/self.rlgz` restored the self graph snapshot successfully with SHA-256 `e9eaa7c466079d37af018725e8db027185fa499705bd93fdc22715ed4876b1b6`.
+- Imported package totals: 63 files, 705 symbols, 2,124 edges
 - Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
@@ -170,22 +171,23 @@ Result:
 - Files indexed: 818
 - Files skipped: 35
 - Symbols: 5,812
-- Edges: 30,959
+- Edges: 31,601
 - Lines indexed: 100,100
-- Full index elapsed: 19,898 ms
-- No-op incremental elapsed: 683 ms
+- Full index elapsed: 17,695 ms
+- No-op incremental elapsed: 372 ms
 - No-op incremental unchanged files: 853
 - No-op incremental removed files: 0
 - Full-text code-search rows: 85,063 `code_lines` rows and 85,063 `code_fts` rows
 - Channel graph rows: 5 `channel` nodes, 6 `EMITS` edges, and 7 `LISTENS_ON` edges
+- Import graph rows: 642 `IMPORTS_FILE` edges resolving local relative, source-root, workspace-package, and path-alias imports.
 - HTTP route/call graph rows: 153 Next.js `route` nodes, 30 `http_call` nodes, 30 `CALLS_HTTP_ENDPOINT` edges, and 20 generated `HTTP_CALLS` route edges
 - Lockfile graph rows: 1 `lockfile` node, 387 `locked_dependency` nodes, and 387 `LOCKS` edges from `pnpm-lock.yaml`.
-- Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (59,603 bytes)
-- Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (9,294 bytes)
+- Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (59,645 bytes)
+- Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (9,317 bytes)
 - Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html` (1,000 nodes, 1,000 edges, 348,985 bytes)
 - Graph export JSON: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json` (1,000 nodes, 1,000 edges, 428,932 bytes)
-- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (11,640,714 bytes from a 68,751,360-byte SQLite snapshot, SHA-256 `9d84c656112b44dc30ecad59ac3d87734202cc8e77a1703bf3d2aeb3d58bc42f`)
-- Imported graph package totals: 818 files, 5,812 symbols, 30,959 edges
+- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (12,699,174 bytes from a 71,245,824-byte SQLite snapshot, SHA-256 `862ed42bd8a70f96892a62babbf6d8571138b64c745dd695e52ea2daf88012ad`)
+- Imported graph package totals: 818 files, 5,812 symbols, 31,601 edges
 - Redacted secret scan: 0 high-confidence and 0 medium-confidence findings across 61,746 indexed non-test lines.
 - Graph communities sampled: order repository, iOS load flows, access/cart clearing, auth/request helpers, address book, live-session tests, cart, and menu management communities.
 - Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
@@ -222,6 +224,7 @@ Graph schema:
 | `IMPORTS` edges | 1,321 |
 | `DECLARES` edges | 167 |
 | `SIMILAR_TO` edges | 1,194 |
+| `IMPORTS_FILE` edges | 642 |
 | `LOCKS` edges | 387 |
 | `SEMANTICALLY_RELATED` edges | 118 |
 | HTTP call nodes | 30 |
@@ -237,7 +240,7 @@ node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
   --incremental
 ```
 
-Confirmed a no-op incremental pass preserved 5,812 symbols and 30,959 edges while marking all 853 discovered files unchanged.
+Confirmed a no-op incremental pass preserved 5,812 symbols and 31,601 edges while marking all 853 discovered files unchanged.
 
 Representative hotspots:
 
@@ -557,7 +560,7 @@ node --experimental-sqlite dist/src/cli.js unpack-graph \
   --overwrite
 ```
 
-Confirmed the package exporter created a checksummed `.rlgz` artifact and the importer restored a graph with 818 files, 5,812 symbols, and 30,959 edges.
+Confirmed the package exporter created a checksummed `.rlgz` artifact and the importer restored a graph with 818 files, 5,812 symbols, and 31,601 edges.
 
 Watch mode:
 
@@ -569,7 +572,7 @@ node --experimental-sqlite dist/src/cli.js watch /Users/sameer/Desktop/testing \
   --runs 2
 ```
 
-Confirmed two watch-mode incremental passes over the large validation database preserved the graph. The refreshed validation database currently contains 5,812 symbols and 30,959 edges. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
+Confirmed two watch-mode incremental passes over the large validation database preserved the graph. The refreshed validation database currently contains 5,812 symbols and 31,601 edges. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
 
 Index lock:
 
@@ -599,7 +602,7 @@ curl --fail 'http://127.0.0.1:9750/api/report?format=markdown&graphLimit=50'
 curl --fail http://127.0.0.1:9750/
 ```
 
-Confirmed the dashboard served the validation database, returned graph-community rows, returned the 818-file / 5,812-symbol / 30,959-edge schema, returned live-session graph matches, returned semantic search rows, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated a Markdown report response, and served the HTML dashboard shell.
+Confirmed the dashboard served the validation database, returned graph-community rows, returned the 818-file / 5,812-symbol / 31,601-edge schema, returned live-session graph matches, returned semantic search rows, returned read-only graph query rows, returned Swift dead-code candidates, returned an empty import-resolved cycle list, returned a highlighted Swift snippet for `makeSession`, generated a Markdown report response, and served the HTML dashboard shell.
 
 Trace:
 

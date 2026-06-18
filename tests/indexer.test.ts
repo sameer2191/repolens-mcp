@@ -667,6 +667,87 @@ test("resolves workspace package imports in dependency cycles", async () => {
   }
 });
 
+test("indexes resolved local import file edges for aliases and workspace packages", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-import-edges-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(path.join(repo, "packages", "api", "src"), { recursive: true });
+  await fs.mkdir(path.join(repo, "packages", "domain", "src"), { recursive: true });
+  await fs.writeFile(
+    path.join(repo, "tsconfig.json"),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          baseUrl: ".",
+          paths: {
+            "@domain/*": ["packages/domain/src/*"]
+          }
+        }
+      },
+      null,
+      2
+    )
+  );
+  await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ name: "import-edge-root", workspaces: ["packages/*"] }, null, 2));
+  await fs.writeFile(path.join(repo, "packages", "api", "package.json"), JSON.stringify({ name: "@demo/api" }, null, 2));
+  await fs.writeFile(path.join(repo, "packages", "domain", "package.json"), JSON.stringify({ name: "@demo/domain" }, null, 2));
+  await fs.writeFile(
+    path.join(repo, "packages", "api", "src", "index.ts"),
+    [
+      `import { priceOrder } from "@domain/order";`,
+      `import { domainName } from "@demo/domain";`,
+      "export function handleOrder() { return priceOrder() + domainName.length; }"
+    ].join("\n")
+  );
+  await fs.writeFile(path.join(repo, "packages", "domain", "src", "index.ts"), `export const domainName = "domain";\n`);
+  await fs.writeFile(
+    path.join(repo, "packages", "domain", "src", "order.ts"),
+    [`import { handleOrder } from "../../api/src/index";`, "export function priceOrder() { return handleOrder ? 42 : 0; }"].join("\n")
+  );
+
+  await indexRepository({ root: repo, dbPath });
+  const store = new MemoryStore(dbPath);
+  try {
+    const schema = store.graphSchema();
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "IMPORTS_FILE"));
+
+    const importRows = store.queryGraph(
+      "MATCH (a)-[r:IMPORTS_FILE]->(b) RETURN a.filePath,b.filePath,r.type LIMIT 20"
+    ).rows;
+    assert.ok(
+      importRows.some(
+        (row) =>
+          row["a.filePath"] === "packages/api/src/index.ts" &&
+          row["b.filePath"] === "packages/domain/src/order.ts" &&
+          row["r.type"] === "IMPORTS_FILE"
+      )
+    );
+    assert.ok(
+      importRows.some(
+        (row) =>
+          row["a.filePath"] === "packages/api/src/index.ts" &&
+          row["b.filePath"] === "packages/domain/src/index.ts" &&
+          row["r.type"] === "IMPORTS_FILE"
+      )
+    );
+    assert.ok(
+      importRows.some(
+        (row) =>
+          row["a.filePath"] === "packages/domain/src/order.ts" &&
+          row["b.filePath"] === "packages/api/src/index.ts" &&
+          row["r.type"] === "IMPORTS_FILE"
+      )
+    );
+
+    const cycles = store.dependencyCycles();
+    assert.equal(cycles.length, 1);
+    assert.deepEqual(cycles[0].clusters, ["packages/api", "packages/domain"]);
+    assert.ok(cycles[0].sampleEdges.some((edge) => edge.type === "IMPORTS_FILE"));
+  } finally {
+    store.close();
+  }
+});
+
 test("incremental indexing skips unchanged files and prunes removed files", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-incremental-"));
   const repo = path.join(tmp, "repo");

@@ -310,7 +310,7 @@ export class MemoryStore {
   }
 
   deleteDerivedEdges(): void {
-    this.db.prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL', 'HTTP_CALLS', 'SIMILAR_TO', 'SEMANTICALLY_RELATED')").run();
+    this.db.prepare("DELETE FROM edges WHERE type IN ('CALLS', 'CALLS_LOCAL', 'HTTP_CALLS', 'IMPORTS_FILE', 'SIMILAR_TO', 'SEMANTICALLY_RELATED')").run();
   }
 
   counts(): { symbols: number; edges: number } {
@@ -1002,6 +1002,51 @@ export class MemoryStore {
   }
 
   dependencyCycles(limit = 20): DependencyCycle[] {
+    const resolvedRows = this.db
+      .prepare(
+        `SELECT source_symbol.file_path AS source_file,
+          target_symbol.file_path AS target_file,
+          edges.type
+         FROM edges
+         JOIN symbols source_symbol ON source_symbol.qualified_name = edges.source
+         JOIN symbols target_symbol ON target_symbol.qualified_name = edges.target
+         WHERE edges.type = 'IMPORTS_FILE'
+         LIMIT 50000`
+      )
+      .all() as Array<{ source_file: string; target_file: string; type: string }>;
+
+    const graph = new Map<string, Set<string>>();
+    const edges = new Map<string, { source: string; target: string; count: number; sampleEdges: Array<{ source: string; target: string; type: string }> }>();
+    const addCycleEdge = (sourceFile: string, targetFile: string, type: string) => {
+      if (targetFile === sourceFile) {
+        return;
+      }
+      const source = clusterName(sourceFile);
+      const target = clusterName(targetFile);
+      if (source === target) {
+        return;
+      }
+      const targets = graph.get(source) ?? new Set<string>();
+      targets.add(target);
+      graph.set(source, targets);
+      if (!graph.has(target)) graph.set(target, new Set<string>());
+
+      const key = `${source}->${target}`;
+      const edge = edges.get(key) ?? { source, target, count: 0, sampleEdges: [] };
+      edge.count += 1;
+      if (edge.sampleEdges.length < 3) {
+        edge.sampleEdges.push({ source: sourceFile, target: targetFile, type });
+      }
+      edges.set(key, edge);
+    };
+
+    if (resolvedRows.length > 0) {
+      for (const row of resolvedRows) {
+        addCycleEdge(row.source_file, row.target_file, row.type);
+      }
+      return dependencyCyclesFromGraph(graph, edges, limit);
+    }
+
     const fileRows = this.db
       .prepare("SELECT path FROM files WHERE skipped = 0")
       .all() as Array<{ path: string }>;
@@ -1023,8 +1068,6 @@ export class MemoryStore {
       )
       .all() as Array<{ source_file: string; type: string; source: string; target: string; metadata: string }>;
 
-    const graph = new Map<string, Set<string>>();
-    const edges = new Map<string, { source: string; target: string; count: number; sampleEdges: Array<{ source: string; target: string; type: string }> }>();
     for (const row of rows) {
       const imported = parseMetadata(row.metadata).import;
       if (typeof imported !== "string") {
@@ -1034,50 +1077,10 @@ export class MemoryStore {
       if (!targetFile || targetFile === row.source_file) {
         continue;
       }
-      const source = clusterName(row.source_file);
-      const target = clusterName(targetFile);
-      if (source === target) {
-        continue;
-      }
-      const targets = graph.get(source) ?? new Set<string>();
-      targets.add(target);
-      graph.set(source, targets);
-      if (!graph.has(target)) graph.set(target, new Set<string>());
-
-      const key = `${source}->${target}`;
-      const edge = edges.get(key) ?? { source, target, count: 0, sampleEdges: [] };
-      edge.count += 1;
-      if (edge.sampleEdges.length < 3) {
-        edge.sampleEdges.push({ source: row.source_file, target: targetFile, type: row.type });
-      }
-      edges.set(key, edge);
+      addCycleEdge(row.source_file, targetFile, row.type);
     }
 
-    return stronglyConnectedComponents(graph)
-      .filter((component) => component.length > 1)
-      .map((component) => {
-        const members = new Set(component);
-        let count = 0;
-        const samples: Array<{ source: string; target: string; type: string }> = [];
-        for (const edge of edges.values()) {
-          if (!members.has(edge.source) || !members.has(edge.target)) {
-            continue;
-          }
-          count += edge.count;
-          for (const sample of edge.sampleEdges) {
-            if (samples.length < 8) samples.push(sample);
-          }
-        }
-        const clusters = [...component].sort();
-        return {
-          clusters,
-          edges: count,
-          sampleEdges: samples,
-          recommendation: `Break the ${clusters.join(" <-> ")} cycle by moving shared contracts into a lower-level module or routing calls through one directional adapter.`
-        };
-      })
-      .sort((a, b) => b.edges - a.edges)
-      .slice(0, clampPositive(limit, 1, 100));
+    return dependencyCyclesFromGraph(graph, edges, limit);
   }
 
   detectChanges(root = this.latestRoot(), limit = 100): ChangeImpactResult {
@@ -2488,6 +2491,38 @@ function architectureRecommendations(input: {
   }
 
   return recommendations.slice(0, 8);
+}
+
+function dependencyCyclesFromGraph(
+  graph: Map<string, Set<string>>,
+  edges: Map<string, { source: string; target: string; count: number; sampleEdges: Array<{ source: string; target: string; type: string }> }>,
+  limit: number
+): DependencyCycle[] {
+  return stronglyConnectedComponents(graph)
+    .filter((component) => component.length > 1)
+    .map((component) => {
+      const members = new Set(component);
+      let count = 0;
+      const samples: Array<{ source: string; target: string; type: string }> = [];
+      for (const edge of edges.values()) {
+        if (!members.has(edge.source) || !members.has(edge.target)) {
+          continue;
+        }
+        count += edge.count;
+        for (const sample of edge.sampleEdges) {
+          if (samples.length < 8) samples.push(sample);
+        }
+      }
+      const clusters = [...component].sort();
+      return {
+        clusters,
+        edges: count,
+        sampleEdges: samples,
+        recommendation: `Break the ${clusters.join(" <-> ")} cycle by moving shared contracts into a lower-level module or routing calls through one directional adapter.`
+      };
+    })
+    .sort((a, b) => b.edges - a.edges)
+    .slice(0, clampPositive(limit, 1, 100));
 }
 
 function resolveImportFile(sourceFile: string, specifier: string, filePaths: Set<string>, packageRoots: Array<[string, string]> = []): string | null {
