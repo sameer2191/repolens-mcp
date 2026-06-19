@@ -6,6 +6,8 @@ export type AutoIndexMode = "off" | "incremental" | "full";
 
 export interface RepoLensConfig {
   autoIndex?: AutoIndexMode;
+  autoSync?: boolean;
+  autoSyncIntervalMs?: number;
   root?: string;
   dbPath?: string;
   maxFileBytes?: number;
@@ -22,6 +24,12 @@ const keyAliases = new Map<string, keyof RepoLensConfig>([
   ["autoindex", "autoIndex"],
   ["auto-index", "autoIndex"],
   ["auto_index", "autoIndex"],
+  ["autosync", "autoSync"],
+  ["auto-sync", "autoSync"],
+  ["auto_sync", "autoSync"],
+  ["autosyncintervalms", "autoSyncIntervalMs"],
+  ["auto-sync-interval-ms", "autoSyncIntervalMs"],
+  ["auto_sync_interval_ms", "autoSyncIntervalMs"],
   ["root", "root"],
   ["repo", "root"],
   ["db", "dbPath"],
@@ -120,8 +128,14 @@ function normalizeRawConfigValue(key: keyof RepoLensConfig, value: unknown): Rep
   if (key === "autoIndex" && typeof value === "boolean") {
     return value ? "incremental" : "off";
   }
+  if (key === "autoSync" && typeof value === "boolean") {
+    return value;
+  }
+  if (key === "autoSyncIntervalMs" && typeof value === "number") {
+    return parsePositiveInteger(value, "autoSyncIntervalMs");
+  }
   if (key === "maxFileBytes" && typeof value === "number") {
-    return parseMaxFileBytes(value);
+    return parsePositiveInteger(value, "maxFileBytes");
   }
   if (key === "bootstrapPackage" && value === false) {
     return false;
@@ -138,8 +152,17 @@ function parseConfigValue(key: keyof RepoLensConfig, value: string): RepoLensCon
     if (normalized === "full") return "full";
     throw new Error("autoIndex must be off, incremental, or full");
   }
+  if (key === "autoSync") {
+    const normalized = trimmed.toLowerCase();
+    if (["0", "false", "off", "no"].includes(normalized)) return false;
+    if (["1", "true", "on", "yes"].includes(normalized)) return true;
+    throw new Error("autoSync must be on or off");
+  }
+  if (key === "autoSyncIntervalMs") {
+    return parsePositiveInteger(Number(trimmed), "autoSyncIntervalMs");
+  }
   if (key === "maxFileBytes") {
-    return parseMaxFileBytes(Number(trimmed));
+    return parsePositiveInteger(Number(trimmed), "maxFileBytes");
   }
   if (key === "bootstrapPackage" && ["0", "false", "off", "no"].includes(trimmed.toLowerCase())) {
     return false;
@@ -150,9 +173,9 @@ function parseConfigValue(key: keyof RepoLensConfig, value: string): RepoLensCon
   return trimmed;
 }
 
-function parseMaxFileBytes(value: number): number {
+function parsePositiveInteger(value: number, key: string): number {
   if (!Number.isInteger(value) || value <= 0) {
-    throw new Error("maxFileBytes must be a positive integer");
+    throw new Error(`${key} must be a positive integer`);
   }
   return value;
 }
@@ -168,7 +191,7 @@ function normalizeConfigKey(key: string): keyof RepoLensConfig {
 
 function sortConfig(config: RepoLensConfig): RepoLensConfig {
   const sorted: RepoLensConfig = {};
-  for (const key of ["autoIndex", "root", "dbPath", "maxFileBytes", "autoIndexLabel", "bootstrapPackage"] as const) {
+  for (const key of ["autoIndex", "autoSync", "autoSyncIntervalMs", "root", "dbPath", "maxFileBytes", "autoIndexLabel", "bootstrapPackage"] as const) {
     if (config[key] !== undefined) {
       sorted[key] = config[key] as never;
     }

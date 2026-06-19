@@ -1,6 +1,6 @@
 # Validation Report
 
-Date: 2026-06-18
+Date: 2026-06-19
 
 ## Environment
 
@@ -20,8 +20,8 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 55 tests, 54 passing, 0 failures, 1 sandbox-only dashboard socket skip.
-- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, version/update status with npm-compatible registry checks, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, MCP startup auto-indexing from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, index-time graph package writing with `--write-package`, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema including relationship patterns and label property hints, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, `SKIP`, `IN`, and numeric comparisons, relative and workspace-package import cycle resolution, git-history hotspot extraction, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
+- Node test suite passed: 57 tests, 56 passing, 0 failures, 1 sandbox-only dashboard socket skip.
+- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, version/update status with npm-compatible registry checks, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, git-aware watch skipping unchanged polls and refreshing dirty worktrees, MCP startup auto-indexing and git-aware auto-sync wiring from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, index-time graph package writing with `--write-package`, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema including relationship patterns and label property hints, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, `SKIP`, `IN`, and numeric comparisons, relative and workspace-package import cycle resolution, git-history hotspot extraction, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
 
 ## Package And Release
 
@@ -51,9 +51,9 @@ Result:
 
 - Production dependency audit passed with `npm run audit:prod`: 0 vulnerabilities.
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, approximately 184 KB packed, 941,588 bytes unpacked, 81 runtime/doc entries.
-- Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `docs/`, `llms.txt`, `scripts/`, `package.json`, `server.json`, `install.sh`, and `install.ps1`; compiled tests, source TypeScript, local graph memory, SQLite databases, graph packages, and fixtures are excluded.
-- Package contents gate passed: 81 files inspected.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 180,673 bytes packed, 929,624 bytes unpacked, 84 runtime/doc entries.
+- Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, selected public docs, `llms.txt`, scripts, `package.json`, `server.json`, `install.sh`, and `install.ps1`; compiled tests, source TypeScript, local graph memory, SQLite databases, graph packages, fixtures, private validation output, and local workstation paths are excluded.
+- Package contents gate passed: 84 files inspected.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
 - PowerShell installer parser check is enforced in CI for `install.ps1`; it mirrors the Unix installer's Node 24 check, npm/build flow, doctor command, Codex install/uninstall, agent install/uninstall, `-DryRun`, `-Force`, `-Db`, `-Agents`, `-Target`, and `-SkipNpm` options. Local macOS validation could not execute `pwsh` because it is not installed in this environment.
@@ -66,7 +66,7 @@ Result:
 - Release workflow added for version tags and manual runs. It now separates unprivileged `verify-package` work from privileged `publish` work: package verification runs install, verification, dependency audit, demo indexing, `npm pack --json`, CycloneDX SBOM generation, SHA-256 checksum generation, and artifact upload with read-only contents plus `security-events: read`; tag publishing downloads the verified artifact in a separate job with `contents: write`, `id-token: write`, and `attestations: write`.
 - Release publishing calls `actions/attest-build-provenance@v2` for the tarball, SBOM, and checksum manifest, uploads GitHub release assets for tags, and publishes the tarball to npm with provenance.
 - Tag release publishing now fails when `NPM_TOKEN` is missing instead of silently skipping npm publication.
-- Release workflow runs `npm run release:codeql-gate` with `security-events: read` before packaging/publishing; live validation returned `CodeQL alert gate passed: 0 open CodeQL alerts.`
+- Release workflow runs `npm run release:security-gate` with `security-events: read` before packaging/publishing; the gate uses the GitHub security summary to fail on actionable CodeQL, Dependabot, or secret-scanning alerts.
 - OpenSSF Scorecard workflow added with SARIF upload to GitHub code scanning.
 - Live GitHub security check reported 0 open Dependabot alerts, 0 open secret-scanning alerts, and 0 open CodeQL alerts. The remaining 3 open code-scanning alerts are OpenSSF Scorecard process signals: `MaintainedID`, `CodeReviewID`, and `CIIBestPracticesID`.
 - CI now also checks `npm pack --dry-run --json`, `npm run package:check`, generates a CycloneDX SBOM, and self-indexes into `.repolens/ci.db`.
@@ -129,40 +129,40 @@ Result:
 
 ## Big Repo Validation
 
-Target: `/Users/sameer/Desktop/testing`
+Target: `/path/to/large-workspace`
 
 Latest repeatable benchmark refresh:
 
 ```bash
-node --experimental-sqlite dist/src/cli.js benchmark /Users/sameer/Desktop/testing \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark.db \
+node --experimental-sqlite dist/src/cli.js benchmark /path/to/large-workspace \
+  --db /path/to/large-workspace/.repolens/repolens-testing-benchmark.db \
   --max-file-bytes 750000 \
   --label testing-benchmark
 
 node --experimental-sqlite dist/src/cli.js report \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark.db \
+  --db /path/to/large-workspace/.repolens/repolens-testing-benchmark.db \
   --format html \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-report.html
+  --out /path/to/large-workspace/.repolens/repolens-testing-benchmark-report.html
 
 node --experimental-sqlite dist/src/cli.js export-graph \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark.db \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-graph.html \
+  --db /path/to/large-workspace/.repolens/repolens-testing-benchmark.db \
+  --out /path/to/large-workspace/.repolens/repolens-testing-benchmark-graph.html \
   --limit 1500
 
 node --experimental-sqlite dist/src/cli.js pack-graph \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark.db \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-graph.rlgz \
+  --db /path/to/large-workspace/.repolens/repolens-testing-benchmark.db \
+  --out /path/to/large-workspace/.repolens/repolens-testing-benchmark-graph.rlgz \
   --label testing-benchmark
 
 node --experimental-sqlite dist/src/cli.js unpack-graph \
-  /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-graph.rlgz \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-import-check.db \
+  /path/to/large-workspace/.repolens/repolens-testing-benchmark-graph.rlgz \
+  --db /path/to/large-workspace/.repolens/repolens-testing-benchmark-import-check.db \
   --overwrite
 ```
 
 Latest benchmark result:
 
-- Benchmark DB: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark.db`
+- Benchmark DB: `/path/to/large-workspace/.repolens/repolens-testing-benchmark.db`
 - Files discovered: 853
 - Files indexed: 818
 - Files skipped: 35
@@ -174,95 +174,95 @@ Latest benchmark result:
 - No-op incremental unchanged files: 853
 - Throughput: 49.62 files/s and 352.58 symbols/s for full indexing; 3,660.94 discovered files/s for no-op incremental indexing.
 - Redacted secret scan: 0 high-confidence and 0 medium-confidence findings across 61,746 indexed non-test lines.
-- Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-graph.html` (1,500 nodes, 1,500 edges)
-- HTML report: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-report.html`
-- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-benchmark-graph.rlgz` (10,955,684 bytes from a 73,871,360-byte SQLite snapshot, SHA-256 `6be8fdf102af01114dfa5ddc49f5923935aa597be1887a57c29460a78831ebf0`)
+- Graph export: `/path/to/large-workspace/.repolens/repolens-testing-benchmark-graph.html` (1,500 nodes, 1,500 edges)
+- HTML report: `/path/to/large-workspace/.repolens/repolens-testing-benchmark-report.html`
+- Graph package: `/path/to/large-workspace/.repolens/repolens-testing-benchmark-graph.rlgz` (10,955,684 bytes from a 73,871,360-byte SQLite snapshot, SHA-256 `6be8fdf102af01114dfa5ddc49f5923935aa597be1887a57c29460a78831ebf0`)
 - Imported benchmark graph package totals: 818 indexed files, 5,812 symbols, and 38,645 edges.
 
 Command:
 
 ```bash
-node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+node --experimental-sqlite dist/src/cli.js index /path/to/large-workspace \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --max-file-bytes 750000
 
-node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+node --experimental-sqlite dist/src/cli.js index /path/to/large-workspace \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --max-file-bytes 750000 \
   --incremental
 
 node --experimental-sqlite dist/src/cli.js architecture \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 
 node --experimental-sqlite dist/src/cli.js schema \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 
 node --experimental-sqlite dist/src/cli.js semantic "live session repository" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 8
 
 node --experimental-sqlite dist/src/cli.js vector "live session repository" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 5
 
 node --experimental-sqlite dist/src/cli.js references getLiveSessionRepository \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 5
 
 node --experimental-sqlite dist/src/cli.js query-graph \
   "MATCH (a)-[r:DATA_FLOWS]->(b) WHERE a.filePath CONTAINS 'live-session' RETURN a.name,b.name,r.type LIMIT 8" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 
 node --experimental-sqlite dist/src/cli.js communities \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 8 \
   --min-size 8
 
 node --experimental-sqlite dist/src/cli.js cycles \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 5
 
 node --experimental-sqlite dist/src/cli.js scan-secrets \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 25 \
   --min-confidence medium
 
 node --experimental-sqlite dist/src/cli.js scan-secrets \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 10 \
   --min-confidence high
 
 node --experimental-sqlite dist/src/cli.js report \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --format html \
   --graph-limit 160 \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html
+  --out /path/to/large-workspace/.repolens/repolens-architecture-report.html
 
 node --experimental-sqlite dist/src/cli.js report \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --format markdown \
   --graph-limit 160 \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md
+  --out /path/to/large-workspace/.repolens/repolens-architecture-report.md
 
 node --experimental-sqlite dist/src/cli.js export-graph \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 1000 \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html
+  --out /path/to/large-workspace/.repolens/repolens-testing-graph.html
 
 node --experimental-sqlite dist/src/cli.js export-graph \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --format json \
   --limit 1000 \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json
+  --out /path/to/large-workspace/.repolens/repolens-testing-graph-1000.json
 
 node --experimental-sqlite dist/src/cli.js pack-graph \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
+  --out /path/to/large-workspace/.repolens/repolens-validation.rlgz \
   --label testing-validation
 
 node --experimental-sqlite dist/src/cli.js unpack-graph \
-  /Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation-imported.db \
+  /path/to/large-workspace/.repolens/repolens-validation.rlgz \
+  --db /path/to/large-workspace/.repolens/repolens-validation-imported.db \
   --overwrite
 ```
 
@@ -287,18 +287,18 @@ Result:
 - Import graph rows: 642 `IMPORTS_FILE` edges resolving local relative, source-root, workspace-package, and path-alias imports.
 - HTTP route/call graph rows: 153 Next.js `route` nodes, 30 `http_call` nodes, 30 `CALLS_HTTP_ENDPOINT` edges, and 20 generated `HTTP_CALLS` route edges
 - Lockfile graph rows: 1 `lockfile` node, 387 `locked_dependency` nodes, and 387 `LOCKS` edges from `pnpm-lock.yaml`.
-- Architecture report HTML: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html` (62,527 bytes)
-- Architecture report Markdown: `/Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.md` (11,772 bytes)
-- Graph export: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html` (1,000 nodes, 1,000 edges, 348,985 bytes)
-- Graph export JSON: `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json` (1,000 nodes, 1,000 edges, 428,932 bytes)
-- Graph package: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz` (14,184,723 bytes from an 81,072,128-byte SQLite snapshot, SHA-256 `a18d45eae59a1c377b26267904cb5c120301049bab9712b8f9fa18ab2411c053`)
+- Architecture report HTML: `/path/to/large-workspace/.repolens/repolens-architecture-report.html` (62,527 bytes)
+- Architecture report Markdown: `/path/to/large-workspace/.repolens/repolens-architecture-report.md` (11,772 bytes)
+- Graph export: `/path/to/large-workspace/.repolens/repolens-testing-graph.html` (1,000 nodes, 1,000 edges, 348,985 bytes)
+- Graph export JSON: `/path/to/large-workspace/.repolens/repolens-testing-graph-1000.json` (1,000 nodes, 1,000 edges, 428,932 bytes)
+- Graph package: `/path/to/large-workspace/.repolens/repolens-validation.rlgz` (14,184,723 bytes from an 81,072,128-byte SQLite snapshot, SHA-256 `a18d45eae59a1c377b26267904cb5c120301049bab9712b8f9fa18ab2411c053`)
 - Imported graph package totals: 818 indexed files, 5,812 symbols, 38,634 edges, plus 4,558 persisted vector rows at 384 dimensions.
 - Redacted secret scan: 0 high-confidence and 0 medium-confidence findings across 61,746 indexed non-test lines.
 - Graph communities sampled: order repository, iOS load flows, access/cart clearing, auth/request helpers, address book, live-session tests, cart, and menu management communities.
-- Validation DB: `/Users/sameer/Desktop/testing/.repolens/repolens-validation.db`
+- Validation DB: `/path/to/large-workspace/.repolens/repolens-validation.db`
 - Import-resolved dependency cycles: 0
 - Git history hotspots: architecture summaries rank `src/styles/global.css`, `apps/ios/NewAppiOS/Views/ConsumerHomeView.swift`, `apps/ios/NewAppiOS/Views/RestaurantProfileView.swift`, and other high-churn files with commit counts, churn, author count, and latest subject.
-- Dashboard smoke check: `serve --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db --port 9759` served `/api/schema`, `/api/query-graph` for `DATA_FLOWS`, and `/api/architecture`; sandboxed local networking required approval for the bind and curl checks.
+- Dashboard smoke check: `serve --db /path/to/large-workspace/.repolens/repolens-validation.db --port 9759` served `/api/schema`, `/api/query-graph` for `DATA_FLOWS`, and `/api/architecture`; sandboxed local networking required approval for the bind and curl checks.
 
 Top language coverage:
 
@@ -345,8 +345,8 @@ Graph schema:
 Incremental refresh:
 
 ```bash
-node --experimental-sqlite dist/src/cli.js index /Users/sameer/Desktop/testing \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+node --experimental-sqlite dist/src/cli.js index /path/to/large-workspace \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --max-file-bytes 750000 \
   --incremental
 ```
@@ -385,7 +385,7 @@ Search:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js search "live session repository" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 5
 ```
 
@@ -457,7 +457,7 @@ Symbol lookup:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js symbols repository \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 5
 ```
 
@@ -468,15 +468,15 @@ Type relationship graph:
 ```bash
 node --experimental-sqlite dist/src/cli.js query-graph \
   "MATCH (a)-[r:USES_TYPE]->(b) WHERE a.filePath CONTAINS 'live-session' RETURN a.name,b.name,r.type LIMIT 8" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 
 node --experimental-sqlite dist/src/cli.js query-graph \
   "MATCH (a)-[r:IMPLEMENTS]->(b) RETURN a.name,b.name,r.type LIMIT 8" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 
 node --experimental-sqlite dist/src/cli.js query-graph \
   "MATCH (a)-[r:INHERITS]->(b) RETURN a.name,b.name,r.type LIMIT 8" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 ```
 
 Confirmed typed graph queries returned live-session type-use edges such as `parseSort -> LiveSessionFeedSort` and `enforceLifecycleRules -> LiveSession`, repository implementation edges such as `APIAddressBookRepository -> AddressBookRepository`, and inheritance edges such as `LiveSessionFeedItem -> LiveSession`.
@@ -486,7 +486,7 @@ Data-flow graph:
 ```bash
 node --experimental-sqlite dist/src/cli.js query-graph \
   "MATCH (a)-[r:DATA_FLOWS]->(b) WHERE a.filePath CONTAINS 'live-session' RETURN a.name,b.name,r.type LIMIT 8" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 ```
 
 Confirmed data-flow queries returned live-session argument-flow edges such as `getValidatedComment -> getById`, `requestJson -> parseJsonSafe`, `toDomainFromSupabase -> parseCount`, `countReactionsSupabase -> getMemoryReactionCount`, and `filterFeedSessions -> normalizedStatuses`.
@@ -495,7 +495,7 @@ Reference lookup:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js references getLiveSessionRepository \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 5
 ```
 
@@ -505,20 +505,20 @@ Semantic search and similarity edges:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js semantic "live session repository" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 8
 
 node --experimental-sqlite dist/src/cli.js vector "live session repository" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 5
 
 node --experimental-sqlite dist/src/cli.js query-graph \
   "MATCH (a)-[r:SIMILAR_TO]->(b) RETURN a.name,b.name,r.weight LIMIT 5" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 
 node --experimental-sqlite dist/src/cli.js query-graph \
   "MATCH (a)-[r:SEMANTICALLY_RELATED]->(b) RETURN a.name,b.name,r.weight LIMIT 5" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 ```
 
 Confirmed concept search returned live-session domain symbols, vector search ranked `getLiveSessionRepository`, `getLiveSessionCommentRepository`, and `getLiveSessionLikeRepository` at the top with all query tokens matched, `SIMILAR_TO` returned near-duplicate token-profile links, and `SEMANTICALLY_RELATED` returned cross-symbol semantic links.
@@ -586,11 +586,11 @@ node --experimental-sqlite dist/src/cli.js snippet getCodeSnippet \
   --context 2
 
 node --experimental-sqlite dist/src/cli.js snippet makeSession \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --context 1
 
 node --experimental-sqlite dist/src/cli.js snippet 'apps/web-admin/src/lib/server/repositories/live-session-repository.ts:40' \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --context 2
 ```
 
@@ -600,7 +600,7 @@ Graph schema:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js schema \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 ```
 
 Confirmed Swift, TypeScript, Markdown, SQL, JSON, shell, JavaScript, YAML, and unknown text coverage with node-label counts, edge-type counts, relationship patterns, and label property hints.
@@ -610,11 +610,11 @@ Read-only graph query:
 ```bash
 node --experimental-sqlite dist/src/cli.js query-graph \
   "MATCH (f:Function) WHERE f.filePath CONTAINS 'live-session' RETURN f.name,f.filePath LIMIT 5" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 
 node --experimental-sqlite dist/src/cli.js query-graph \
   "MATCH (a)-[r:CALLS]->(b) WHERE b.name = 'makeSession' RETURN a.name,b.name,r.type LIMIT 5" \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db
+  --db /path/to/large-workspace/.repolens/repolens-validation.db
 ```
 
 Confirmed node and one-hop relationship queries with `WHERE`, `RETURN`, edge aliases, and `LIMIT` on the large validation database.
@@ -637,7 +637,7 @@ Graph communities:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js communities \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 8 \
   --min-size 8
 ```
@@ -648,7 +648,7 @@ Dependency cycles:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js cycles \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 5
 ```
 
@@ -658,10 +658,10 @@ Architecture report:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js report \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --format html \
   --graph-limit 1000 \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-architecture-report.html
+  --out /path/to/large-workspace/.repolens/repolens-architecture-report.html
 ```
 
 Confirmed HTML and Markdown reports with summary metrics, language tables, graph schema counts including semantic/similarity edges, structural hotspots, git-history hotspots, top symbols, architecture boundaries, dependency-cycle checks, history-aware recommendations, dead-code samples, review signals, and graph samples.
@@ -672,7 +672,7 @@ Structural graph search:
 node --experimental-sqlite dist/src/cli.js search-graph live-session \
   --relationship CALLS \
   --min-degree 1 \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 5
 ```
 
@@ -682,7 +682,7 @@ Dead-code candidates:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js dead-code \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 8
 ```
 
@@ -692,24 +692,24 @@ Graph export:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js export-graph \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --limit 1000 \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-testing-graph.html
+  --out /path/to/large-workspace/.repolens/repolens-testing-graph.html
 ```
 
-Confirmed 1,000 nodes and 1,000 edges in the exported HTML graph. A matching JSON artifact was written to `/Users/sameer/Desktop/testing/.repolens/repolens-testing-graph-1000.json`.
+Confirmed 1,000 nodes and 1,000 edges in the exported HTML graph. A matching JSON artifact was written to `/path/to/large-workspace/.repolens/repolens-testing-graph-1000.json`.
 
 Graph package exchange:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js pack-graph \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
-  --out /Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
+  --out /path/to/large-workspace/.repolens/repolens-validation.rlgz \
   --label testing-validation
 
 node --experimental-sqlite dist/src/cli.js unpack-graph \
-  /Users/sameer/Desktop/testing/.repolens/repolens-validation.rlgz \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation-imported.db \
+  /path/to/large-workspace/.repolens/repolens-validation.rlgz \
+  --db /path/to/large-workspace/.repolens/repolens-validation-imported.db \
   --overwrite
 ```
 
@@ -718,8 +718,8 @@ Confirmed the package exporter created a checksummed `.rlgz` artifact and the im
 Watch mode:
 
 ```bash
-node --experimental-sqlite dist/src/cli.js watch /Users/sameer/Desktop/testing \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+node --experimental-sqlite dist/src/cli.js watch /path/to/large-workspace \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --max-file-bytes 750000 \
   --interval-ms 250 \
   --runs 2
@@ -740,7 +740,7 @@ Dashboard routes:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js serve \
-  --db /Users/sameer/Desktop/testing/.repolens/repolens-validation.db \
+  --db /path/to/large-workspace/.repolens/repolens-validation.db \
   --port 9759
 
 curl --fail http://127.0.0.1:9759/api/schema
@@ -764,7 +764,7 @@ Confirmed inbound links from the fixture server file to the `listOrders` symbol.
 Git-change impact:
 
 ```bash
-node --experimental-sqlite dist/src/cli.js changes /Users/sameer/Desktop/projects/repolens-mcp \
+node --experimental-sqlite dist/src/cli.js changes /path/to/repolens-mcp \
   --db .repolens/self.db \
   --limit 10
 ```

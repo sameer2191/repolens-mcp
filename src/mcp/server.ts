@@ -46,6 +46,7 @@ import {
 } from "../core/api.js";
 import { agentProfiles, installAgentSetup, type AgentId } from "../core/agents.js";
 import { configValueFromEnvOrConfig, loadRepoLensConfig } from "../core/config.js";
+import { watchRepository } from "../core/watcher.js";
 import type { IndexResult } from "../core/types.js";
 
 export async function startMcpServer(): Promise<void> {
@@ -53,6 +54,12 @@ export async function startMcpServer(): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`RepoLens auto-index failed: ${message}\n`);
   });
+  try {
+    maybeStartAutoSyncOnStartup();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`RepoLens auto-sync failed: ${message}\n`);
+  }
 
   const server = new McpServer({
     name: "repolens-mcp",
@@ -649,6 +656,51 @@ export async function maybeAutoIndexOnStartup(env: NodeJS.ProcessEnv = process.e
   return result;
 }
 
+export function maybeStartAutoSyncOnStartup(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): AbortController | undefined {
+  const config = loadRepoLensConfig(env.REPOLENS_CONFIG);
+  if (!parseBooleanEnv(configValueFromEnvOrConfig(env.REPOLENS_AUTO_SYNC, config.autoSync), "REPOLENS_AUTO_SYNC")) {
+    return undefined;
+  }
+
+  const autoIndexMode = parseAutoIndexMode(configValueFromEnvOrConfig(env.REPOLENS_AUTO_INDEX, config.autoIndex));
+  const root = path.resolve(cwd, env.REPOLENS_ROOT ?? config.root ?? ".");
+  const intervalMs =
+    parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_AUTO_SYNC_INTERVAL_MS, config.autoSyncIntervalMs), "REPOLENS_AUTO_SYNC_INTERVAL_MS") ??
+    2500;
+  const controller = new AbortController();
+  const maxRuns = parsePositiveIntEnv(env.REPOLENS_AUTO_SYNC_RUNS, "REPOLENS_AUTO_SYNC_RUNS");
+  const maxPolls = parsePositiveIntEnv(env.REPOLENS_AUTO_SYNC_POLLS, "REPOLENS_AUTO_SYNC_POLLS");
+
+  process.stderr.write(`RepoLens auto-sync: watching ${root} every ${intervalMs}ms for git changes\n`);
+  void watchRepository({
+    root,
+    dbPath: env.REPOLENS_DB ?? config.dbPath,
+    incremental: true,
+    maxFileBytes: parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_MAX_FILE_BYTES, config.maxFileBytes), "REPOLENS_MAX_FILE_BYTES"),
+    runLabel: env.REPOLENS_AUTO_INDEX_LABEL ?? config.autoIndexLabel ?? "mcp-auto-sync",
+    bootstrapPackage: bootstrapPackageFromConfig(env.REPOLENS_BOOTSTRAP_PACKAGE, config.bootstrapPackage),
+    intervalMs,
+    maxRuns,
+    maxPolls,
+    gitAware: true,
+    skipInitialRun: Boolean(autoIndexMode),
+    signal: controller.signal,
+    onResult: (result) => {
+      process.stderr.write(
+        `RepoLens auto-sync: ${result.mode} ${result.filesIndexed}/${result.filesDiscovered} files, ${result.symbols} symbols, ${result.edges} edges\n`
+      );
+    }
+  }).catch((error: unknown) => {
+    if (controller.signal.aborted) {
+      return;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`RepoLens auto-sync failed: ${message}\n`);
+  });
+
+  return controller;
+}
+
 function parseAutoIndexMode(value: string | undefined): { incremental: boolean } | undefined {
   const normalized = value?.trim().toLowerCase();
   if (!normalized || normalized === "0" || normalized === "false" || normalized === "off" || normalized === "no") {
@@ -661,6 +713,17 @@ function parseAutoIndexMode(value: string | undefined): { incremental: boolean }
     return { incremental: true };
   }
   throw new Error("Invalid REPOLENS_AUTO_INDEX. Use 1, true, incremental, full, or 0.");
+}
+
+function parseBooleanEnv(value: string | undefined, name: string): boolean {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized || normalized === "0" || normalized === "false" || normalized === "off" || normalized === "no") {
+    return false;
+  }
+  if (normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes") {
+    return true;
+  }
+  throw new Error(`${name} must be on or off`);
 }
 
 function parsePositiveIntEnv(value: string | undefined, name: string): number | undefined {

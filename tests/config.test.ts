@@ -15,12 +15,20 @@ test("persists RepoLens config values with aliases and reset support", async () 
   result = setRepoLensConfigValue("max-file-bytes", "750000", configPath);
   assert.equal(result.config.maxFileBytes, 750000);
 
+  result = setRepoLensConfigValue("auto-sync", "true", configPath);
+  assert.equal(result.config.autoSync, true);
+
+  result = setRepoLensConfigValue("auto-sync-interval-ms", "1250", configPath);
+  assert.equal(result.config.autoSyncIntervalMs, 1250);
+
   result = setRepoLensConfigValue("bootstrap-package", "off", configPath);
   assert.equal(result.config.bootstrapPackage, false);
 
   const loaded = readRepoLensConfig(configPath);
   assert.equal(loaded.path, configPath);
   assert.equal(loaded.config.autoIndex, "incremental");
+  assert.equal(loaded.config.autoSync, true);
+  assert.equal(loaded.config.autoSyncIntervalMs, 1250);
   assert.equal(loaded.config.maxFileBytes, 750000);
   assert.equal(loaded.config.bootstrapPackage, false);
 

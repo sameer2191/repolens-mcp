@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fsSync from "node:fs";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -764,6 +765,62 @@ test("watch mode keeps a repository indexed incrementally", async () => {
   assert.equal(summary.runs.length, 2);
   assert.deepEqual(observed, ["full", "incremental"]);
   assert.equal(summary.runs[1]?.filesUnchanged, summary.runs[0]?.filesDiscovered);
+});
+
+test("git-aware watch skips unchanged polls and refreshes dirty worktrees", async (t) => {
+  const git = spawnSync("git", ["--version"], { encoding: "utf8" });
+  if (git.status !== 0) {
+    t.skip("git is not available");
+    return;
+  }
+
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-git-watch-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.cp(fixture, repo, { recursive: true });
+  const runGit = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  };
+
+  spawnSync("git", ["init", repo], { encoding: "utf8" });
+  runGit("config", "user.email", "repolens@example.test");
+  runGit("config", "user.name", "RepoLens Test");
+  runGit("add", ".");
+  runGit("commit", "-m", "initial graph");
+
+  const observed: string[] = [];
+  const skipped: string[] = [];
+  let dirtied = false;
+  const summary = await watchRepository({
+    root: repo,
+    dbPath,
+    intervalMs: 250,
+    maxRuns: 2,
+    maxPolls: 4,
+    gitAware: true,
+    onResult: (result) => observed.push(result.mode),
+    onSkip: () => {
+      skipped.push("git-unchanged");
+      if (!dirtied) {
+        dirtied = true;
+        fsSync.appendFileSync(path.join(repo, "src", "orders.ts"), "\nexport function watchModeChange() { return orders.length; }\n");
+      }
+    }
+  });
+
+  assert.equal(summary.runs.length, 2);
+  assert.deepEqual(observed, ["full", "incremental"]);
+  assert.equal(skipped.length, 1);
+  assert.equal(summary.skippedPolls.length, 1);
+  assert.ok(summary.polls >= 3);
+  assert.equal(summary.runs[1]?.mode, "incremental");
+  const store = new MemoryStore(dbPath);
+  try {
+    assert.ok(store.searchSymbols("watchModeChange", "function", 5).some((match) => match.name === "watchModeChange"));
+  } finally {
+    store.close();
+  }
 });
 
 test("index lock prevents overlapping writers", async () => {

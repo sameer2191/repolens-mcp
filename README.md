@@ -12,13 +12,13 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 38 tools for indexing, version/update status, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema with relationship patterns and label properties, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 38 tools for indexing, version/update status, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing and git-aware auto-sync, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema with relationship patterns and label properties, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
-- **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, and optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`.
-- **Persistent local config**: `config set auto-index incremental` stores defaults for MCP startup auto-indexing, root, database path, max file size, labels, and graph-package bootstrap without requiring shell env vars.
-- **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes.
+- **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`, and keep long-running MCP sessions fresh with git-aware `REPOLENS_AUTO_SYNC`.
+- **Persistent local config**: `config set auto-index incremental` and `config set auto-sync true` store defaults for MCP startup indexing, live-session syncing, root, database path, max file size, labels, and graph-package bootstrap without requiring shell env vars.
+- **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes, optionally skipping unchanged git polls with `--git-aware`.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI; first index can bootstrap a missing database from `.repolens/graph.rlgz`.
 - **Operational dashboard**: browse graph previews, structural filters, references, semantic/vector search, schema counts, relationship patterns, label property hints, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
 - **Graph communities**: detects functional modules from weighted relationships, not just folder names.
@@ -105,7 +105,7 @@ repolens-mcp trace <symbol> [--direction inbound|outbound|both] [--mode all|call
 repolens-mcp impact <path-or-symbol...>
 repolens-mcp schema [--db path]
 repolens-mcp communities [--db path] [--limit n] [--min-size n]
-repolens-mcp watch [repo] [--db path] [--interval-ms n]
+repolens-mcp watch [repo] [--db path] [--interval-ms n] [--git-aware]
 repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--min-degree n]
 repolens-mcp semantic "live session repository" [--limit n]
 repolens-mcp vector "live session repository" [--limit n]
@@ -245,15 +245,14 @@ node --experimental-sqlite dist/src/cli.js report --db /tmp/memory.db --format h
 node --experimental-sqlite dist/src/cli.js export-graph --db /tmp/memory.db --out graph.html --limit 1000
 node --experimental-sqlite dist/src/cli.js pack-graph --db /tmp/memory.db --out graph.rlgz --label validation
 node --experimental-sqlite dist/src/cli.js unpack-graph graph.rlgz --db /tmp/imported-memory.db
-node --experimental-sqlite dist/src/cli.js watch /path/to/big/repo --db /tmp/memory.db --interval-ms 2500
+node --experimental-sqlite dist/src/cli.js watch /path/to/big/repo --db /tmp/memory.db --interval-ms 2500 --git-aware
 node --experimental-sqlite dist/src/cli.js config set auto-index incremental
 node --experimental-sqlite dist/src/cli.js config set root /path/to/big/repo
 node --experimental-sqlite dist/src/cli.js serve --db /tmp/memory.db --port 9749
 node --experimental-sqlite dist/src/cli.js agent-setup --target /tmp/project --agents all
 ```
 
-The repo includes `docs/research-notes.md` with source-research notes and the design decisions behind this implementation.
-It also includes `docs/validation-report.md` with the local self-index and `/Users/sameer/Desktop/testing` big-repo validation results.
+The repo includes `docs/research-notes.md` with source-research notes and design decisions, plus `docs/BENCHMARK.md` with sanitized validation evidence for the npm package.
 
 ## Team-Shared Graph Bootstrap
 
@@ -292,16 +291,21 @@ Optional startup indexing for MCP sessions:
 [mcp_servers.repolens.env]
 REPOLENS_DB = ".repolens/memory.db"
 REPOLENS_AUTO_INDEX = "1"          # incremental startup refresh
+REPOLENS_AUTO_SYNC = "1"           # keep a long-running MCP session fresh after git changes
+REPOLENS_AUTO_SYNC_INTERVAL_MS = "2500"
 REPOLENS_ROOT = "."                # optional, defaults to process cwd
 REPOLENS_MAX_FILE_BYTES = "750000" # optional
 ```
 
 Set `REPOLENS_AUTO_INDEX=full` to force a full rebuild on startup. Leave it unset for the default manual-index behavior.
+`REPOLENS_AUTO_SYNC=1` starts a background git-aware watcher after startup; unchanged HEAD/status polls are skipped, while committed or dirty worktree changes trigger incremental refreshes.
 
 You can also persist those defaults without shell env vars:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js config set auto-index incremental
+node --experimental-sqlite dist/src/cli.js config set auto-sync true
+node --experimental-sqlite dist/src/cli.js config set auto-sync-interval-ms 2500
 node --experimental-sqlite dist/src/cli.js config set root /path/to/repo
 node --experimental-sqlite dist/src/cli.js config set db-path /path/to/repo/.repolens/memory.db
 ```

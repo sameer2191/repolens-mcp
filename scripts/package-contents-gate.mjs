@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 
 const requiredFiles = [
   "README.md",
@@ -12,8 +13,8 @@ const requiredFiles = [
   "install.sh",
   "install.ps1",
   "docs/agent-guide.md",
+  "docs/BENCHMARK.md",
   "docs/research-notes.md",
-  "docs/validation-report.md",
   "scripts/codeql-alert-gate.mjs",
   "scripts/github-security-summary.mjs",
   "scripts/package-contents-gate.mjs",
@@ -31,12 +32,15 @@ const allowedExactFiles = new Set([
   "install.sh",
   "install.ps1",
   "package.json",
+  "docs/agent-guide.md",
+  "docs/BENCHMARK.md",
+  "docs/research-notes.md",
   "scripts/codeql-alert-gate.mjs",
   "scripts/github-security-summary.mjs",
   "scripts/package-contents-gate.mjs"
 ]);
 
-const allowedPrefixes = ["dist/src/", "docs/"];
+const allowedPrefixes = ["dist/src/"];
 
 const forbiddenPatterns = [
   /^\.repolens\//,
@@ -47,6 +51,15 @@ const forbiddenPatterns = [
   /(^|\/)\.env(?:\.|$)/,
   /\.(?:db|db-shm|db-wal|sqlite|sqlite3|rlgz|pem|key|p12)$/i
 ];
+
+const forbiddenTextPatterns = [
+  { pattern: /\/Users\/[A-Za-z0-9._-]+[^\s`"'<>)]*/g, label: "macOS user-home path" },
+  { pattern: /\/private\/(?:tmp|var)\/[^\s`"'<>)]*/g, label: "macOS private temp path" },
+  { pattern: /\/var\/folders\/[^\s`"'<>)]*/g, label: "macOS var folders path" },
+  { pattern: /Desktop\/[^\s`"'<>)]*/g, label: "local Desktop path" }
+];
+
+const textFilePattern = /\.(?:cjs|d\.ts|html|js|json|map|md|mjs|ps1|sh|toml|txt|yaml|yml)$/i;
 
 let parsed;
 try {
@@ -79,8 +92,9 @@ const unexpected = files.filter((file) => {
   }
   return !allowedPrefixes.some((prefix) => file.startsWith(prefix));
 });
+const leakedLocalPaths = scanTextFiles(files);
 
-if (missing.length > 0 || forbidden.length > 0 || unexpected.length > 0) {
+if (missing.length > 0 || forbidden.length > 0 || unexpected.length > 0 || leakedLocalPaths.length > 0) {
   if (missing.length > 0) {
     console.error("Required package files are missing:");
     for (const file of missing) {
@@ -99,7 +113,31 @@ if (missing.length > 0 || forbidden.length > 0 || unexpected.length > 0) {
       console.error(`- ${file}`);
     }
   }
+  if (leakedLocalPaths.length > 0) {
+    console.error("Packed text files contain local workstation paths:");
+    for (const finding of leakedLocalPaths) {
+      console.error(`- ${finding.file}: ${finding.label}: ${finding.match}`);
+    }
+  }
   process.exit(1);
 }
 
 console.log(`Package contents gate passed: ${files.length} files inspected.`);
+
+function scanTextFiles(files) {
+  const findings = [];
+  for (const file of files) {
+    if (!textFilePattern.test(file) || !fs.existsSync(file)) {
+      continue;
+    }
+    const body = fs.readFileSync(file, "utf8");
+    for (const { pattern, label } of forbiddenTextPatterns) {
+      pattern.lastIndex = 0;
+      const matches = [...body.matchAll(pattern)];
+      for (const match of matches.slice(0, 5)) {
+        findings.push({ file, label, match: match[0] });
+      }
+    }
+  }
+  return findings;
+}
