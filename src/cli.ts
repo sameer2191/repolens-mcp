@@ -360,6 +360,7 @@ async function main(): Promise<void> {
           cliPath: stringFlag(args, "cli") ?? currentCliPath(),
           dbPath: stringFlag(args, "db"),
           serverName: stringFlag(args, "name") ?? "repolens",
+          withHooks: booleanFlag(args, "with-hooks"),
           dryRun: true
         })
       );
@@ -373,6 +374,7 @@ async function main(): Promise<void> {
           cliPath: stringFlag(args, "cli") ?? currentCliPath(),
           dbPath: stringFlag(args, "db"),
           serverName: stringFlag(args, "name") ?? "repolens",
+          withHooks: booleanFlag(args, "with-hooks"),
           dryRun: booleanFlag(args, "dry-run")
         })
       );
@@ -383,6 +385,7 @@ async function main(): Promise<void> {
           targetDir: stringFlag(args, "target") ?? process.cwd(),
           agents: agentList(stringFlag(args, "agents")),
           serverName: stringFlag(args, "name") ?? "repolens",
+          withHooks: booleanFlag(args, "with-hooks"),
           dryRun: booleanFlag(args, "dry-run")
         })
       );
@@ -661,9 +664,9 @@ Usage:
   repolens-mcp doctor [--config ~/.codex/config.toml] [--name repolens]
   repolens-mcp install-codex [--db .repolens/memory.db] [--dry-run] [--force] [--config ~/.codex/config.toml]
   repolens-mcp uninstall-codex [--dry-run] [--config ~/.codex/config.toml]
-  repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--db .repolens/memory.db]
-  repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run]
-  repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run]
+  repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--db .repolens/memory.db] [--with-hooks]
+  repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run] [--with-hooks]
+  repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run] [--with-hooks]
   repolens-mcp mcp
   repolens-mcp demo
 `;

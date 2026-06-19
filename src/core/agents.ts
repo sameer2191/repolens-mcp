@@ -21,6 +21,7 @@ export interface AgentProfile {
   instructionPath: string;
   configPath?: string;
   configKind?: "vscode-mcp";
+  hookPath?: string;
 }
 
 export interface AgentSetupOptions {
@@ -31,6 +32,7 @@ export interface AgentSetupOptions {
   dbPath?: string;
   serverName?: string;
   dryRun?: boolean;
+  withHooks?: boolean;
 }
 
 export interface AgentSetupFile {
@@ -44,6 +46,7 @@ export interface AgentSetupResult {
   targetDir: string;
   serverName: string;
   dryRun: boolean;
+  withHooks: boolean;
   agents: AgentProfile[];
   files: AgentSetupFile[];
   guidePath: string;
@@ -53,17 +56,17 @@ const MANAGED_START = "<!-- >>> repolens-mcp managed >>> -->";
 const MANAGED_END = "<!-- <<< repolens-mcp managed <<< -->";
 
 export const agentProfiles: AgentProfile[] = [
-  { id: "codex", label: "Codex CLI", configHint: ".codex/config.toml", instructionPath: ".codex/AGENTS.md" },
-  { id: "claude", label: "Claude Code", configHint: ".mcp.json or ~/.claude/.mcp.json", instructionPath: "CLAUDE.md" },
-  { id: "gemini", label: "Gemini CLI", configHint: ".gemini/settings.json", instructionPath: ".gemini/GEMINI.md" },
-  { id: "zed", label: "Zed", configHint: "settings.json context server", instructionPath: ".zed/repolens.md" },
-  { id: "opencode", label: "OpenCode", configHint: "opencode.json", instructionPath: ".opencode/AGENTS.md" },
-  { id: "antigravity", label: "Antigravity", configHint: ".gemini/config/mcp_config.json", instructionPath: "antigravity-cli/AGENTS.md" },
-  { id: "aider", label: "Aider", configHint: "project conventions", instructionPath: "CONVENTIONS.md" },
-  { id: "kilocode", label: "KiloCode", configHint: "mcp_settings.json", instructionPath: ".kilocode/rules/repolens.md" },
-  { id: "vscode", label: "VS Code", configHint: ".vscode/mcp.json", instructionPath: ".vscode/repolens-mcp.md", configPath: ".vscode/mcp.json", configKind: "vscode-mcp" },
-  { id: "openclaw", label: "OpenClaw", configHint: "openclaw.json", instructionPath: ".openclaw/repolens.md" },
-  { id: "kiro", label: "Kiro", configHint: ".kiro/settings/mcp.json", instructionPath: ".kiro/steering/repolens.md" }
+  { id: "codex", label: "Codex CLI", configHint: ".codex/config.toml", instructionPath: ".codex/AGENTS.md", hookPath: ".codex/repolens-hooks.md" },
+  { id: "claude", label: "Claude Code", configHint: ".mcp.json or ~/.claude/.mcp.json", instructionPath: "CLAUDE.md", hookPath: ".claude/repolens-hooks.md" },
+  { id: "gemini", label: "Gemini CLI", configHint: ".gemini/settings.json", instructionPath: ".gemini/GEMINI.md", hookPath: ".gemini/repolens-hooks.md" },
+  { id: "zed", label: "Zed", configHint: "settings.json context server", instructionPath: ".zed/repolens.md", hookPath: ".zed/repolens-hooks.md" },
+  { id: "opencode", label: "OpenCode", configHint: "opencode.json", instructionPath: ".opencode/AGENTS.md", hookPath: ".opencode/repolens-hooks.md" },
+  { id: "antigravity", label: "Antigravity", configHint: ".gemini/config/mcp_config.json", instructionPath: "antigravity-cli/AGENTS.md", hookPath: "antigravity-cli/repolens-hooks.md" },
+  { id: "aider", label: "Aider", configHint: "project conventions", instructionPath: "CONVENTIONS.md", hookPath: ".aider/repolens-hooks.md" },
+  { id: "kilocode", label: "KiloCode", configHint: "mcp_settings.json", instructionPath: ".kilocode/rules/repolens.md", hookPath: ".kilocode/rules/repolens-hooks.md" },
+  { id: "vscode", label: "VS Code", configHint: ".vscode/mcp.json", instructionPath: ".vscode/repolens-mcp.md", configPath: ".vscode/mcp.json", configKind: "vscode-mcp", hookPath: ".vscode/repolens-hooks.md" },
+  { id: "openclaw", label: "OpenClaw", configHint: "openclaw.json", instructionPath: ".openclaw/repolens.md", hookPath: ".openclaw/repolens-hooks.md" },
+  { id: "kiro", label: "Kiro", configHint: ".kiro/settings/mcp.json", instructionPath: ".kiro/steering/repolens.md", hookPath: ".kiro/steering/repolens-hooks.md" }
 ];
 
 export async function installAgentSetup(options: AgentSetupOptions): Promise<AgentSetupResult> {
@@ -77,11 +80,30 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
     cliPath: options.cliPath,
     dbPath
   };
+  const hookFiles = options.withHooks
+    ? [
+        {
+          relativePath: "docs/repolens-agent-hooks.md",
+          body: agentHookGuide({
+            profiles: selected,
+            ...renderOptions
+          })
+        },
+        ...selected.map((profile) => ({
+          relativePath: profile.hookPath ?? profile.instructionPath,
+          body: agentHookReminderBlock({
+            profile,
+            ...renderOptions
+          })
+        }))
+      ]
+    : [];
   const files = [
     {
       relativePath: "docs/repolens-agent-setup.md",
       body: agentSetupGuide({
         profiles: selected,
+        withHooks: options.withHooks ?? false,
         ...renderOptions
       })
     },
@@ -91,7 +113,8 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
         profile,
         ...renderOptions
       })
-    }))
+    })),
+    ...hookFiles
   ];
 
   const written: AgentSetupFile[] = [];
@@ -120,6 +143,7 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
     targetDir,
     serverName,
     dryRun: options.dryRun ?? false,
+    withHooks: options.withHooks ?? false,
     agents: selected,
     files: written,
     guidePath: path.join(targetDir, "docs", "repolens-agent-setup.md")
@@ -130,7 +154,8 @@ export async function uninstallAgentSetup(options: Omit<AgentSetupOptions, "comm
   const targetDir = path.resolve(options.targetDir ?? process.cwd());
   const serverName = options.serverName ?? "repolens";
   const selected = selectAgents(options.agents);
-  const relativePaths = ["docs/repolens-agent-setup.md", ...selected.map((profile) => profile.instructionPath)];
+  const hookPaths = options.withHooks ? ["docs/repolens-agent-hooks.md", ...selected.map((profile) => profile.hookPath ?? profile.instructionPath)] : [];
+  const relativePaths = ["docs/repolens-agent-setup.md", ...selected.map((profile) => profile.instructionPath), ...hookPaths];
   const files: AgentSetupFile[] = [];
 
   for (const relativePath of relativePaths) {
@@ -168,6 +193,7 @@ export async function uninstallAgentSetup(options: Omit<AgentSetupOptions, "comm
     targetDir,
     serverName,
     dryRun: options.dryRun ?? false,
+    withHooks: options.withHooks ?? false,
     agents: selected,
     files,
     guidePath: path.join(targetDir, "docs", "repolens-agent-setup.md")
@@ -180,6 +206,7 @@ export function agentSetupGuide(options: {
   command: string;
   cliPath: string;
   dbPath: string;
+  withHooks?: boolean;
 }): string {
   const snippets = options.profiles
     .map((profile) => `### ${profile.label}
@@ -214,6 +241,66 @@ ${snippets}
 - Prefer \`${options.serverName}.context_pack\`, \`${options.serverName}.search_graph\`, and \`${options.serverName}.trace_symbol\` before opening many files.
 - Use \`${options.serverName}.get_graph_schema\` first when writing graph queries.
 - Use \`${options.serverName}.detect_changes\` before risky edits.
+${options.withHooks ? "\n## Optional Hook And Reminder Files\n\nThis install includes project-local, non-blocking hook/reminder files. They describe when to call RepoLens before broad searches or risky edits without automatically sending source code anywhere.\n" : ""}
+`;
+}
+
+function agentHookGuide(options: {
+  profiles: AgentProfile[];
+  serverName: string;
+  command: string;
+  cliPath: string;
+  dbPath: string;
+}): string {
+  const hookTargets = options.profiles.map((profile) => `- ${profile.label}: \`${profile.hookPath ?? profile.instructionPath}\``).join("\n");
+  return `# RepoLens Agent Hook And Reminder Setup
+
+These files are opt-in, project-local reminders for coding agents that support session prompts, hook notes, or project rules. They are intentionally non-blocking and read-only: the agent should use RepoLens context tools before broad searches, but the files do not execute code by themselves.
+
+Server name: \`${options.serverName}\`
+Database: \`${options.dbPath}\`
+
+## Generated Targets
+
+${hookTargets}
+
+## Suggested Trigger Policy
+
+- Before broad search commands, ask \`${options.serverName}.context_pack\` or \`${options.serverName}.search_graph\` for focused context.
+- Before risky edits, ask \`${options.serverName}.detect_changes\` after local changes and inspect impacted symbols.
+- Before graph queries, ask \`${options.serverName}.get_graph_schema\` first.
+- Keep hook behavior non-blocking: if RepoLens is unavailable, continue with normal local inspection and mention the miss.
+
+## Local Fallback Commands
+
+\`\`\`bash
+${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "index", ".", "--db", options.dbPath])}
+${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "context-pack", "implementation target", "--db", options.dbPath])}
+${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "changes", ".", "--db", options.dbPath])}
+\`\`\`
+`;
+}
+
+function agentHookReminderBlock(options: { profile: AgentProfile; serverName: string; command: string; cliPath: string; dbPath: string }): string {
+  return `# RepoLens Hook Reminder
+
+Agent profile: ${options.profile.label}
+Server name: \`${options.serverName}\`
+Database: \`${options.dbPath}\`
+
+Use this as a non-blocking project reminder:
+
+- Before broad grep/glob/search, call \`${options.serverName}.context_pack\` with the implementation target.
+- For symbol or route questions, call \`${options.serverName}.search_graph\` before opening many files.
+- For call-path or impact questions, call \`${options.serverName}.trace_symbol\`, \`${options.serverName}.trace_path\`, or \`${options.serverName}.detect_changes\`.
+- For custom graph queries, call \`${options.serverName}.get_graph_schema\` before \`${options.serverName}.query_graph\`.
+- If the MCP server is unavailable, continue without blocking and say that RepoLens context was unavailable.
+
+Local fallback:
+
+\`\`\`bash
+${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "context-pack", "implementation target", "--db", options.dbPath])}
+\`\`\`
 `;
 }
 

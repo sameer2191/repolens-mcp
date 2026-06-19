@@ -35,10 +35,55 @@ test("agent setup dry-run reports files without writing", async () => {
   });
 
   assert.equal(result.dryRun, true);
+  assert.equal(result.withHooks, false);
   assert.equal(result.agents.length, 2);
   assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-setup.md") && file.changed));
   assert.ok(result.files.some((file) => file.path.endsWith(".codex/AGENTS.md")));
+  assert.ok(!result.files.some((file) => file.path.endsWith("repolens-hooks.md")));
   await assert.rejects(() => fs.readFile(path.join(tmp, "docs/repolens-agent-setup.md"), "utf8"));
+});
+
+test("agent setup can render opt-in hook reminder files", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agent-hooks-"));
+  const result = await installAgentSetup({
+    targetDir: tmp,
+    agents: ["claude", "gemini"],
+    command: "node",
+    cliPath: "/repo/cli.js",
+    dbPath: ".repolens/memory.db",
+    withHooks: true,
+    dryRun: true
+  });
+
+  assert.equal(result.withHooks, true);
+  assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-hooks.md") && file.changed));
+  assert.ok(result.files.some((file) => file.path.endsWith(".claude/repolens-hooks.md") && file.content.includes("context_pack")));
+  assert.ok(result.files.some((file) => file.path.endsWith(".gemini/repolens-hooks.md") && file.content.includes("non-blocking")));
+  await assert.rejects(() => fs.readFile(path.join(tmp, "docs/repolens-agent-hooks.md"), "utf8"));
+});
+
+test("agent setup uninstall removes managed hook reminders when requested", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agent-hooks-"));
+
+  await installAgentSetup({
+    targetDir: tmp,
+    agents: ["claude"],
+    command: "node",
+    cliPath: "/repo/cli.js",
+    withHooks: true
+  });
+  const hookPath = path.join(tmp, ".claude", "repolens-hooks.md");
+  assert.match(await fs.readFile(hookPath, "utf8"), /RepoLens Hook Reminder/);
+
+  const result = await uninstallAgentSetup({
+    targetDir: tmp,
+    agents: ["claude"],
+    withHooks: true
+  });
+
+  assert.ok(result.files.some((file) => file.path.endsWith(".claude/repolens-hooks.md") && file.removed));
+  assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-hooks.md") && file.removed));
+  await assert.rejects(() => fs.readFile(hookPath, "utf8"));
 });
 
 test("agent setup writes and replaces managed instruction blocks", async () => {
