@@ -329,6 +329,15 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.equal(lineSnippet?.filePath, "src/orders.ts");
     assert.ok(lineSnippet?.lines.some((line) => line.line === 8 && line.highlight));
 
+    const absoluteLineSnippet = store.getCodeSnippet(`${path.join(fixture, "src", "orders.ts")}:8`, 1);
+    assert.equal(absoluteLineSnippet?.filePath, "src/orders.ts");
+    assert.ok(absoluteLineSnippet?.lines.some((line) => line.line === 8 && line.highlight));
+
+    const outsideFile = path.join(tmp, "outside-secret.txt");
+    await fs.writeFile(outsideFile, "SHOULD_NOT_BE_READ\n");
+    assert.equal(store.getCodeSnippet(`${outsideFile}:1`, 0), null);
+    assert.equal(store.getCodeSnippet("../outside-secret.txt:1", 0), null);
+
     const code = store.searchCode("app.get");
     assert.ok(code.some((match) => match.text.includes("app.get")));
 

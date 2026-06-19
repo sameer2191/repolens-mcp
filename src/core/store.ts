@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { normalizeSlashes } from "./language.js";
 import { cosineSimilarity, semanticScore, semanticTokens, semanticVector, type LocalVector } from "./semantic.js";
 import type {
   ArchitectureSummary,
@@ -589,23 +590,35 @@ export class MemoryStore {
   }
 
   private snippetForLocation(filePath: string, startLine: number, endLine: number, context: number, symbol?: SymbolNode): CodeSnippet | null {
-    const file = this.db.prepare("SELECT * FROM files WHERE path = ? LIMIT 1").get(filePath) as FileRow | undefined;
+    const root = this.latestRoot();
+    const indexedPath = indexedRelativePath(filePath, root);
+    if (!indexedPath) {
+      return null;
+    }
+    const file = this.db.prepare("SELECT * FROM files WHERE path = ? LIMIT 1").get(indexedPath) as FileRow | undefined;
+    if (!file) {
+      return null;
+    }
     const from = Math.max(1, startLine - context);
     const to = Math.max(from, endLine + context);
-    const root = this.latestRoot();
-    const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(root, filePath);
+    const absolutePath = safeIndexedAbsolutePath(root, indexedPath);
 
     let lines: Array<{ line: number; text: string; highlight: boolean }> = [];
-    try {
-      const content = fs.readFileSync(absolutePath, "utf8");
-      lines = content
-        .split(/\r?\n/)
-        .slice(from - 1, to)
-        .map((text, index) => {
-          const line = from + index;
-          return { line, text, highlight: line >= startLine && line <= endLine };
-        });
-    } catch {
+    if (absolutePath) {
+      try {
+        const content = fs.readFileSync(absolutePath, "utf8");
+        lines = content
+          .split(/\r?\n/)
+          .slice(from - 1, to)
+          .map((text, index) => {
+            const line = from + index;
+            return { line, text, highlight: line >= startLine && line <= endLine };
+          });
+      } catch {
+        lines = [];
+      }
+    }
+    if (lines.length === 0) {
       const rows = this.db
         .prepare(
           `SELECT line, text
@@ -613,7 +626,7 @@ export class MemoryStore {
            WHERE file_path = ? AND line BETWEEN ? AND ?
            ORDER BY line ASC`
         )
-        .all(filePath, from, to) as Array<{ line: number; text: string }>;
+        .all(indexedPath, from, to) as Array<{ line: number; text: string }>;
       lines = rows.map((row) => ({ ...row, highlight: row.line >= startLine && row.line <= endLine }));
     }
 
@@ -622,7 +635,7 @@ export class MemoryStore {
     }
 
     return {
-      filePath,
+      filePath: indexedPath,
       language: symbol?.language ?? file?.language ?? "unknown",
       startLine: from,
       endLine: lines[lines.length - 1].line,
@@ -3816,6 +3829,40 @@ function parseFileLine(identifier: string): { filePath: string; line: number } |
     return null;
   }
   return { filePath: match[1], line: Number(match[2]) };
+}
+
+function indexedRelativePath(filePath: string, root: string): string | null {
+  const trimmed = filePath.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const rootPath = path.resolve(root);
+  const absolutePath = path.isAbsolute(trimmed) ? path.resolve(trimmed) : path.resolve(rootPath, trimmed);
+  if (!isPathInside(rootPath, absolutePath)) {
+    return null;
+  }
+  const relative = normalizeSlashes(path.relative(rootPath, absolutePath));
+  return relative && relative !== "." ? relative : null;
+}
+
+function safeIndexedAbsolutePath(root: string, relativePath: string): string | null {
+  const rootPath = path.resolve(root);
+  const absolutePath = path.resolve(rootPath, relativePath);
+  if (!isPathInside(rootPath, absolutePath)) {
+    return null;
+  }
+  try {
+    const realRoot = fs.realpathSync(rootPath);
+    const realPath = fs.realpathSync(absolutePath);
+    return isPathInside(realRoot, realPath) ? realPath : null;
+  } catch {
+    return null;
+  }
+}
+
+function isPathInside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function clusterName(filePath: string): string {
