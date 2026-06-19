@@ -25,16 +25,26 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
+      - run: npm run test:skip-gate
       - run: npm run verify
       - run: npm run audit:prod
+      - run: npm pack --dry-run --json
+      - run: npm run package:check
+      - run: npm run installer:audit
+      - run: pwsh -NoLogo -NoProfile -Command '$parseErrors = $null; [System.Management.Automation.Language.Parser]::ParseFile("install.ps1", [ref]$null, [ref]$parseErrors) | Out-Null; if ($parseErrors.Count) { $parseErrors; exit 1 }'
       - name: Fail release on actionable GitHub security alerts
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm run release:security-gate
+      - name: Fail release on open CodeQL alerts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm run release:codeql-gate
       - run: node --experimental-sqlite dist/src/cli.js demo
       - run: npm pack --json
       - run: npm sbom --sbom-format cyclonedx --json > sbom.cyclonedx.json
       - run: sha256sum *.tgz sbom.cyclonedx.json > checksums.txt
+      - run: sha256sum --check checksums.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: repolens-release-package
@@ -55,6 +65,8 @@ jobs:
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: repolens-release-package
+      - name: Verify release artifact checksums
+        run: sha256sum --check checksums.txt
       - name: Require npm publish token
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

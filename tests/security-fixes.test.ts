@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import fc from "fast-check";
 import { dashboardErrorBody } from "../src/dashboard/server.js";
 import { buildResolvedImportEdges } from "../src/core/import-resolver.js";
@@ -230,6 +231,49 @@ test("graph search name patterns are bounded wildcards, not raw regexes", async 
   } finally {
     store.close();
   }
+});
+
+test("GitHub security release gate fails closed when alert endpoints are unavailable", async () => {
+  type SecuritySummaryModule = {
+    runSecuritySummary: (options: Record<string, unknown>) => Promise<number>;
+  };
+  const { runSecuritySummary } = (await import(
+    pathToFileURL(path.join(process.cwd(), "scripts/github-security-summary.mjs")).href
+  )) as SecuritySummaryModule;
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+
+  const result = await runSecuritySummary({
+    apiUrl: "https://api.example.test",
+    repository: "sameer/repolens-mcp",
+    token: "test-token",
+    failOnActionable: true,
+    fetchImpl: async (input: URL | string) => {
+      const pathname = new URL(String(input)).pathname;
+      if (pathname.endsWith("/code-scanning/alerts") || pathname.endsWith("/secret-scanning/alerts")) {
+        return new Response("[]", { headers: { "content-type": "application/json" } });
+      }
+      if (pathname.endsWith("/dependabot/alerts")) {
+        return new Response(JSON.stringify({ message: "Resource not accessible by integration" }), {
+          status: 403,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    },
+    output: {
+      log: (message = "") => stdout.push(String(message)),
+      error: (message = "") => stderr.push(String(message))
+    }
+  });
+
+  assert.equal(result, 1);
+  assert.match(stdout.join("\n"), /Unavailable alert endpoints/);
+  assert.match(stdout.join("\n"), /Dependabot: HTTP 403/);
+  assert.match(stderr.join("\n"), /could not verify every actionable alert endpoint/);
 });
 
 function fileSymbol(filePath: string): SymbolNode {

@@ -34,7 +34,7 @@ npm run package:check
 npm run audit:prod
 ```
 
-Release publishing also runs dependency audit and CodeQL alert gates before package creation. Tag releases publish npm provenance from a separate privileged job and fail if `NPM_TOKEN` is missing.
+Release publishing also mirrors CI package gates, runs dependency audit and GitHub alert gates before package creation, verifies SHA-256 checksums before artifact upload and again after artifact download, publishes npm provenance from a separate privileged job, and fails if `NPM_TOKEN` is missing.
 
 ## GitHub Security Summary
 
@@ -44,7 +44,7 @@ Maintainers can summarize the live GitHub Security tab state with:
 GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run security:github
 ```
 
-Use `-- --format json` for automation or `-- --fail-on-actionable` to exit non-zero when CodeQL, Dependabot, or secret-scanning alerts are open. OpenSSF Scorecard alerts are reported separately as process signals so they are visible without being confused with code vulnerabilities.
+Use `-- --format json` for automation or `-- --fail-on-actionable` to exit non-zero when CodeQL, Dependabot, or secret-scanning alerts are open or when an actionable alert endpoint cannot be verified. OpenSSF Scorecard alerts are reported separately as process signals so they are visible without being confused with code vulnerabilities.
 
 ## Reporting A Vulnerability
 
