@@ -36,6 +36,17 @@ npm run audit:prod
 
 Release publishing also runs dependency audit and CodeQL alert gates before package creation. Tag releases publish npm provenance from a separate privileged job and fail if `NPM_TOKEN` is missing.
 
+## Pull Request Dependency Review
+
+Pull requests run GitHub Dependency Review with a pinned action SHA. The gate fails when a PR introduces moderate-or-higher vulnerabilities in runtime or development scopes, or dependencies outside the documented permissive license policy.
+
+Dependency changes should include the normal local checks plus context for why any newly introduced package is needed:
+
+```bash
+npm run verify
+npm run audit:prod
+```
+
 ## GitHub Security Summary
 
 Maintainers can summarize the live GitHub Security tab state with:

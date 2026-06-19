@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/sameer2191/repolens-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sameer2191/repolens-mcp/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/sameer2191/repolens-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/sameer2191/repolens-mcp/actions/workflows/codeql.yml)
+[![Dependency Review](https://github.com/sameer2191/repolens-mcp/actions/workflows/dependency-review.yml/badge.svg)](https://github.com/sameer2191/repolens-mcp/actions/workflows/dependency-review.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/sameer2191/repolens-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/sameer2191/repolens-mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D24-339933.svg)](package.json)
@@ -38,14 +39,14 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
 - **Architecture recommendations**: turns structural hotspots, git-history churn, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
 - **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
-- **Validation evidence**: tests, CI, CodeQL, OpenSSF Scorecard, CycloneDX SBOM generation, GitHub build-provenance attestations, docs, local dashboard smoke checks, and a documented local big-repo validation run.
+- **Validation evidence**: tests, CI, Dependency Review, CodeQL, OpenSSF Scorecard, CycloneDX SBOM generation, GitHub build-provenance attestations, docs, local dashboard smoke checks, and a documented local big-repo validation run.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
 - **No frontend build required**: the dashboard is served by the CLI.
 
 ## Security And Quality
 
 - **Protected mainline**: `main` requires PR review, CODEOWNERS review, fresh branch checks, resolved conversations, linear history, `verify`, and CodeQL `Analyze`; force pushes and branch deletion are blocked.
-- **GitHub security coverage**: CodeQL, OpenSSF Scorecard, Dependabot security updates, secret scanning with push protection, private vulnerability reporting, pinned workflow actions, least-privilege workflow tokens, and a release gate that blocks publishing when CodeQL has open alerts.
+- **GitHub security coverage**: Dependency Review on pull requests, CodeQL, OpenSSF Scorecard, Dependabot security updates, secret scanning with push protection, private vulnerability reporting, pinned workflow actions, least-privilege workflow tokens, and a release gate that blocks publishing when CodeQL has open alerts.
 - **Property-based fuzzing**: `fast-check` fuzzes import resolver traversal boundaries, safe alias/source-root/workspace-package resolution, and MCP JSON-RPC tool-call validation in `tests/security-fixes.test.ts` and `tests/mcp-server.test.ts`.
 - **Release integrity**: npm provenance, GitHub build-provenance attestations, CycloneDX SBOM generation, lockfile dependency graphing, dry-run package validation, and a package contents gate that blocks local graph artifacts from being published.
 - **Agent-readable docs**: `llms.txt` and `docs/agent-guide.md` give coding agents a concise operating guide, data-boundary rules, and validation commands.
