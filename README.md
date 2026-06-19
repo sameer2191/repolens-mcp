@@ -84,7 +84,7 @@ Windows PowerShell uses the same installer flow:
 ## CLI
 
 ```bash
-repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name]
+repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name] [--write-package [graph.rlgz]]
 repolens-mcp index [repo] [--bootstrap-package .repolens/graph.rlgz] [--no-bootstrap]
 repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--no-secret-scan]
 repolens-mcp list-projects [--limit n]
@@ -255,9 +255,10 @@ It also includes `docs/validation-report.md` with the local self-index and `/Use
 Create a reusable graph package:
 
 ```bash
-repolens-mcp index . --db .repolens/memory.db
-repolens-mcp pack-graph --db .repolens/memory.db --out .repolens/graph.rlgz --label main
+repolens-mcp index . --db .repolens/memory.db --write-package
 ```
+
+`--write-package` without a value writes `.repolens/graph.rlgz` after a successful index. Pass a path such as `--write-package artifacts/service.rlgz` to write somewhere else, or use `REPOLENS_WRITE_PACKAGE=.repolens/graph.rlgz` for session-wide automation. `.rlgz` packages are marked as binary by `.gitattributes`; review them before force-adding ignored `.repolens` artifacts to a repository.
 
 On another machine or a fresh clone, the first index will import `.repolens/graph.rlgz` when the target database is missing, then run an incremental refresh for local changes:
 

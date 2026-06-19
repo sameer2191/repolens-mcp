@@ -68,11 +68,12 @@ export async function startMcpServer(): Promise<void> {
         incremental: z.boolean().optional().describe("Skip unchanged files and prune removed files using existing SQLite metadata."),
         maxFileBytes: z.number().int().positive().optional().describe("Skip files larger than this size."),
         bootstrapPackage: z.string().optional().describe("Optional .rlgz graph package to import when the target database is missing."),
-        noBootstrap: z.boolean().optional().describe("Disable default .repolens/graph.rlgz bootstrap when true.")
+        noBootstrap: z.boolean().optional().describe("Disable default .repolens/graph.rlgz bootstrap when true."),
+        writePackage: z.string().optional().describe("Optional .rlgz graph package path to write after a successful index.")
       }
     },
-    async ({ root, dbPath, incremental, maxFileBytes, bootstrapPackage, noBootstrap }) =>
-      text(await runIndex({ root: root ?? process.cwd(), dbPath, incremental, maxFileBytes, bootstrapPackage: noBootstrap ? false : bootstrapPackage }))
+    async ({ root, dbPath, incremental, maxFileBytes, bootstrapPackage, noBootstrap, writePackage }) =>
+      text(await runIndex({ root: root ?? process.cwd(), dbPath, incremental, maxFileBytes, bootstrapPackage: noBootstrap ? false : bootstrapPackage, writePackage }))
   );
 
   server.registerTool(

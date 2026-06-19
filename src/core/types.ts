@@ -28,6 +28,7 @@ export interface IndexOptions {
   maxFileBytes?: number;
   runLabel?: string;
   bootstrapPackage?: string | false;
+  writePackage?: string | false;
 }
 
 export interface IndexedFile {
@@ -390,6 +391,7 @@ export interface IndexResult {
   indexedAt: string;
   mode: "full" | "incremental";
   bootstrapPackage?: GraphPackageImportResult;
+  graphPackage?: GraphPackageExportResult;
   filesDiscovered: number;
   filesIndexed: number;
   filesSkipped: number;

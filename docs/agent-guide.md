@@ -61,7 +61,7 @@ mkdir -p .repolens
 node --experimental-sqlite dist/src/cli.js benchmark /path/to/repo --db .repolens/benchmark.db --label validation
 node --experimental-sqlite dist/src/cli.js report --db .repolens/benchmark.db --format html --out .repolens/report.html
 node --experimental-sqlite dist/src/cli.js export-graph --db .repolens/benchmark.db --out .repolens/graph.html --limit 1500
-node --experimental-sqlite dist/src/cli.js pack-graph --db .repolens/benchmark.db --out .repolens/graph.rlgz --label validation
+node --experimental-sqlite dist/src/cli.js index /path/to/repo --db .repolens/memory.db --write-package .repolens/graph.rlgz --label validation
 ```
 
 Record the indexed file count, skipped file count, symbol count, edge count, benchmark times, secret-scan result, and artifact paths in the validation notes.
@@ -71,6 +71,7 @@ Record the indexed file count, skipped file count, symbol count, edge count, ben
 RepoLens is local-first, but generated outputs are still derived code metadata.
 
 - Do not commit `.repolens/`, SQLite database files, WAL/shm sidecars, graph packages, or local memory folders.
+- Treat forced-added `.rlgz` files as binary derived-code artifacts and review them before sharing.
 - Do not paste raw private source snippets into public issues or pull requests.
 - Run `scan-secrets` before sharing reports or graph exports from private repositories.
 - Run `npm run package:check` before publishing package changes.

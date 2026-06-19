@@ -69,7 +69,8 @@ async function main(): Promise<void> {
         incremental: args.flags.has("incremental") ? true : undefined,
         maxFileBytes: numberFlag(args, "max-file-bytes"),
         runLabel: stringFlag(args, "label"),
-        bootstrapPackage: booleanFlag(args, "no-bootstrap") ? false : stringFlag(args, "bootstrap-package")
+        bootstrapPackage: booleanFlag(args, "no-bootstrap") ? false : stringFlag(args, "bootstrap-package"),
+        writePackage: writePackageFlag(args)
       });
       print(result);
       break;
@@ -433,6 +434,14 @@ function booleanFlag(args: ParsedArgs, name: string): boolean {
   return args.flags.get(name) === true;
 }
 
+function writePackageFlag(args: ParsedArgs): string | undefined {
+  const value = args.flags.get("write-package");
+  if (value === true) {
+    return ".repolens/graph.rlgz";
+  }
+  return typeof value === "string" ? value : undefined;
+}
+
 function commaListFlag(args: ParsedArgs, name: string): string[] | undefined {
   const value = stringFlag(args, name);
   return value?.split(",").map((item) => item.trim()).filter(Boolean);
@@ -598,7 +607,7 @@ function help(): string {
   return `repolens-mcp
 
 Usage:
-  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap]
+  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--write-package [graph.rlgz]]
   repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--no-secret-scan] [--secret-limit n]
   repolens-mcp list-projects [--limit n]
   repolens-mcp project-status [root-or-db-or-label]

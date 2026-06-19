@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { importGraphPackage } from "./artifact.js";
+import { exportGraphPackage, importGraphPackage } from "./artifact.js";
 import { addCallEdges, addDataFlowEdges, addHttpEdges, addTypeRelationEdges, extractFromFile } from "./extractor.js";
 import { sha256 } from "./hash.js";
 import { buildResolvedImportEdges } from "./import-resolver.js";
@@ -31,6 +31,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
   const fileContents = new Map<string, string>();
   const allSymbols: SymbolNode[] = [];
   let lockAcquired = false;
+  let result: IndexResult | undefined;
 
   try {
     store.acquireLock("index");
@@ -168,7 +169,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
     }
     const counts = store.counts();
 
-    return {
+    result = {
       root,
       dbPath,
       indexedAt,
@@ -189,6 +190,16 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
     }
     store.close();
   }
+
+  if (!result) {
+    throw new Error("Index did not produce a result.");
+  }
+  const writePackagePath = graphPackageWritePath(root, options.writePackage);
+  if (!writePackagePath) {
+    return result;
+  }
+  const graphPackage = await exportGraphPackage({ dbPath, outPath: writePackagePath, label: options.runLabel });
+  return { ...result, graphPackage };
 }
 
 async function bootstrapGraphPackage(
@@ -217,6 +228,14 @@ async function fileExists(filePath: string): Promise<boolean> {
 function isFalseLike(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase();
   return normalized === "0" || normalized === "false" || normalized === "off" || normalized === "no";
+}
+
+function graphPackageWritePath(root: string, configuredPackage: string | false | undefined): string | undefined {
+  if (configuredPackage === false || (configuredPackage === undefined && isFalseLike(process.env.REPOLENS_WRITE_PACKAGE))) {
+    return undefined;
+  }
+  const packagePath = configuredPackage ?? process.env.REPOLENS_WRITE_PACKAGE;
+  return packagePath ? path.resolve(root, packagePath) : undefined;
 }
 
 function isSameSkippedFile(previous: IndexedFile | undefined, next: IndexedFile): boolean {
