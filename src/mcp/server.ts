@@ -225,10 +225,11 @@ export async function startMcpServer(): Promise<void> {
         agents: z.array(z.enum(agentProfiles.map((profile) => profile.id) as [AgentId, ...AgentId[]])).optional().describe("Agent ids to include. Defaults to all supported agents."),
         dbPath: z.string().optional().describe("Recommended RepoLens database path in generated instructions."),
         serverName: z.string().optional().describe("MCP server name to use in snippets."),
+        withHooks: z.boolean().optional().describe("Also generate opt-in project-local hook/reminder files for selected agents."),
         write: z.boolean().optional().describe("Actually write files when true. Defaults to false/dry-run.")
       }
     },
-    async ({ targetDir, agents, dbPath, serverName, write }) =>
+    async ({ targetDir, agents, dbPath, serverName, withHooks, write }) =>
       text(
         await installAgentSetup({
           targetDir: targetDir ?? process.cwd(),
@@ -237,6 +238,7 @@ export async function startMcpServer(): Promise<void> {
           cliPath: currentCliPath(),
           dbPath,
           serverName,
+          withHooks,
           dryRun: !write
         })
       )
