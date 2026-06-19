@@ -36,6 +36,15 @@ npm run audit:prod
 
 Release publishing also runs dependency audit and CodeQL alert gates before package creation. Tag releases publish npm provenance from a separate privileged job and fail if `NPM_TOKEN` is missing.
 
+Tag releases attach keyless Sigstore bundles for the npm tarball, CycloneDX SBOM, and checksum manifest. After downloading a release asset and its matching `.sigstore.json` bundle, verify the bundle with:
+
+```bash
+cosign verify-blob repolens-mcp-<version>.tgz \
+  --bundle repolens-mcp-<version>.tgz.sigstore.json \
+  --certificate-identity-regexp "https://github.com/sameer2191/repolens-mcp/.github/workflows/release.yml@refs/tags/v.*" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 ## GitHub Security Summary
 
 Maintainers can summarize the live GitHub Security tab state with:

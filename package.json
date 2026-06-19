@@ -35,6 +35,7 @@
     "installer:audit": "node scripts/installer-audit.mjs",
     "security:github": "node scripts/github-security-summary.mjs",
     "release:security-gate": "node scripts/github-security-summary.mjs --fail-on-actionable",
+    "release:workflow-gate": "node scripts/release-workflow-gate.mjs",
     "release:codeql-gate": "node scripts/codeql-alert-gate.mjs",
     "demo": "npm run build && node --experimental-sqlite dist/src/cli.js demo"
   },

@@ -64,6 +64,25 @@ jobs:
             echo "NPM_TOKEN is required for tag releases so npm provenance is not skipped."
             exit 1
           fi
+      - name: Install cosign
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22
+      - name: Generate keyless Sigstore bundles
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=(./*.tgz)
+          if [ "${#packages[@]}" -ne 1 ]; then
+            echo "Expected exactly one npm package tarball, found ${#packages[@]}."
+            exit 1
+          fi
+          artifacts=("${packages[@]}" sbom.cyclonedx.json checksums.txt)
+          for artifact in "${artifacts[@]}"; do
+            if [ ! -s "$artifact" ]; then
+              echo "Missing release artifact: $artifact"
+              exit 1
+            fi
+            cosign sign-blob --yes --bundle "${artifact}.sigstore.json" "$artifact"
+          done
       - name: Generate build provenance attestation
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32
         with:
@@ -71,16 +90,25 @@ jobs:
             *.tgz
             sbom.cyclonedx.json
             checksums.txt
+            *.sigstore.json
       - name: Publish GitHub release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          shopt -s nullglob
           tag="${GITHUB_REF_NAME}"
+          assets=(./*.tgz ./*.tgz.sigstore.json sbom.cyclonedx.json sbom.cyclonedx.json.sigstore.json checksums.txt checksums.txt.sigstore.json)
+          for asset in "${assets[@]}"; do
+            if [ ! -s "$asset" ]; then
+              echo "Missing release asset: $asset"
+              exit 1
+            fi
+          done
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" ./*.tgz sbom.cyclonedx.json checksums.txt --clobber
+            gh release upload "$tag" "${assets[@]}" --clobber
           else
-            gh release create "$tag" ./*.tgz sbom.cyclonedx.json checksums.txt --title "$tag" --notes "RepoLens MCP release package, CycloneDX SBOM, and SHA-256 checksums."
+            gh release create "$tag" "${assets[@]}" --title "$tag" --notes "RepoLens MCP release package, CycloneDX SBOM, SHA-256 checksums, and Sigstore verification bundles."
           fi
       - name: Publish npm package
         env:
