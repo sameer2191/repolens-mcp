@@ -200,6 +200,10 @@ export function extractFromFile(filePath: string, language: Language, content: s
       edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DEFINES", weight: 1 });
     }
   }
+  for (const method of extractClassMethods(filePath, language, lines, symbols)) {
+    symbols.push(method);
+    edges.push({ source: String(method.metadata?.parentQualifiedName ?? fileNode), target: method.qualifiedName, type: "DEFINES", weight: 0.95 });
+  }
 
   const channels = extractChannelLinks(filePath, language, content, symbols);
   for (const symbol of channels.symbols) {
@@ -231,19 +235,26 @@ export function extractFromFile(filePath: string, language: Language, content: s
 export function addCallEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
   const named = symbols.filter((symbol) => ["function", "method", "class"].includes(symbol.kind) && isCallableName(symbol.name));
   const files = symbols.filter((symbol) => symbol.kind === "file");
+  const methodLookup = classMethodLookup(named);
   const edges: Edge[] = [];
+  const seen = new Set<string>();
+  const addEdge = (source: string, target: string, type: "CALLS" | "CALLS_LOCAL", weight: number, metadata?: Record<string, unknown>) => {
+    if (source === target) {
+      return;
+    }
+    const key = `${source}\0${target}\0${type}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    edges.push({ source, target, type, weight, metadata });
+  };
   for (const file of files) {
     const content = fileContents.get(file.filePath);
     if (!content) continue;
     for (const target of named) {
-      if (file.filePath !== target.filePath && callsName(content, target.name)) {
-        edges.push({
-          source: file.qualifiedName,
-          target: target.qualifiedName,
-          type: "CALLS",
-          weight: 0.5,
-          metadata: { scope: "file" }
-        });
+      if (file.filePath !== target.filePath && callsName(content, target.name, { allowMember: target.kind !== "method" })) {
+        addEdge(file.qualifiedName, target.qualifiedName, "CALLS", 0.5, { scope: "file" });
       }
     }
   }
@@ -256,21 +267,149 @@ export function addCallEdges(symbols: SymbolNode[], fileContents: Map<string, st
       .split(/\r?\n/)
       .slice(Math.max(0, source.startLine - 1), source.endLine)
       .join("\n");
+    for (const receiverCall of receiverMethodCalls(source, local, content, methodLookup)) {
+      const type = source.filePath === receiverCall.target.filePath ? "CALLS_LOCAL" : "CALLS";
+      addEdge(source.qualifiedName, receiverCall.target.qualifiedName, type, type === "CALLS_LOCAL" ? 0.92 : 0.82, {
+        resolution: "receiver_type",
+        receiver: receiverCall.receiver,
+        receiverType: receiverCall.receiverType,
+        method: receiverCall.method
+      });
+    }
     for (const target of named) {
       if (source.qualifiedName === target.qualifiedName) {
         continue;
       }
-      if (callsName(local, target.name)) {
-        edges.push({
-          source: source.qualifiedName,
-          target: target.qualifiedName,
-          type: source.filePath === target.filePath ? "CALLS_LOCAL" : "CALLS",
-          weight: source.filePath === target.filePath ? 1 : 0.75
-        });
+      if (callsName(local, target.name, { allowMember: target.kind !== "method" })) {
+        const type = source.filePath === target.filePath ? "CALLS_LOCAL" : "CALLS";
+        addEdge(source.qualifiedName, target.qualifiedName, type, type === "CALLS_LOCAL" ? 1 : 0.75);
       }
     }
   }
   return edges;
+}
+
+function extractClassMethods(filePath: string, language: Language, lines: string[], symbols: SymbolNode[]): SymbolNode[] {
+  if (!["typescript", "javascript"].includes(language)) {
+    return [];
+  }
+  const classes = symbols.filter((symbol) => symbol.kind === "class" && symbol.filePath === filePath);
+  const methods: SymbolNode[] = [];
+  const methodRegex =
+    /^\s*(?:(?:public|private|protected|static|async|override|readonly|abstract|get|set)\s+)*([A-Za-z_$][\w$]*)\s*\([^;{}]*\)\s*(?::\s*[^{};]+)?\{/gm;
+  for (const classSymbol of classes) {
+    const classText = lines.slice(classSymbol.startLine - 1, classSymbol.endLine).join("\n");
+    for (const match of classText.matchAll(methodRegex)) {
+      const name = match[1];
+      if (!name || !isCallableName(name) || isReservedMethodName(name)) {
+        continue;
+      }
+      const line = classSymbol.startLine + offsetToLine(classText, match.index ?? 0) - 1;
+      if (line <= classSymbol.startLine || line > classSymbol.endLine) {
+        continue;
+      }
+      const signature = lines[line - 1]?.trim().slice(0, 220);
+      methods.push(
+        makeSymbol(filePath, language, "method", name, line, findBlockEndLine(language, lines, line), signature, false, {
+          parentClass: classSymbol.name,
+          parentQualifiedName: classSymbol.qualifiedName
+        })
+      );
+    }
+  }
+  return methods;
+}
+
+function classMethodLookup(symbols: SymbolNode[]): Map<string, SymbolNode[]> {
+  const lookup = new Map<string, SymbolNode[]>();
+  for (const method of symbols.filter((symbol) => symbol.kind === "method" && typeof symbol.metadata?.parentClass === "string")) {
+    const key = classMethodKey(String(method.metadata?.parentClass), method.name);
+    lookup.set(key, [...(lookup.get(key) ?? []), method]);
+  }
+  return lookup;
+}
+
+function receiverMethodCalls(
+  source: SymbolNode,
+  local: string,
+  fileContent: string,
+  methodLookup: Map<string, SymbolNode[]>
+): Array<{ target: SymbolNode; receiver: string; receiverType: string; method: string }> {
+  if (methodLookup.size === 0) {
+    return [];
+  }
+  const receiverTypes = new Map<string, string>();
+  for (const [receiver, typeName] of inferReceiverTypes(fileContent)) {
+    receiverTypes.set(receiver, typeName);
+  }
+  for (const [receiver, typeName] of inferReceiverTypes(local)) {
+    receiverTypes.set(receiver, typeName);
+  }
+  const parentClass = typeof source.metadata?.parentClass === "string" ? source.metadata.parentClass : undefined;
+  if (parentClass) {
+    receiverTypes.set("this", parentClass);
+  }
+
+  const calls: Array<{ target: SymbolNode; receiver: string; receiverType: string; method: string }> = [];
+  const receiverCallRegex = /\b((?:this\.)?[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)\.([A-Za-z_$][\w$]*)\s*\(/g;
+  for (const match of local.matchAll(receiverCallRegex)) {
+    const receiver = match[1];
+    const method = match[2];
+    if (!receiver || !method || isReservedMethodName(method)) {
+      continue;
+    }
+    const receiverType = receiverTypes.get(receiver);
+    if (!receiverType) {
+      continue;
+    }
+    const target = resolveClassMethod(receiverType, method, source, methodLookup);
+    if (!target) {
+      continue;
+    }
+    calls.push({ target, receiver, receiverType, method });
+  }
+  return calls;
+}
+
+function inferReceiverTypes(content: string): Map<string, string> {
+  const receiverTypes = new Map<string, string>();
+  const declarationRegex = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)(?:\s*:\s*([A-Za-z_$][\w$]*))?\s*=\s*new\s+([A-Za-z_$][\w$]*)\s*\(/g;
+  for (const match of content.matchAll(declarationRegex)) {
+    const receiver = match[1];
+    const typeName = match[3] ?? match[2];
+    if (receiver && typeName) {
+      receiverTypes.set(receiver, typeName);
+    }
+  }
+  const assignmentRegex = /\b(this\.[A-Za-z_$][\w$]*)\s*=\s*new\s+([A-Za-z_$][\w$]*)\s*\(/g;
+  for (const match of content.matchAll(assignmentRegex)) {
+    const receiver = match[1];
+    const typeName = match[2];
+    if (receiver && typeName) {
+      receiverTypes.set(receiver, typeName);
+    }
+  }
+  return receiverTypes;
+}
+
+function resolveClassMethod(typeName: string, method: string, source: SymbolNode, methodLookup: Map<string, SymbolNode[]>): SymbolNode | null {
+  const candidates = methodLookup.get(classMethodKey(typeName, method)) ?? [];
+  if (candidates.length === 0) {
+    return null;
+  }
+  const sameFile = candidates.filter((candidate) => candidate.filePath === source.filePath);
+  if (sameFile.length === 1) {
+    return sameFile[0];
+  }
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+function classMethodKey(className: string, method: string): string {
+  return `${className}.${method}`;
+}
+
+function isReservedMethodName(name: string): boolean {
+  return ["constructor", "if", "for", "while", "switch", "catch", "function", "return"].includes(name.toLowerCase());
 }
 
 export function addTypeRelationEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
@@ -2251,8 +2390,11 @@ function findMatchingParen(content: string, open: number): number | null {
   return null;
 }
 
-function callsName(content: string, name: string): boolean {
+function callsName(content: string, name: string, options: { allowMember?: boolean } = {}): boolean {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (options.allowMember === false) {
+    return new RegExp(`(?:^|[^A-Za-z0-9_$.])${escaped}\\s*\\(`).test(content);
+  }
   return new RegExp(`(?:^|[^A-Za-z0-9_$])(?:\\.|)${escaped}\\s*\\(`).test(content);
 }
 
