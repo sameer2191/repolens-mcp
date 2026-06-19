@@ -40,7 +40,7 @@ RepoLens MCP is not a fork or a drop-in static C replacement. It is an original 
 
 - A small, inspectable TypeScript codebase with tests that a reviewer can understand quickly.
 - Codex setup is explicit and reviewable through `doctor` and `install-codex --dry-run`, with safeguards around existing unmanaged MCP entries.
-- Multi-agent setup is explicit, reversible, and reviewable through `agent-setup`, `install-agents --dry-run`, and `uninstall-agents --dry-run`, generating project-local instructions and config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
+- Multi-agent setup is explicit, reversible, and reviewable through `agent-setup`, `install-agents --dry-run`, and `uninstall-agents --dry-run`, with auto-detected or explicit project-local instructions and config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - Built-in ADR memory, not just structural graph search.
 - Dashboard API and HTML are included in the same binary entrypoint, avoiding a separate frontend build while still exposing graph exploration, fleet service links, schema counts, relationship patterns, label property hints, review signals, dead-code samples, and report links.
 - Swift extraction and big-repo validation now cover a mixed mobile/web monorepo, not only TypeScript services.

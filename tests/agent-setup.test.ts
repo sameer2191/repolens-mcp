@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { agentConfigSnippet, installAgentSetup, uninstallAgentSetup } from "../src/core/agents.js";
+import { agentConfigSnippet, detectAgentProfiles, installAgentSetup, uninstallAgentSetup } from "../src/core/agents.js";
 
 test("renders multi-agent MCP config snippets", () => {
   const base = {
@@ -41,6 +41,92 @@ test("agent setup dry-run reports files without writing", async () => {
   assert.ok(result.files.some((file) => file.path.endsWith(".codex/AGENTS.md")));
   assert.ok(!result.files.some((file) => file.path.endsWith("repolens-hooks.md")));
   await assert.rejects(() => fs.readFile(path.join(tmp, "docs/repolens-agent-setup.md"), "utf8"));
+});
+
+test("detects installed agent profiles from project, home, and PATH markers", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agent-detect-"));
+  const target = path.join(tmp, "project");
+  const home = path.join(tmp, "home");
+  const bin = path.join(tmp, "bin");
+  await fs.mkdir(path.join(target, ".vscode"), { recursive: true });
+  await fs.writeFile(path.join(target, "CLAUDE.md"), "# Claude project\n");
+  await fs.mkdir(path.join(home, ".codex"), { recursive: true });
+  await fs.writeFile(path.join(home, ".codex", "config.toml"), "");
+  await fs.mkdir(bin, { recursive: true });
+  const geminiPath = path.join(bin, "gemini");
+  await fs.writeFile(geminiPath, "#!/bin/sh\nexit 0\n");
+  await fs.chmod(geminiPath, 0o755);
+
+  const detected = await detectAgentProfiles(target, { homeDir: home, pathEnv: bin });
+  const ids = detected.map((profile) => profile.id);
+
+  assert.deepEqual(ids, ["codex", "claude", "gemini", "vscode"]);
+});
+
+test("agent command detection ignores non-executable PATH files", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agent-nonexec-"));
+  const target = path.join(tmp, "project");
+  const home = path.join(tmp, "home");
+  const bin = path.join(tmp, "bin");
+  await fs.mkdir(target, { recursive: true });
+  await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(bin, { recursive: true });
+  await fs.writeFile(path.join(bin, "gemini"), "#!/bin/sh\nexit 0\n", { mode: 0o644 });
+
+  const detected = await detectAgentProfiles(target, { homeDir: home, pathEnv: bin });
+
+  assert.ok(!detected.some((profile) => profile.id === "gemini"));
+});
+
+test("agent setup detected mode writes only detected agent targets", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agent-detected-"));
+  const target = path.join(tmp, "project");
+  const home = path.join(tmp, "home");
+  await fs.mkdir(path.join(target, ".vscode"), { recursive: true });
+  await fs.writeFile(path.join(target, "CLAUDE.md"), "# Claude project\n");
+  await fs.mkdir(home, { recursive: true });
+
+  const result = await installAgentSetup({
+    targetDir: target,
+    detectAgents: true,
+    detectionHome: home,
+    pathEnv: "",
+    command: "node",
+    cliPath: "/repo/cli.js",
+    dryRun: true
+  });
+  const ids = result.agents.map((profile) => profile.id);
+
+  assert.equal(result.detectAgents, true);
+  assert.deepEqual(ids, ["claude", "vscode"]);
+  assert.ok(result.files.some((file) => file.path.endsWith("CLAUDE.md")));
+  assert.ok(result.files.some((file) => file.path.endsWith(".vscode/mcp.json")));
+  assert.ok(!result.files.some((file) => file.path.endsWith(".codex/AGENTS.md")));
+  assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-setup.md") && file.content.includes("Selection: Detected")));
+});
+
+test("agent setup detected mode with no matches renders a guide only", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agent-none-"));
+  const target = path.join(tmp, "project");
+  const home = path.join(tmp, "home");
+  await fs.mkdir(home, { recursive: true });
+
+  const result = await installAgentSetup({
+    targetDir: target,
+    detectAgents: true,
+    detectionHome: home,
+    pathEnv: "",
+    command: "node",
+    cliPath: "/repo/cli.js",
+    dryRun: true
+  });
+
+  assert.deepEqual(result.agents, []);
+  assert.deepEqual(
+    result.files.map((file) => path.relative(target, file.path)),
+    ["docs/repolens-agent-setup.md"]
+  );
+  assert.ok(result.files[0].content.includes("No agent profiles were selected"));
 });
 
 test("agent setup can render opt-in hook reminder files", async () => {

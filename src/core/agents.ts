@@ -1,3 +1,4 @@
+import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -22,11 +23,21 @@ export interface AgentProfile {
   configPath?: string;
   configKind?: "vscode-mcp";
   hookPath?: string;
+  detection?: AgentDetectionHints;
+}
+
+export interface AgentDetectionHints {
+  projectPaths?: string[];
+  homePaths?: string[];
+  commands?: string[];
 }
 
 export interface AgentSetupOptions {
   targetDir?: string;
   agents?: AgentId[];
+  detectAgents?: boolean;
+  detectionHome?: string;
+  pathEnv?: string;
   command: string;
   cliPath: string;
   dbPath?: string;
@@ -47,6 +58,7 @@ export interface AgentSetupResult {
   serverName: string;
   dryRun: boolean;
   withHooks: boolean;
+  detectAgents: boolean;
   agents: AgentProfile[];
   files: AgentSetupFile[];
   guidePath: string;
@@ -56,23 +68,114 @@ const MANAGED_START = "<!-- >>> repolens-mcp managed >>> -->";
 const MANAGED_END = "<!-- <<< repolens-mcp managed <<< -->";
 
 export const agentProfiles: AgentProfile[] = [
-  { id: "codex", label: "Codex CLI", configHint: ".codex/config.toml", instructionPath: ".codex/AGENTS.md", hookPath: ".codex/repolens-hooks.md" },
-  { id: "claude", label: "Claude Code", configHint: ".mcp.json or ~/.claude/.mcp.json", instructionPath: "CLAUDE.md", hookPath: ".claude/repolens-hooks.md" },
-  { id: "gemini", label: "Gemini CLI", configHint: ".gemini/settings.json", instructionPath: ".gemini/GEMINI.md", hookPath: ".gemini/repolens-hooks.md" },
-  { id: "zed", label: "Zed", configHint: "settings.json context server", instructionPath: ".zed/repolens.md", hookPath: ".zed/repolens-hooks.md" },
-  { id: "opencode", label: "OpenCode", configHint: "opencode.json", instructionPath: ".opencode/AGENTS.md", hookPath: ".opencode/repolens-hooks.md" },
-  { id: "antigravity", label: "Antigravity", configHint: ".gemini/config/mcp_config.json", instructionPath: "antigravity-cli/AGENTS.md", hookPath: "antigravity-cli/repolens-hooks.md" },
-  { id: "aider", label: "Aider", configHint: "project conventions", instructionPath: "CONVENTIONS.md", hookPath: ".aider/repolens-hooks.md" },
-  { id: "kilocode", label: "KiloCode", configHint: "mcp_settings.json", instructionPath: ".kilocode/rules/repolens.md", hookPath: ".kilocode/rules/repolens-hooks.md" },
-  { id: "vscode", label: "VS Code", configHint: ".vscode/mcp.json", instructionPath: ".vscode/repolens-mcp.md", configPath: ".vscode/mcp.json", configKind: "vscode-mcp", hookPath: ".vscode/repolens-hooks.md" },
-  { id: "openclaw", label: "OpenClaw", configHint: "openclaw.json", instructionPath: ".openclaw/repolens.md", hookPath: ".openclaw/repolens-hooks.md" },
-  { id: "kiro", label: "Kiro", configHint: ".kiro/settings/mcp.json", instructionPath: ".kiro/steering/repolens.md", hookPath: ".kiro/steering/repolens-hooks.md" }
+  {
+    id: "codex",
+    label: "Codex CLI",
+    configHint: ".codex/config.toml",
+    instructionPath: ".codex/AGENTS.md",
+    hookPath: ".codex/repolens-hooks.md",
+    detection: { projectPaths: [".codex/config.toml", ".codex/AGENTS.md"], homePaths: [".codex/config.toml"], commands: ["codex"] }
+  },
+  {
+    id: "claude",
+    label: "Claude Code",
+    configHint: ".mcp.json or ~/.claude/.mcp.json",
+    instructionPath: "CLAUDE.md",
+    hookPath: ".claude/repolens-hooks.md",
+    detection: { projectPaths: [".mcp.json", "CLAUDE.md", ".claude"], homePaths: [".claude/.mcp.json", ".claude"], commands: ["claude"] }
+  },
+  {
+    id: "gemini",
+    label: "Gemini CLI",
+    configHint: ".gemini/settings.json",
+    instructionPath: ".gemini/GEMINI.md",
+    hookPath: ".gemini/repolens-hooks.md",
+    detection: { projectPaths: [".gemini/settings.json", ".gemini/GEMINI.md"], homePaths: [".gemini/settings.json"], commands: ["gemini"] }
+  },
+  {
+    id: "zed",
+    label: "Zed",
+    configHint: "settings.json context server",
+    instructionPath: ".zed/repolens.md",
+    hookPath: ".zed/repolens-hooks.md",
+    detection: { projectPaths: [".zed", ".zed/settings.json"], homePaths: [".config/zed/settings.json"], commands: ["zed"] }
+  },
+  {
+    id: "opencode",
+    label: "OpenCode",
+    configHint: "opencode.json",
+    instructionPath: ".opencode/AGENTS.md",
+    hookPath: ".opencode/repolens-hooks.md",
+    detection: { projectPaths: ["opencode.json", ".opencode"], homePaths: [".config/opencode"], commands: ["opencode"] }
+  },
+  {
+    id: "antigravity",
+    label: "Antigravity",
+    configHint: ".gemini/config/mcp_config.json",
+    instructionPath: "antigravity-cli/AGENTS.md",
+    hookPath: "antigravity-cli/repolens-hooks.md",
+    detection: { projectPaths: ["antigravity-cli", ".gemini/config/mcp_config.json"], homePaths: [".gemini/config/mcp_config.json"], commands: ["antigravity"] }
+  },
+  {
+    id: "aider",
+    label: "Aider",
+    configHint: "project conventions",
+    instructionPath: "CONVENTIONS.md",
+    hookPath: ".aider/repolens-hooks.md",
+    detection: { projectPaths: [".aider.conf.yml", ".aider"], homePaths: [".aider.conf.yml", ".aider"], commands: ["aider"] }
+  },
+  {
+    id: "kilocode",
+    label: "KiloCode",
+    configHint: "mcp_settings.json",
+    instructionPath: ".kilocode/rules/repolens.md",
+    hookPath: ".kilocode/rules/repolens-hooks.md",
+    detection: { projectPaths: [".kilocode", "mcp_settings.json"], homePaths: [".kilocode"], commands: ["kilocode"] }
+  },
+  {
+    id: "vscode",
+    label: "VS Code",
+    configHint: ".vscode/mcp.json",
+    instructionPath: ".vscode/repolens-mcp.md",
+    configPath: ".vscode/mcp.json",
+    configKind: "vscode-mcp",
+    hookPath: ".vscode/repolens-hooks.md",
+    detection: { projectPaths: [".vscode", ".vscode/mcp.json"], homePaths: [".config/Code/User/settings.json"], commands: ["code"] }
+  },
+  {
+    id: "openclaw",
+    label: "OpenClaw",
+    configHint: "openclaw.json",
+    instructionPath: ".openclaw/repolens.md",
+    hookPath: ".openclaw/repolens-hooks.md",
+    detection: { projectPaths: ["openclaw.json", ".openclaw"], homePaths: [".openclaw"], commands: ["openclaw"] }
+  },
+  {
+    id: "kiro",
+    label: "Kiro",
+    configHint: ".kiro/settings/mcp.json",
+    instructionPath: ".kiro/steering/repolens.md",
+    hookPath: ".kiro/steering/repolens-hooks.md",
+    detection: { projectPaths: [".kiro", ".kiro/settings/mcp.json"], homePaths: [".kiro"], commands: ["kiro"] }
+  }
 ];
+
+for (const profile of agentProfiles) {
+  if (profile.detection) {
+    Object.defineProperty(profile, "detection", { value: profile.detection, enumerable: false });
+  }
+}
 
 export async function installAgentSetup(options: AgentSetupOptions): Promise<AgentSetupResult> {
   const targetDir = path.resolve(options.targetDir ?? process.cwd());
   const serverName = options.serverName ?? "repolens";
-  const selected = selectAgents(options.agents);
+  const selected = await selectAgents({
+    agents: options.agents,
+    detectAgents: options.detectAgents,
+    targetDir,
+    detectionHome: options.detectionHome,
+    pathEnv: options.pathEnv
+  });
   const dbPath = options.dbPath ?? ".repolens/memory.db";
   const renderOptions = {
     serverName,
@@ -103,6 +206,7 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
       relativePath: "docs/repolens-agent-setup.md",
       body: agentSetupGuide({
         profiles: selected,
+        detectAgents: options.detectAgents ?? false,
         withHooks: options.withHooks ?? false,
         ...renderOptions
       })
@@ -144,6 +248,7 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
     serverName,
     dryRun: options.dryRun ?? false,
     withHooks: options.withHooks ?? false,
+    detectAgents: options.detectAgents ?? false,
     agents: selected,
     files: written,
     guidePath: path.join(targetDir, "docs", "repolens-agent-setup.md")
@@ -153,7 +258,13 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
 export async function uninstallAgentSetup(options: Omit<AgentSetupOptions, "command" | "cliPath" | "dbPath">): Promise<AgentSetupResult> {
   const targetDir = path.resolve(options.targetDir ?? process.cwd());
   const serverName = options.serverName ?? "repolens";
-  const selected = selectAgents(options.agents);
+  const selected = await selectAgents({
+    agents: options.agents,
+    detectAgents: options.detectAgents,
+    targetDir,
+    detectionHome: options.detectionHome,
+    pathEnv: options.pathEnv
+  });
   const hookPaths = options.withHooks ? ["docs/repolens-agent-hooks.md", ...selected.map((profile) => profile.hookPath ?? profile.instructionPath)] : [];
   const relativePaths = ["docs/repolens-agent-setup.md", ...selected.map((profile) => profile.instructionPath), ...hookPaths];
   const files: AgentSetupFile[] = [];
@@ -194,6 +305,7 @@ export async function uninstallAgentSetup(options: Omit<AgentSetupOptions, "comm
     serverName,
     dryRun: options.dryRun ?? false,
     withHooks: options.withHooks ?? false,
+    detectAgents: options.detectAgents ?? false,
     agents: selected,
     files,
     guidePath: path.join(targetDir, "docs", "repolens-agent-setup.md")
@@ -206,10 +318,13 @@ export function agentSetupGuide(options: {
   command: string;
   cliPath: string;
   dbPath: string;
+  detectAgents?: boolean;
   withHooks?: boolean;
 }): string {
-  const snippets = options.profiles
-    .map((profile) => `### ${profile.label}
+  const snippets =
+    options.profiles.length > 0
+      ? options.profiles
+          .map((profile) => `### ${profile.label}
 
 Config target: \`${profile.configHint}\`
 
@@ -217,7 +332,9 @@ Config target: \`${profile.configHint}\`
 ${agentConfigSnippet(profile.id, options)}
 \`\`\`
 `)
-    .join("\n");
+          .join("\n")
+      : "No agent profiles were selected. Re-run with `--agents all` to render every supported profile, or create a supported agent config and retry `--agents detected`.\n";
+  const selection = options.detectAgents ? "Detected installed/project agents" : "Selected agents";
 
   return `# RepoLens Agent Setup
 
@@ -225,6 +342,7 @@ This project includes RepoLens MCP instructions for multiple coding agents. Conf
 
 Server name: \`${options.serverName}\`
 Database: \`${options.dbPath}\`
+Selection: ${selection}
 
 ## Command
 
@@ -465,12 +583,91 @@ Config target: \`${options.profile.configHint}\`
 `;
 }
 
-function selectAgents(agents?: AgentId[]): AgentProfile[] {
-  if (!agents || agents.length === 0) {
-    return agentProfiles;
+export async function detectAgentProfiles(
+  targetDir = process.cwd(),
+  options: { homeDir?: string; pathEnv?: string } = {}
+): Promise<AgentProfile[]> {
+  const root = path.resolve(targetDir);
+  const homeDir = options.homeDir ?? process.env.HOME ?? process.env.USERPROFILE;
+  const pathEnv = options.pathEnv ?? process.env.PATH ?? "";
+  const found: AgentProfile[] = [];
+  for (const profile of agentProfiles) {
+    if (await agentDetected(profile, root, homeDir, pathEnv)) {
+      found.push(profile);
+    }
   }
-  const requested = new Set(agents);
-  return agentProfiles.filter((profile) => requested.has(profile.id));
+  return found;
+}
+
+async function selectAgents(options: {
+  agents?: AgentId[];
+  detectAgents?: boolean;
+  targetDir: string;
+  detectionHome?: string;
+  pathEnv?: string;
+}): Promise<AgentProfile[]> {
+  const base = options.agents?.length ? agentProfiles.filter((profile) => new Set(options.agents).has(profile.id)) : agentProfiles;
+  if (!options.detectAgents) {
+    return base;
+  }
+  const detected = new Set((await detectAgentProfiles(options.targetDir, { homeDir: options.detectionHome, pathEnv: options.pathEnv })).map((profile) => profile.id));
+  return base.filter((profile) => detected.has(profile.id));
+}
+
+async function agentDetected(profile: AgentProfile, targetDir: string, homeDir: string | undefined, pathEnv: string): Promise<boolean> {
+  const detection = profile.detection;
+  if (!detection) {
+    return false;
+  }
+  if (await anyPathExists(targetDir, detection.projectPaths ?? [])) {
+    return true;
+  }
+  if (homeDir && (await anyPathExists(homeDir, detection.homePaths ?? []))) {
+    return true;
+  }
+  return anyCommandExists(pathEnv, detection.commands ?? []);
+}
+
+async function anyPathExists(baseDir: string, relativePaths: string[]): Promise<boolean> {
+  for (const relativePath of relativePaths) {
+    if (await pathExists(path.join(baseDir, relativePath))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function anyCommandExists(pathEnv: string, commands: string[]): Promise<boolean> {
+  const searchDirs = pathEnv.split(path.delimiter).filter(Boolean);
+  const suffixes = process.platform === "win32" ? ["", ".exe", ".cmd", ".bat"] : [""];
+  for (const dir of searchDirs) {
+    for (const command of commands) {
+      for (const suffix of suffixes) {
+        if (await executablePathExists(path.join(dir, `${command}${suffix}`))) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+async function executablePathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath, process.platform === "win32" ? fsConstants.F_OK : fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function upsertMarkdownBlock(existing: string, body: string): string {

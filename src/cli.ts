@@ -352,10 +352,11 @@ async function main(): Promise<void> {
       );
       break;
     case "agent-setup":
+      const setupSelection = agentSelection(stringFlag(args, "agents"), booleanFlag(args, "detect-agents"));
       print(
         await installAgentSetup({
           targetDir: stringFlag(args, "target") ?? process.cwd(),
-          agents: agentList(stringFlag(args, "agents")),
+          ...setupSelection,
           command: stringFlag(args, "command") ?? process.execPath,
           cliPath: stringFlag(args, "cli") ?? currentCliPath(),
           dbPath: stringFlag(args, "db"),
@@ -366,10 +367,11 @@ async function main(): Promise<void> {
       );
       break;
     case "install-agents":
+      const installSelection = agentSelection(stringFlag(args, "agents"), booleanFlag(args, "detect-agents"));
       print(
         await installAgentSetup({
           targetDir: stringFlag(args, "target") ?? process.cwd(),
-          agents: agentList(stringFlag(args, "agents")),
+          ...installSelection,
           command: stringFlag(args, "command") ?? process.execPath,
           cliPath: stringFlag(args, "cli") ?? currentCliPath(),
           dbPath: stringFlag(args, "db"),
@@ -380,10 +382,11 @@ async function main(): Promise<void> {
       );
       break;
     case "uninstall-agents":
+      const uninstallSelection = agentSelection(stringFlag(args, "agents"), booleanFlag(args, "detect-agents"));
       print(
         await uninstallAgentSetup({
           targetDir: stringFlag(args, "target") ?? process.cwd(),
-          agents: agentList(stringFlag(args, "agents")),
+          ...uninstallSelection,
           serverName: stringFlag(args, "name") ?? "repolens",
           withHooks: booleanFlag(args, "with-hooks"),
           dryRun: booleanFlag(args, "dry-run")
@@ -527,18 +530,22 @@ function decisionPatch(args: ParsedArgs): {
   return patch;
 }
 
-function agentList(value: string | undefined): AgentId[] | undefined {
+function agentSelection(value: string | undefined, detectFlag = false): { agents?: AgentId[]; detectAgents?: boolean } {
   if (!value || value === "all") {
-    return undefined;
+    return { detectAgents: detectFlag };
+  }
+  if (value === "detected") {
+    return { detectAgents: true };
   }
   const known = new Set(agentProfiles.map((profile) => profile.id));
-  return value.split(",").map((item) => {
+  const agents = value.split(",").map((item) => {
     const agent = item.trim() as AgentId;
     if (!known.has(agent)) {
-      throw new Error(`Unknown agent '${item}'. Use one of: all, ${[...known].join(", ")}`);
+      throw new Error(`Unknown agent '${item}'. Use one of: all, detected, ${[...known].join(", ")}`);
     }
     return agent;
   });
+  return { agents, detectAgents: detectFlag };
 }
 
 function handleConfigCommand(args: ParsedArgs): unknown {
@@ -664,9 +671,9 @@ Usage:
   repolens-mcp doctor [--config ~/.codex/config.toml] [--name repolens]
   repolens-mcp install-codex [--db .repolens/memory.db] [--dry-run] [--force] [--config ~/.codex/config.toml]
   repolens-mcp uninstall-codex [--dry-run] [--config ~/.codex/config.toml]
-  repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--db .repolens/memory.db] [--with-hooks]
-  repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run] [--with-hooks]
-  repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run] [--with-hooks]
+  repolens-mcp agent-setup [--target .] [--agents all|detected|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--detect-agents] [--db .repolens/memory.db] [--with-hooks]
+  repolens-mcp install-agents [--target .] [--agents all|detected|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--detect-agents] [--dry-run] [--with-hooks]
+  repolens-mcp uninstall-agents [--target .] [--agents all|detected|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--detect-agents] [--dry-run] [--with-hooks]
   repolens-mcp mcp
   repolens-mcp demo
 `;

@@ -13,7 +13,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 ## Why It Stands Out
 
 - **MCP-native**: exposes 38 tools for indexing, version/update status, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing and git-aware auto-sync, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema with relationship patterns and label properties, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, receiver-aware method call edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
-- **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance plus opt-in hook/reminder files for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
+- **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` can auto-detect or explicitly generate reviewable guidance plus opt-in hook/reminder files for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
 - **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`, and keep long-running MCP sessions fresh with git-aware `REPOLENS_AUTO_SYNC`.
@@ -123,9 +123,9 @@ repolens-mcp unpack-graph graph.rlgz [--db path] [--overwrite]
 repolens-mcp doctor [--config ~/.codex/config.toml] [--name repolens]
 repolens-mcp install-codex [--db .repolens/memory.db] [--dry-run] [--force]
 repolens-mcp uninstall-codex [--dry-run]
-repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--db .repolens/memory.db] [--with-hooks]
-repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run] [--with-hooks]
-repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run] [--with-hooks]
+repolens-mcp agent-setup [--target .] [--agents all|detected|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--detect-agents] [--db .repolens/memory.db] [--with-hooks]
+repolens-mcp install-agents [--target .] [--agents all|detected|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--detect-agents] [--dry-run] [--with-hooks]
+repolens-mcp uninstall-agents [--target .] [--agents all|detected|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--detect-agents] [--dry-run] [--with-hooks]
 repolens-mcp decision --title "Use SQLite" --body "Keep memory local."
 repolens-mcp decision-update 1 --status accepted --tags sqlite,privacy
 repolens-mcp decision-delete 1
@@ -319,13 +319,15 @@ Project teams can generate agent guidance and config snippets for the broader ag
 
 ```bash
 repolens-mcp agent-setup --target . --agents all
+repolens-mcp agent-setup --target . --agents detected
 repolens-mcp install-agents --target . --agents codex,claude,gemini --dry-run
+repolens-mcp install-agents --target . --detect-agents --dry-run
 repolens-mcp install-agents --target . --agents codex,claude,gemini --with-hooks --dry-run
 repolens-mcp install-agents --target . --agents codex,claude,gemini
 repolens-mcp uninstall-agents --target . --agents codex,claude,gemini --with-hooks --dry-run
 ```
 
-`install-agents` writes managed markdown blocks into project-local instruction files and a `docs/repolens-agent-setup.md` guide. For VS Code it also writes a project-local `.vscode/mcp.json` `servers.repolens` entry while preserving unrelated servers. Add `--with-hooks` to generate opt-in, non-blocking hook/reminder files plus `docs/repolens-agent-hooks.md`; these files tell agents when to call RepoLens before broad searches or risky edits, but they do not execute code by themselves. `uninstall-agents --with-hooks` removes those managed reminder files alongside managed RepoLens markdown blocks and managed VS Code config entries while preserving hand-written content. The guide includes MCP config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
+`install-agents` writes managed markdown blocks into project-local instruction files and a `docs/repolens-agent-setup.md` guide. For VS Code it also writes a project-local `.vscode/mcp.json` `servers.repolens` entry while preserving unrelated servers. Use `--agents detected` or `--detect-agents` to select only supported agents found from project markers, home config files, or commands on `PATH`; use `--agents all` to render every supported profile. Add `--with-hooks` to generate opt-in, non-blocking hook/reminder files plus `docs/repolens-agent-hooks.md`; these files tell agents when to call RepoLens before broad searches or risky edits, but they do not execute code by themselves. `uninstall-agents --with-hooks` removes those managed reminder files alongside managed RepoLens markdown blocks and managed VS Code config entries while preserving hand-written content. The guide includes MCP config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 
 ```json
 {
