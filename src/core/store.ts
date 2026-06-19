@@ -40,6 +40,14 @@ interface CountRow {
   count: number;
 }
 
+interface SchemaPropertyAccumulator {
+  name: string;
+  type: string;
+  source: "column" | "metadata";
+  count: number;
+  types: Set<string>;
+}
+
 interface SymbolRow {
   id: number;
   file_path: string;
@@ -756,8 +764,85 @@ export class MemoryStore {
       },
       languages,
       nodeLabels: this.nodeLabels(),
-      edgeTypes: this.edgeTypes()
+      edgeTypes: this.edgeTypes(),
+      relationshipPatterns: this.relationshipPatterns(),
+      labelProperties: this.labelProperties()
     };
+  }
+
+  private relationshipPatterns(): GraphSchema["relationshipPatterns"] {
+    return this.db
+      .prepare(
+        `SELECT coalesce(source_symbol.kind, 'external') AS sourceKind, edges.type AS type, coalesce(target_symbol.kind, 'external') AS targetKind, count(*) AS count
+         FROM edges
+         LEFT JOIN symbols source_symbol ON source_symbol.qualified_name = edges.source
+         LEFT JOIN symbols target_symbol ON target_symbol.qualified_name = edges.target
+         GROUP BY sourceKind, edges.type, targetKind
+         ORDER BY count DESC, edges.type ASC, sourceKind ASC, targetKind ASC
+         LIMIT 100`
+      )
+      .all() as GraphSchema["relationshipPatterns"];
+  }
+
+  private labelProperties(): GraphSchema["labelProperties"] {
+    const labelRows = this.nodeLabels();
+    const labelCounts = new Map(labelRows.map((row) => [row.kind, row.count]));
+    const byKind = new Map<string, Map<string, SchemaPropertyAccumulator>>();
+
+    for (const label of labelRows) {
+      const properties = new Map<string, SchemaPropertyAccumulator>();
+      for (const property of [
+        ["name", "string"],
+        ["qualifiedName", "string"],
+        ["filePath", "string"],
+        ["language", "string"],
+        ["startLine", "number"],
+        ["endLine", "number"],
+        ["signature", "string"],
+        ["doc", "string"],
+        ["exported", "boolean"]
+      ] as Array<[string, string]>) {
+        properties.set(`column:${property[0]}`, {
+          name: property[0],
+          type: property[1],
+          source: "column",
+          count: label.count,
+          types: new Set([property[1]])
+        });
+      }
+      byKind.set(label.kind, properties);
+    }
+
+    const rows = this.db.prepare("SELECT kind, metadata FROM symbols WHERE metadata <> '{}' LIMIT 10000").all() as Array<{ kind: string; metadata: string }>;
+    for (const row of rows) {
+      const properties = byKind.get(row.kind);
+      if (!properties) {
+        continue;
+      }
+      const metadata = parseMetadata(row.metadata);
+      for (const [name, value] of Object.entries(metadata)) {
+        const type = inferSchemaValueType(value);
+        const propertyKey = `metadata:${name}`;
+        const existing = properties.get(propertyKey) ?? { name, type, source: "metadata" as const, count: 0, types: new Set<string>() };
+        existing.count += 1;
+        existing.types.add(type);
+        existing.type = existing.types.size === 1 ? [...existing.types][0] ?? type : "mixed";
+        properties.set(propertyKey, existing);
+      }
+    }
+
+    return [...byKind.entries()]
+      .map(([kind, properties]) => ({
+        kind,
+        properties: [...properties.values()]
+          .map((property) => ({ name: property.name, type: property.type, source: property.source, count: property.count }))
+          .sort((a, b) => (a.source === b.source ? a.name.localeCompare(b.name) : a.source.localeCompare(b.source)))
+      }))
+      .sort((a, b) => {
+        const left = labelCounts.get(a.kind) ?? 0;
+        const right = labelCounts.get(b.kind) ?? 0;
+        return right - left || a.kind.localeCompare(b.kind);
+      });
   }
 
   searchGraph(options: GraphSearchOptions = {}): GraphSearchMatch[] {
@@ -2039,6 +2124,23 @@ function parseMetadata(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function inferSchemaValueType(value: unknown): string {
+  if (value === null) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return "array";
+  }
+  const valueType = typeof value;
+  if (valueType === "string" || valueType === "number" || valueType === "boolean") {
+    return valueType;
+  }
+  if (valueType === "object") {
+    return "object";
+  }
+  return "unknown";
 }
 
 function traceEdgeTypes(options: TraceOptions): string[] {

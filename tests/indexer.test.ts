@@ -316,6 +316,13 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "EMITS"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "LISTENS_ON"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "USES_TYPE"));
+    assert.ok(schema.relationshipPatterns.some((pattern) => pattern.sourceKind === "function" && pattern.type === "CALLS" && pattern.targetKind === "function"));
+    assert.ok(schema.relationshipPatterns.some((pattern) => pattern.type === "HTTP_CALLS" && pattern.targetKind === "route"));
+    const functionProperties = schema.labelProperties.find((label) => label.kind === "function")?.properties ?? [];
+    assert.ok(functionProperties.some((property) => property.name === "qualifiedName" && property.source === "column" && property.type === "string"));
+    const routeProperties = schema.labelProperties.find((label) => label.kind === "route")?.properties ?? [];
+    assert.ok(routeProperties.some((property) => property.name === "method" && property.source === "metadata" && property.type === "string"));
+    assert.ok(routeProperties.some((property) => property.name === "path" && property.source === "metadata" && property.type === "string"));
 
     const typeUsage = store.queryGraph("MATCH (a)-[r:USES_TYPE]->(b) WHERE b.name = 'Order' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(typeUsage.rows.some((row) => row["b.name"] === "Order" && row["r.type"] === "USES_TYPE"));
