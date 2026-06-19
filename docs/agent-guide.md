@@ -36,7 +36,7 @@ On Windows PowerShell, the local installer mirrors the shell installer:
 1. Run `index` or `benchmark` for the target repository.
 2. Use `architecture`, `schema`, `communities`, or `fleet-summary` to understand the project shape. `schema` includes relationship patterns and label property hints for safer graph queries.
 3. Use `search`, `symbols`, `references`, `trace`, `cycles`, and `context-pack` for focused code context.
-4. Use `changes` after edits to map uncommitted files back to graph impact.
+4. Use `changes` after edits to map uncommitted files back to graph impact, including per-file blast radius, relationship counts, and risk reasons.
 
 ## Useful MCP Tools
 

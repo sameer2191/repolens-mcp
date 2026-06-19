@@ -20,7 +20,7 @@ npm run verify
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 49 tests, 48 passing, 0 failures, 1 sandbox-only dashboard socket skip.
+- Node test suite passed: 50 tests, 49 passing, 0 failures, 1 sandbox-only dashboard socket skip.
 - Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, MCP startup auto-indexing from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema including relationship patterns and label property hints, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, and `SKIP`, relative and workspace-package import cycle resolution, git-history hotspot extraction, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
 
 ## Package And Release
@@ -50,7 +50,7 @@ Result:
 
 - Production dependency audit passed with `npm run audit:prod`: 0 vulnerabilities.
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, approximately 181 KB packed, 924,148 bytes unpacked, 81 runtime/doc entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, approximately 183 KB packed, 938,147 bytes unpacked, 81 runtime/doc entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `docs/`, `llms.txt`, `scripts/`, `package.json`, `server.json`, `install.sh`, and `install.ps1`; compiled tests, source TypeScript, local graph memory, SQLite databases, graph packages, and fixtures are excluded.
 - Package contents gate passed: 81 files inspected.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
@@ -767,7 +767,7 @@ node --experimental-sqlite dist/src/cli.js changes /Users/sameer/Desktop/project
   --limit 10
 ```
 
-Confirmed modified files map back to indexed symbols and produced a medium risk classification for the current local change set.
+Confirmed modified files map back to indexed symbols and produced a medium risk classification for the current local change set, with per-file blast-radius details, relationship counts, symbol-kind summaries, and risk reasons.
 
 ## Conclusion
 
