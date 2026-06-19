@@ -115,8 +115,8 @@ function normalizeRegistryUrl(value: string): string {
   return parsed.toString().replace(/\/+$/, "");
 }
 
-function encodePackageName(name: string): string {
-  return name.startsWith("@") ? name.replace("/", "%2f") : encodeURIComponent(name);
+export function encodePackageName(name: string): string {
+  return name.startsWith("@") ? name.replaceAll("/", "%2f") : encodeURIComponent(name);
 }
 
 function parseVersion(value: string): { parts: [number, number, number]; prerelease: string } {
