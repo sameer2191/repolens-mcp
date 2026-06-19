@@ -48,6 +48,17 @@ interface SchemaPropertyAccumulator {
   types: Set<string>;
 }
 
+interface GitChangedFile {
+  path: string;
+  status: string;
+  previousPath?: string;
+}
+
+interface SymbolKindRow {
+  qualified_name: string;
+  kind: string;
+}
+
 interface SymbolRow {
   id: number;
   file_path: string;
@@ -1382,35 +1393,121 @@ export class MemoryStore {
 
   detectChanges(root = this.latestRoot(), limit = 100): ChangeImpactResult {
     const repoRoot = path.resolve(root);
-    const changed = new Set<string>();
     const signals: string[] = [];
-    for (const args of [
-      ["diff", "--name-only"],
-      ["diff", "--cached", "--name-only"],
-      ["ls-files", "--others", "--exclude-standard"]
-    ]) {
-      const result = spawnSync("git", ["-C", repoRoot, ...args], { encoding: "utf8" });
-      if (result.status !== 0) {
-        const message = String(result.stderr || result.stdout || "git command failed").trim();
-        signals.push(`${args.join(" ")} failed: ${message}`);
-        continue;
-      }
-      for (const line of result.stdout.split(/\r?\n/)) {
-        if (line.trim()) changed.add(line.trim());
-      }
-    }
-
-    const changedFiles = [...changed].sort();
+    const changedFileDetails = gitChangedFiles(repoRoot, signals)
+      .sort((a, b) => a.path.localeCompare(b.path))
+      .map((file) => this.changedFileBlastRadius(file));
+    const changedFiles = changedFileDetails.map((file) => file.path);
     const impacted = changedFiles.length > 0 ? this.impactedBy(changedFiles, limit) : [];
-    const risk = impacted.length > 40 || changedFiles.length > 12 ? "high" : impacted.length > 12 || changedFiles.length > 4 ? "medium" : changedFiles.length > 0 ? "low" : "none";
+    const directEdgeCount = changedFileDetails.reduce((sum, file) => sum + file.directEdges, 0);
+    const summary = {
+      changedFileCount: changedFiles.length,
+      indexedChangedFileCount: changedFileDetails.filter((file) => file.indexed).length,
+      impactedItemCount: impacted.length,
+      directEdgeCount,
+      topEdgeTypes: topCounts(changedFileDetails.flatMap((file) => file.edgeTypes), "type", 10),
+      topSymbolKinds: topCounts(changedFileDetails.flatMap((file) => file.symbolKinds), "kind", 10)
+    };
+    const highRiskFiles = changedFileDetails.filter((file) => file.risk === "high").length;
+    const mediumRiskFiles = changedFileDetails.filter((file) => file.risk === "medium").length;
+    const risk =
+      highRiskFiles > 0 || impacted.length > 40 || changedFiles.length > 12 || directEdgeCount > 250
+        ? "high"
+        : mediumRiskFiles > 0 || impacted.length > 12 || changedFiles.length > 4 || directEdgeCount > 80
+          ? "medium"
+          : changedFiles.length > 0
+            ? "low"
+            : "none";
     if (changedFiles.length === 0) {
       signals.push("no uncommitted git changes detected");
     }
     if (impacted.length === 0 && changedFiles.length > 0) {
       signals.push("changed files did not map to indexed symbols; re-index may be needed");
     }
+    if (changedFileDetails.some((file) => !file.indexed)) {
+      signals.push("one or more changed files are not present in the current graph; re-index for full impact coverage");
+    }
 
-    return { root: repoRoot, changedFiles, impacted, risk, signals };
+    return { root: repoRoot, changedFiles, changedFileDetails, summary, impacted, risk, signals };
+  }
+
+  private changedFileBlastRadius(file: GitChangedFile): ChangeImpactResult["changedFileDetails"][number] {
+    const fileRow = this.db.prepare("SELECT skipped FROM files WHERE path = ?").get(file.path) as { skipped: number } | undefined;
+    const symbols = this.db
+      .prepare("SELECT qualified_name, kind FROM symbols WHERE file_path = ? ORDER BY start_line ASC LIMIT 1000")
+      .all(file.path) as unknown as SymbolKindRow[];
+    const symbolNames = symbols.map((symbol) => symbol.qualified_name);
+    const symbolKinds = countValues(symbols.map((symbol) => symbol.kind), "kind", 10);
+    const inboundEdges = this.countEdgesForSymbols("target", symbolNames);
+    const outboundEdges = this.countEdgesForSymbols("source", symbolNames);
+    const edgeTypes = this.edgeTypesForSymbols(symbolNames);
+    const directEdges = edgeTypes.reduce((sum, edgeType) => sum + edgeType.count, 0);
+    const indexed = Boolean(fileRow && fileRow.skipped === 0);
+    const reasons: string[] = [];
+
+    if (!indexed) {
+      reasons.push("file is not present as an indexed graph file");
+    }
+    if (symbols.length >= 60) {
+      reasons.push(`${symbols.length} indexed symbols in changed file`);
+    } else if (symbols.length >= 12) {
+      reasons.push(`${symbols.length} indexed symbols in changed file`);
+    }
+    if (directEdges >= 150) {
+      reasons.push(`${directEdges} direct graph relationships touch this file`);
+    } else if (directEdges >= 30) {
+      reasons.push(`${directEdges} direct graph relationships touch this file`);
+    }
+    if (/deleted|renamed/.test(file.status) && indexed) {
+      reasons.push(`${file.status} indexed file may invalidate inbound references`);
+    }
+
+    const risk =
+      directEdges >= 150 || symbols.length >= 60 || (/deleted|renamed/.test(file.status) && indexed && directEdges >= 50)
+        ? "high"
+        : directEdges >= 30 || symbols.length >= 12 || !indexed
+          ? "medium"
+          : "low";
+
+    return {
+      path: file.path,
+      status: file.status,
+      previousPath: file.previousPath,
+      indexed,
+      symbols: symbols.length,
+      symbolKinds,
+      inboundEdges,
+      outboundEdges,
+      directEdges,
+      edgeTypes,
+      risk,
+      reasons
+    };
+  }
+
+  private countEdgesForSymbols(column: "source" | "target", symbols: string[]): number {
+    if (symbols.length === 0) {
+      return 0;
+    }
+    const placeholders = symbols.map(() => "?").join(", ");
+    return Number((this.db.prepare(`SELECT count(*) AS count FROM edges WHERE ${column} IN (${placeholders})`).get(...symbols) as unknown as CountRow).count);
+  }
+
+  private edgeTypesForSymbols(symbols: string[]): Array<{ type: string; count: number }> {
+    if (symbols.length === 0) {
+      return [];
+    }
+    const placeholders = symbols.map(() => "?").join(", ");
+    return this.db
+      .prepare(
+        `SELECT type, count(*) AS count
+         FROM edges
+         WHERE source IN (${placeholders}) OR target IN (${placeholders})
+         GROUP BY type
+         ORDER BY count DESC, type ASC
+         LIMIT 20`
+      )
+      .all(...symbols, ...symbols) as Array<{ type: string; count: number }>;
   }
 
   latestRoot(): string {
@@ -2211,6 +2308,77 @@ function parseStringArray(value: string): string[] {
 
 function getCount(db: DatabaseSync, sql: string): number {
   return Number((db.prepare(sql).get() as unknown as CountRow).count);
+}
+
+function gitChangedFiles(root: string, signals: string[]): GitChangedFile[] {
+  const result = spawnSync("git", ["-C", root, "status", "--porcelain=v1", "-z"], { encoding: "utf8" });
+  if (result.status !== 0) {
+    const message = String(result.stderr || result.stdout || "git status failed").trim();
+    signals.push(`git status --porcelain failed: ${message}`);
+    return [];
+  }
+
+  const files = new Map<string, GitChangedFile>();
+  const parts = result.stdout.split("\0");
+  for (let index = 0; index < parts.length; index += 1) {
+    const entry = parts[index];
+    if (!entry) {
+      continue;
+    }
+    const code = entry.slice(0, 2);
+    const filePath = entry.slice(3);
+    const status = gitStatusLabel(code);
+    const isRenameOrCopy = code.includes("R") || code.includes("C");
+    const previousPath = isRenameOrCopy ? parts[index + 1] || undefined : undefined;
+    if (isRenameOrCopy) {
+      index += 1;
+    }
+    files.set(filePath, { path: filePath, status, previousPath });
+  }
+  return [...files.values()];
+}
+
+function gitStatusLabel(code: string): string {
+  if (code === "??") {
+    return "untracked";
+  }
+  const labels = new Set<string>();
+  const staged = code[0];
+  const working = code[1];
+  for (const marker of [staged, working]) {
+    if (marker === "M") labels.add("modified");
+    if (marker === "A") labels.add("added");
+    if (marker === "D") labels.add("deleted");
+    if (marker === "R") labels.add("renamed");
+    if (marker === "C") labels.add("copied");
+    if (marker === "U") labels.add("unmerged");
+  }
+  if (staged && staged !== " " && staged !== "?") {
+    labels.add("staged");
+  }
+  if (working && working !== " " && working !== "?") {
+    labels.add("unstaged");
+  }
+  return [...labels].join("+") || "changed";
+}
+
+function countValues<Key extends "kind" | "type">(values: string[], key: Key, limit: number): Array<Record<Key, string> & { count: number }> {
+  return topCounts(
+    values.map((value) => ({ [key]: value, count: 1 }) as Record<Key, string> & { count: number }),
+    key,
+    limit
+  );
+}
+
+function topCounts<Key extends "kind" | "type">(items: Array<Record<Key, string> & { count: number }>, key: Key, limit: number): Array<Record<Key, string> & { count: number }> {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    counts.set(item[key], (counts.get(item[key]) ?? 0) + item.count);
+  }
+  return [...counts.entries()]
+    .sort(([leftValue, leftCount], [rightValue, rightCount]) => rightCount - leftCount || leftValue.localeCompare(rightValue))
+    .slice(0, limit)
+    .map(([value, count]) => ({ [key]: value, count }) as Record<Key, string> & { count: number });
 }
 
 function clampPositive(value: number, min: number, max: number): number {

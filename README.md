@@ -163,7 +163,7 @@ repolens-mcp mcp
 | `find_dead_code` | Find non-exported functions and methods with no inbound call edges. |
 | `find_dependency_cycles` | Find import-resolved dependency cycles between architecture clusters. |
 | `ingest_traces` | Add observed runtime HTTP, event, or symbol edges as `OBSERVED_*` relationships. |
-| `detect_changes` | Map uncommitted git changes to indexed graph impact. |
+| `detect_changes` | Map uncommitted git changes to indexed graph impact with per-file blast radius, relationship counts, and risk reasons. |
 | `architecture_report` | Generate a markdown or HTML architecture report with graph, hotspot, history, risk, and recommendation sections. |
 | `remember_decision` | Persist an ADR-style architecture decision. |
 | `list_decisions` | Retrieve saved decisions. |

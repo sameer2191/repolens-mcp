@@ -1024,6 +1024,61 @@ test("adds git history hotspots to architecture summaries", async (t) => {
   }
 });
 
+test("detects git change blast radius with per-file details", async (t) => {
+  const git = spawnSync("git", ["--version"], { encoding: "utf8" });
+  if (git.status !== 0) {
+    t.skip("git is not available");
+    return;
+  }
+
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-change-impact-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.cp(fixture, repo, { recursive: true });
+  const runGit = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  };
+
+  spawnSync("git", ["init", repo], { encoding: "utf8" });
+  runGit("config", "user.email", "repolens@example.test");
+  runGit("config", "user.name", "RepoLens Test");
+  runGit("add", ".");
+  runGit("commit", "-m", "initial graph");
+  await indexRepository({ root: repo, dbPath });
+
+  await fs.appendFile(path.join(repo, "src", "orders.ts"), "\nexport function cancelOrder() { return orders.pop(); }\n");
+  await fs.writeFile(path.join(repo, "src", "draft.ts"), "export function draftOnly() { return true; }\n");
+
+  const store = new MemoryStore(dbPath);
+  try {
+    const impact = store.detectChanges(repo, 20);
+    assert.deepEqual(impact.changedFiles, ["src/draft.ts", "src/orders.ts"]);
+    assert.equal(impact.summary.changedFileCount, 2);
+    assert.equal(impact.summary.indexedChangedFileCount, 1);
+    assert.ok(impact.summary.impactedItemCount > 0);
+    assert.ok(impact.summary.directEdgeCount > 0);
+    assert.ok(impact.summary.topSymbolKinds.some((kind) => kind.kind === "function"));
+
+    const orders = impact.changedFileDetails.find((file) => file.path === "src/orders.ts");
+    assert.ok(orders);
+    assert.match(orders.status, /modified/);
+    assert.equal(orders.indexed, true);
+    assert.ok(orders.symbols > 0);
+    assert.ok(orders.directEdges > 0);
+    assert.ok(orders.edgeTypes.some((edgeType) => edgeType.type === "DEFINES"));
+
+    const draft = impact.changedFileDetails.find((file) => file.path === "src/draft.ts");
+    assert.ok(draft);
+    assert.equal(draft.status, "untracked");
+    assert.equal(draft.indexed, false);
+    assert.equal(draft.risk, "medium");
+    assert.ok(impact.signals.some((signal) => signal.includes("not present in the current graph")));
+  } finally {
+    store.close();
+  }
+});
+
 test("incremental indexing skips unchanged files and prunes removed files", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-incremental-"));
   const repo = path.join(tmp, "repo");

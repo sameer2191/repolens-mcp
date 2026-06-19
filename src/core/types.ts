@@ -348,6 +348,28 @@ export interface ArchitectureRecommendation {
 export interface ChangeImpactResult {
   root: string;
   changedFiles: string[];
+  changedFileDetails: Array<{
+    path: string;
+    status: string;
+    previousPath?: string;
+    indexed: boolean;
+    symbols: number;
+    symbolKinds: Array<{ kind: string; count: number }>;
+    inboundEdges: number;
+    outboundEdges: number;
+    directEdges: number;
+    edgeTypes: Array<{ type: string; count: number }>;
+    risk: "none" | "low" | "medium" | "high";
+    reasons: string[];
+  }>;
+  summary: {
+    changedFileCount: number;
+    indexedChangedFileCount: number;
+    impactedItemCount: number;
+    directEdgeCount: number;
+    topEdgeTypes: Array<{ type: string; count: number }>;
+    topSymbolKinds: Array<{ kind: string; count: number }>;
+  };
   impacted: Array<{ item: string; reason: string; score: number }>;
   risk: "none" | "low" | "medium" | "high";
   signals: string[];

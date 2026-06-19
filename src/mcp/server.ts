@@ -513,7 +513,7 @@ export async function startMcpServer(): Promise<void> {
   server.registerTool(
     "detect_changes",
     {
-      description: "Map uncommitted git changes to indexed graph impact with a simple risk classification.",
+      description: "Map uncommitted git changes to indexed graph impact with per-file blast radius, relationship counts, and risk reasons.",
       inputSchema: {
         root: z.string().optional(),
         limit: z.number().int().positive().max(500).optional(),
