@@ -115,6 +115,7 @@ interface ParsedGraphQuery {
         edgeAliasExplicit: boolean;
         edgeType?: string;
         hopRange?: GraphHopRange;
+        pathAlias?: string;
         rightAlias: string;
         rightLabel?: string;
         direction: "outbound" | "inbound";
@@ -2814,6 +2815,12 @@ function graphAliasMap(pattern: ParsedGraphQuery["pattern"]): Map<string, string
 
   addGraphAlias(map, pattern.leftAlias, "left_symbol");
   addGraphAlias(map, pattern.rightAlias, "right_symbol");
+  if (pattern.pathAlias) {
+    if (!pattern.hopRange) {
+      throw new Error("Path aliases are supported only for variable-length path queries");
+    }
+    addGraphAlias(map, pattern.pathAlias, "paths");
+  }
   if (pattern.hopRange) {
     if (pattern.edgeAliasExplicit) {
       throw new Error("Relationship aliases are not supported for variable-length path queries");
@@ -2997,10 +3004,14 @@ function parseGraphQuery(query: string, defaultLimit: number): ParsedGraphQuery 
 }
 
 function parseMatchPattern(pattern: string): ParsedGraphQuery["pattern"] {
-  const trimmed = pattern.trim();
+  const aliasedPattern = parsePathAlias(pattern.trim());
+  const trimmed = aliasedPattern.pattern;
   const outboundIndex = trimmed.indexOf("->");
   const inboundIndex = trimmed.indexOf("<-");
   if (outboundIndex < 0 && inboundIndex < 0) {
+    if (aliasedPattern.pathAlias) {
+      throw new Error("Path aliases require an edge MATCH pattern");
+    }
     const node = parseNodePattern(trimmed);
     if (node) {
       return { kind: "node", alias: node.alias, label: node.label };
@@ -3031,6 +3042,7 @@ function parseMatchPattern(pattern: string): ParsedGraphQuery["pattern"] {
       edgeAliasExplicit: parsedLeft.edge.aliasExplicit,
       edgeType: parsedLeft.edge.type,
       hopRange: parsedLeft.edge.hopRange,
+      pathAlias: aliasedPattern.pathAlias,
       rightAlias: parsedRight.alias,
       rightLabel: parsedRight.label,
       direction
@@ -3050,10 +3062,24 @@ function parseMatchPattern(pattern: string): ParsedGraphQuery["pattern"] {
     edgeAliasExplicit: parsedRight.edge.aliasExplicit,
     edgeType: parsedRight.edge.type,
     hopRange: parsedRight.edge.hopRange,
+    pathAlias: aliasedPattern.pathAlias,
     rightAlias: parsedRight.node.alias,
     rightLabel: parsedRight.node.label,
     direction
   };
+}
+
+function parsePathAlias(pattern: string): { pathAlias?: string; pattern: string } {
+  const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/.exec(pattern);
+  if (!match) {
+    return { pattern };
+  }
+  const pathAlias = match[1];
+  const aliasedPattern = match[2].trim();
+  if (!aliasedPattern) {
+    throw new Error("Path aliases require an edge MATCH pattern");
+  }
+  return { pathAlias, pattern: aliasedPattern };
 }
 
 function parseWhere(where: string | undefined): GraphWhereClause[] {
@@ -3642,6 +3668,18 @@ function propertySql(alias: string, property: string, aliasMap: Map<string, stri
       throw new Error(`Unsupported edge property '${property}'`);
     }
     return `${table}.${column}`;
+  }
+  if (table === "paths") {
+    const pathColumns: Record<string, string> = {
+      length: "paths.depth",
+      start: "paths.left_qn",
+      end: "paths.right_qn"
+    };
+    const column = pathColumns[normalized];
+    if (!column) {
+      throw new Error(`Unsupported path property '${property}'`);
+    }
+    return column;
   }
   const symbolColumns: Record<string, string> = {
     id: "id",

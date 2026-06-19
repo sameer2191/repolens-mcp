@@ -335,15 +335,41 @@ test("query graph supports bounded variable-length paths with guardrails", async
     );
     assert.deepEqual(outbound.rows.map((row) => row["b.name"]), ["beta", "delta", "gamma"]);
 
+    const pathMetadata = store.queryGraph(
+      "MATCH p=(a:Function)-[:CALLS*1..3]->(b:Function) WHERE a.name = 'alpha' RETURN b.name,p.length,p.start,p.end ORDER BY p.length,b.name LIMIT 10"
+    );
+    assert.deepEqual(pathMetadata.rows, [
+      { "b.name": "beta", "p.length": 1, "p.start": qualified("alpha"), "p.end": qualified("beta") },
+      { "b.name": "gamma", "p.length": 2, "p.start": qualified("alpha"), "p.end": qualified("gamma") },
+      { "b.name": "delta", "p.length": 3, "p.start": qualified("alpha"), "p.end": qualified("delta") }
+    ]);
+
     const capped = store.queryGraph(
       "MATCH (a:Function)-[:CALLS*1..2]->(b:Function) WHERE a.name = 'alpha' RETURN b.name ORDER BY b.name LIMIT 10"
     );
     assert.deepEqual(capped.rows.map((row) => row["b.name"]), ["beta", "gamma"]);
 
+    const filteredByLength = store.queryGraph(
+      "MATCH p=(a:Function)-[:CALLS*1..3]->(b:Function) WHERE a.name = 'alpha' AND p.length > 1 RETURN b.name,p.length ORDER BY p.length LIMIT 10"
+    );
+    assert.deepEqual(filteredByLength.rows, [
+      { "b.name": "gamma", "p.length": 2 },
+      { "b.name": "delta", "p.length": 3 }
+    ]);
+
     const inbound = store.queryGraph(
       "MATCH (a)<-[:CALLS*1..2]-(b) WHERE a.name = 'gamma' RETURN b.name ORDER BY b.name LIMIT 10"
     );
     assert.deepEqual(inbound.rows.map((row) => row["b.name"]), ["alpha", "beta", "delta"]);
+
+    const inboundMetadata = store.queryGraph(
+      "MATCH p=(a)<-[:CALLS*1..2]-(b) WHERE a.name = 'gamma' RETURN b.name,p.length,p.start,p.end ORDER BY p.length,b.name LIMIT 10"
+    );
+    assert.deepEqual(inboundMetadata.rows, [
+      { "b.name": "beta", "p.length": 1, "p.start": qualified("gamma"), "p.end": qualified("beta") },
+      { "b.name": "alpha", "p.length": 2, "p.start": qualified("gamma"), "p.end": qualified("alpha") },
+      { "b.name": "delta", "p.length": 2, "p.start": qualified("gamma"), "p.end": qualified("delta") }
+    ]);
 
     const rightAnchored = store.queryGraph(
       "MATCH (a)-[:CALLS*1..2]->(b) WHERE b.name = 'gamma' RETURN a.name ORDER BY a.name LIMIT 10"
@@ -370,6 +396,49 @@ test("query graph supports bounded variable-length paths with guardrails", async
       () => store.queryGraph("MATCH (a)-[r:CALLS*1..2]->(b) WHERE a.name = 'alpha' RETURN b.name"),
       /Relationship aliases are not supported/
     );
+    assert.throws(
+      () => store.queryGraph("MATCH p=(a)-[:CALLS]->(b) WHERE a.name = 'alpha' RETURN p.length"),
+      /Path aliases are supported only for variable-length path queries/
+    );
+    assert.throws(
+      () => store.queryGraph("MATCH p=(a)-[:CALLS*1..2]->(b) WHERE a.name = 'alpha' RETURN p.metadata"),
+      /Unsupported path property 'metadata'/
+    );
+    for (const property of ["nodes", "edges", "weight", "filePath", "anything"]) {
+      assert.throws(
+        () => store.queryGraph(`MATCH p=(a)-[:CALLS*1..2]->(b) WHERE a.name = 'alpha' RETURN p.${property}`),
+        new RegExp(`Unsupported path property '${property}'`)
+      );
+    }
+    assert.throws(
+      () => store.queryGraph("MATCH p=(a)-[:CALLS*1..2]->(b) WHERE a.name = 'alpha' RETURN p"),
+      /Unsupported path property 'qualifiedName'/
+    );
+    assert.throws(
+      () => store.queryGraph("MATCH p=(a)-[:CALLS*1..2]->(b) WHERE a.name = 'alpha' RETURN count(p.nodes)"),
+      /Unsupported path property 'nodes'/
+    );
+    assert.throws(
+      () => store.queryGraph("MATCH p=(a)-[:CALLS*1..2]->(b) WHERE a.name = 'alpha' AND p.nodes = 'x' RETURN b.name"),
+      /Unsupported path property 'nodes'/
+    );
+    assert.throws(
+      () => store.queryGraph("MATCH p=(a)-[:CALLS*1..2]->(b) WHERE a.name = 'alpha' RETURN b.name ORDER BY p.edges"),
+      /Unsupported path property 'edges'/
+    );
+    assert.throws(
+      () => store.queryGraph("MATCH p=(a)-[:CALLS*1..2]->(b) WHERE p.length > 1 RETURN b.name"),
+      /selective WHERE anchor/
+    );
+    assert.throws(
+      () => store.queryGraph(`MATCH p=(a)-[:CALLS*1..2]->(b) WHERE p.start = '${qualified("alpha")}' RETURN b.name`),
+      /selective WHERE anchor/
+    );
+    assert.throws(
+      () => store.queryGraph("MATCH p=(a)-[:CALLS*1..2]->(b) WHERE a.name = 'alpha' OR p.length > 1 RETURN b.name"),
+      /selective WHERE anchor/
+    );
+    assert.throws(() => store.queryGraph("MATCH a=(a)-[:CALLS*1..2]->(b) WHERE a.name = 'alpha' RETURN a.name"), /Duplicate query alias 'a'/);
     assert.throws(() => store.queryGraph("MATCH (a)-[a:CALLS]->(b) RETURN a.name LIMIT 1"), /Duplicate query alias 'a'/);
   } finally {
     store.close();
