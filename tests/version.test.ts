@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compareVersions, getVersionStatus } from "../src/core/version.js";
+import { compareVersions, encodePackageName, getVersionStatus } from "../src/core/version.js";
 
 test("compares semantic versions for update checks", () => {
   assert.equal(compareVersions("1.2.0", "1.1.9"), 1);
@@ -23,6 +23,11 @@ test("rejects non-http registry URLs", async () => {
     () => getVersionStatus({ checkRemote: true, registryUrl: "file:///tmp/repolens" }),
     /http or https/
   );
+});
+
+test("encodes every slash in scoped package names for registry URLs", () => {
+  assert.equal(encodePackageName("@scope/pkg"), "@scope%2fpkg");
+  assert.equal(encodePackageName("@scope/pkg/extra"), "@scope%2fpkg%2fextra");
 });
 
 test("checks an npm-compatible registry for the latest release", async () => {
