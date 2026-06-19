@@ -19,6 +19,8 @@ export interface AgentProfile {
   label: string;
   configHint: string;
   instructionPath: string;
+  configPath?: string;
+  configKind?: "vscode-mcp";
 }
 
 export interface AgentSetupOptions {
@@ -59,7 +61,7 @@ export const agentProfiles: AgentProfile[] = [
   { id: "antigravity", label: "Antigravity", configHint: ".gemini/config/mcp_config.json", instructionPath: "antigravity-cli/AGENTS.md" },
   { id: "aider", label: "Aider", configHint: "project conventions", instructionPath: "CONVENTIONS.md" },
   { id: "kilocode", label: "KiloCode", configHint: "mcp_settings.json", instructionPath: ".kilocode/rules/repolens.md" },
-  { id: "vscode", label: "VS Code", configHint: "mcp.json", instructionPath: ".vscode/repolens-mcp.md" },
+  { id: "vscode", label: "VS Code", configHint: ".vscode/mcp.json", instructionPath: ".vscode/repolens-mcp.md", configPath: ".vscode/mcp.json", configKind: "vscode-mcp" },
   { id: "openclaw", label: "OpenClaw", configHint: "openclaw.json", instructionPath: ".openclaw/repolens.md" },
   { id: "kiro", label: "Kiro", configHint: ".kiro/settings/mcp.json", instructionPath: ".kiro/steering/repolens.md" }
 ];
@@ -68,25 +70,26 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
   const targetDir = path.resolve(options.targetDir ?? process.cwd());
   const serverName = options.serverName ?? "repolens";
   const selected = selectAgents(options.agents);
+  const dbPath = options.dbPath ?? ".repolens/memory.db";
+  const renderOptions = {
+    serverName,
+    command: options.command,
+    cliPath: options.cliPath,
+    dbPath
+  };
   const files = [
     {
       relativePath: "docs/repolens-agent-setup.md",
       body: agentSetupGuide({
         profiles: selected,
-        serverName,
-        command: options.command,
-        cliPath: options.cliPath,
-        dbPath: options.dbPath ?? ".repolens/memory.db"
+        ...renderOptions
       })
     },
     ...selected.map((profile) => ({
       relativePath: profile.instructionPath,
       body: agentInstructionBlock({
         profile,
-        serverName,
-        command: options.command,
-        cliPath: options.cliPath,
-        dbPath: options.dbPath ?? ".repolens/memory.db"
+        ...renderOptions
       })
     }))
   ];
@@ -96,6 +99,16 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
     const outPath = path.join(targetDir, file.relativePath);
     const existing = await fs.readFile(outPath, "utf8").catch(() => "");
     const content = upsertMarkdownBlock(existing, file.body);
+    written.push({ path: outPath, changed: content !== existing, content });
+    if (!options.dryRun && content !== existing) {
+      await fs.mkdir(path.dirname(outPath), { recursive: true });
+      await fs.writeFile(outPath, content);
+    }
+  }
+  for (const profile of selected.filter((item) => item.configPath && item.configKind)) {
+    const outPath = path.join(targetDir, profile.configPath ?? "");
+    const existing = await fs.readFile(outPath, "utf8").catch(() => "");
+    const content = upsertAgentConfig(existing, profile, renderOptions);
     written.push({ path: outPath, changed: content !== existing, content });
     if (!options.dryRun && content !== existing) {
       await fs.mkdir(path.dirname(outPath), { recursive: true });
@@ -132,6 +145,21 @@ export async function uninstallAgentSetup(options: Omit<AgentSetupOptions, "comm
         await fs.rm(outPath, { force: true });
       } else {
         await fs.writeFile(outPath, `${content}\n`);
+      }
+    }
+  }
+  for (const profile of selected.filter((item) => item.configPath && item.configKind)) {
+    const outPath = path.join(targetDir, profile.configPath ?? "");
+    const existing = await fs.readFile(outPath, "utf8").catch(() => "");
+    const content = removeAgentConfig(existing, profile, serverName);
+    const removed = content.length === 0;
+    const changed = content !== existing;
+    files.push({ path: outPath, changed, content, removed });
+    if (!options.dryRun && changed) {
+      if (removed) {
+        await fs.rm(outPath, { force: true });
+      } else {
+        await fs.writeFile(outPath, content);
       }
     }
   }
@@ -191,14 +219,7 @@ ${snippets}
 
 export function agentConfigSnippet(agent: AgentId, options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
   const args = ["--experimental-sqlite", options.cliPath, "mcp"];
-  const jsonServer = {
-    command: options.command,
-    args,
-    env: {
-      NODE_NO_WARNINGS: "1",
-      REPOLENS_DB: options.dbPath
-    }
-  };
+  const jsonServer = mcpServerConfig({ ...options, managed: false });
 
   switch (agent) {
     case "codex":
@@ -230,6 +251,105 @@ REPOLENS_DB = ${JSON.stringify(options.dbPath)}`;
 
 # Then run RepoLens from a shell when needed:
 ${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "index", ".", "--db", options.dbPath])}`;
+  }
+}
+
+function upsertAgentConfig(existing: string, profile: AgentProfile, options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
+  switch (profile.configKind) {
+    case "vscode-mcp":
+      return upsertVscodeMcpConfig(existing, options);
+    default:
+      throw new Error(`Unsupported agent config writer for ${profile.id}.`);
+  }
+}
+
+function removeAgentConfig(existing: string, profile: AgentProfile, serverName: string): string {
+  if (!existing.trim()) {
+    return "";
+  }
+  switch (profile.configKind) {
+    case "vscode-mcp":
+      return removeVscodeMcpConfig(existing, serverName);
+    default:
+      throw new Error(`Unsupported agent config remover for ${profile.id}.`);
+  }
+}
+
+function upsertVscodeMcpConfig(existing: string, options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
+  assertSafeServerName(options.serverName);
+  const config = parseJsonObject(existing, ".vscode/mcp.json");
+  const servers = jsonObjectProperty(config, "servers", ".vscode/mcp.json") ?? {};
+  servers[options.serverName] = mcpServerConfig({ ...options, managed: true });
+  config.servers = servers;
+  return `${JSON.stringify(config, null, 2)}\n`;
+}
+
+function removeVscodeMcpConfig(existing: string, serverName: string): string {
+  assertSafeServerName(serverName);
+  const config = parseJsonObject(existing, ".vscode/mcp.json");
+  const servers = jsonObjectProperty(config, "servers", ".vscode/mcp.json", false);
+  if (!servers || !isManagedMcpServer(servers[serverName])) {
+    return existing;
+  }
+  delete servers[serverName];
+  if (Object.keys(servers).length === 0) {
+    delete config.servers;
+  } else {
+    config.servers = servers;
+  }
+  return Object.keys(config).length === 0 ? "" : `${JSON.stringify(config, null, 2)}\n`;
+}
+
+function mcpServerConfig(options: { serverName: string; command: string; cliPath: string; dbPath: string; managed?: boolean }) {
+  const args = ["--experimental-sqlite", options.cliPath, "mcp"];
+  return {
+    command: options.command,
+    args,
+    env: {
+      NODE_NO_WARNINGS: "1",
+      REPOLENS_DB: options.dbPath,
+      ...(options.managed ? { REPOLENS_MANAGED: "1" } : {})
+    }
+  };
+}
+
+function parseJsonObject(existing: string, label: string): Record<string, unknown> {
+  if (!existing.trim()) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(existing) as unknown;
+    if (isJsonObject(parsed)) {
+      return parsed;
+    }
+  } catch (error) {
+    throw new Error(`${label} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  throw new Error(`${label} must contain a JSON object.`);
+}
+
+function jsonObjectProperty(config: Record<string, unknown>, key: string, label: string, create = true): Record<string, unknown> | undefined {
+  const value = config[key];
+  if (value === undefined) {
+    return create ? {} : undefined;
+  }
+  if (!isJsonObject(value)) {
+    throw new Error(`${label}.${key} must be a JSON object.`);
+  }
+  return { ...value };
+}
+
+function isManagedMcpServer(value: unknown): boolean {
+  return isJsonObject(value) && isJsonObject(value.env) && value.env.REPOLENS_MANAGED === "1";
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function assertSafeServerName(serverName: string): void {
+  if (!/^[A-Za-z0-9_-]+$/.test(serverName)) {
+    throw new Error("Server name for generated agent config must contain only letters, numbers, underscores, or hyphens.");
   }
 }
 
