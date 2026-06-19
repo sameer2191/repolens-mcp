@@ -8,6 +8,7 @@ import test from "node:test";
 import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
 import { addCallEdges, addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
+import { detectLanguage } from "../src/core/language.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
 
@@ -90,6 +91,98 @@ paths:
 `
   );
   assert.ok(openapi.symbols.some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/:id" && symbol.metadata?.protocol === "openapi"));
+});
+
+test("extracts C#, PHP, Kotlin, Ruby, and Elixir symbols", () => {
+  assert.equal(detectLanguage("Services/OrdersController.cs"), "csharp");
+  assert.equal(detectLanguage("app/Http/OrderController.php"), "php");
+  assert.equal(detectLanguage("src/main/kotlin/Orders.kt"), "kotlin");
+  assert.equal(detectLanguage("scripts/task.kts"), "kotlin");
+  assert.equal(detectLanguage("build.gradle.kts"), "gradle");
+  assert.equal(detectLanguage("lib/order_service.rb"), "ruby");
+  assert.equal(detectLanguage("lib/live_plate/orders.ex"), "elixir");
+
+  const csharpContent = `using Microsoft.AspNetCore.Mvc;
+public interface IOrderRepository {}
+public record OrderDto(string Id);
+public class OrdersController : ControllerBase, IOrderRepository {
+  [HttpGet("/orders/{id}")]
+  public async Task<OrderDto> GetOrder(string id) { return await LoadOrder(id); }
+  private OrderDto LoadOrder(string id) { return new OrderDto(id); }
+}`;
+  const csharp = extractFromFile("Services/OrdersController.cs", "csharp", csharpContent);
+  assert.ok(csharp.imports.includes("Microsoft.AspNetCore.Mvc"));
+  assert.ok(csharp.symbols.some((symbol) => symbol.kind === "interface" && symbol.name === "IOrderRepository"));
+  assert.ok(csharp.symbols.some((symbol) => symbol.kind === "record" && symbol.name === "OrderDto"));
+  assert.ok(csharp.symbols.some((symbol) => symbol.kind === "method" && symbol.name === "GetOrder"));
+  assert.ok(csharp.symbols.some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/:id"));
+  assert.ok(addTypeRelationEdges(csharp.symbols, new Map([["Services/OrdersController.cs", csharpContent]])).some((edge) => edge.type === "IMPLEMENTS"));
+
+  const php = extractFromFile(
+    "app/Http/OrderController.php",
+    "php",
+    `<?php
+namespace App\\Http;
+use App\\Models\\Order;
+interface OrderRepository {}
+trait AuditsOrders {}
+class OrderController implements OrderRepository {
+  public function show(string $id): Order { return Order::find($id); }
+}`
+  );
+  assert.ok(php.imports.includes("App\\Models\\Order"));
+  assert.ok(php.symbols.some((symbol) => symbol.kind === "class" && symbol.name === "OrderController"));
+  assert.ok(php.symbols.some((symbol) => symbol.kind === "trait" && symbol.name === "AuditsOrders"));
+  assert.ok(php.symbols.some((symbol) => symbol.kind === "function" && symbol.name === "show"));
+
+  const kotlin = extractFromFile(
+    "src/main/kotlin/Orders.kt",
+    "kotlin",
+    `import org.springframework.web.bind.annotation.GetMapping
+interface OrderPort
+data class OrderDto(val id: String)
+class OrdersController : OrderPort {
+  @GetMapping("/orders/{id}")
+  suspend fun getOrder(id: String): OrderDto = OrderDto(id)
+}
+object OrderModule`
+  );
+  assert.ok(kotlin.imports.includes("org.springframework.web.bind.annotation.GetMapping"));
+  assert.ok(kotlin.symbols.some((symbol) => symbol.kind === "class" && symbol.name === "OrdersController"));
+  assert.ok(kotlin.symbols.some((symbol) => symbol.kind === "object" && symbol.name === "OrderModule"));
+  assert.ok(kotlin.symbols.some((symbol) => symbol.kind === "function" && symbol.name === "getOrder"));
+  assert.ok(kotlin.symbols.some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/:id"));
+
+  const ruby = extractFromFile(
+    "lib/order_service.rb",
+    "ruby",
+    `require "json"
+module LivePlate
+  class OrderService
+    def create_order(params)
+      JSON.generate(params)
+    end
+  end
+end`
+  );
+  assert.ok(ruby.imports.includes("json"));
+  assert.ok(ruby.symbols.some((symbol) => symbol.kind === "module" && symbol.name === "LivePlate"));
+  assert.ok(ruby.symbols.some((symbol) => symbol.kind === "class" && symbol.name === "OrderService"));
+  assert.ok(ruby.symbols.some((symbol) => symbol.kind === "function" && symbol.name === "create_order"));
+
+  const elixir = extractFromFile(
+    "lib/live_plate/orders.ex",
+    "elixir",
+    `defmodule LivePlate.Orders do
+  alias LivePlate.Order
+  def create_order(attrs) do
+    {:ok, attrs}
+  end
+end`
+  );
+  assert.ok(elixir.imports.includes("LivePlate.Order"));
+  assert.ok(elixir.symbols.some((symbol) => symbol.kind === "module" && symbol.name === "LivePlate.Orders"));
+  assert.ok(elixir.symbols.some((symbol) => symbol.kind === "function" && symbol.name === "create_order"));
 });
 
 test("captures host metadata for absolute HTTP call literals", () => {

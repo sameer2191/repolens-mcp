@@ -96,6 +96,42 @@ const patterns: Partial<Record<Language, Pattern[]>> = {
     { kind: "protocol", regex: /^\s*(?:public|internal|private|fileprivate|\s)*protocol\s+([A-Za-z_]\w*)/gm },
     { kind: "actor", regex: /^\s*(?:public|open|internal|private|fileprivate|final|\s)*actor\s+([A-Za-z_]\w*)/gm },
     { kind: "function", regex: /^\s*(?:public|open|internal|private|fileprivate|static|class|mutating|nonisolated|override|async|\s)*func\s+([A-Za-z_]\w*)/gm }
+  ],
+  csharp: [
+    { kind: "class", regex: /^\s*(?:public|private|protected|internal|abstract|sealed|static|partial|\s)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*(?:public|private|protected|internal|partial|\s)*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "struct", regex: /^\s*(?:public|private|protected|internal|readonly|partial|\s)*struct\s+([A-Za-z_]\w*)/gm },
+    { kind: "record", regex: /^\s*(?:public|private|protected|internal|sealed|abstract|partial|\s)*record(?:\s+class|\s+struct)?\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:public|private|protected|internal|\s)*enum\s+([A-Za-z_]\w*)/gm },
+    {
+      kind: "method",
+      regex:
+        /^\s*(?:public|private|protected|internal|static|async|virtual|override|abstract|sealed|partial|extern|unsafe|new|\s)+[\w<>\[\],.?]+\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:where\s+[^{]+)?\{/gm
+    }
+  ],
+  php: [
+    { kind: "class", regex: /^\s*(?:abstract\s+|final\s+)?class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "trait", regex: /^\s*trait\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*enum\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:public|private|protected|static|abstract|final|\s)*function\s+([A-Za-z_]\w*)\s*\(/gm }
+  ],
+  kotlin: [
+    { kind: "class", regex: /^\s*(?:public|private|protected|internal|open|abstract|sealed|data|value|inner|\s)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*(?:public|private|protected|internal|fun|\s)*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "object", regex: /^\s*(?:public|private|protected|internal|data|\s)*object\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:public|private|protected|internal|\s)*enum\s+class\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:public|private|protected|internal|open|override|suspend|inline|tailrec|operator|infix|\s)*fun\s+(?:<[^>]+>\s*)?([A-Za-z_]\w*)\s*\(/gm }
+  ],
+  ruby: [
+    { kind: "class", regex: /^\s*class\s+([A-Z]\w*(?:::[A-Z]\w*)*)/gm },
+    { kind: "module", regex: /^\s*module\s+([A-Z]\w*(?:::[A-Z]\w*)*)/gm },
+    { kind: "function", regex: /^\s*def\s+(?:self\.)?([A-Za-z_]\w*[!?=]?)/gm }
+  ],
+  elixir: [
+    { kind: "module", regex: /^\s*defmodule\s+([A-Z]\w*(?:\.[A-Z]\w*)*)\s+do/gm },
+    { kind: "function", regex: /^\s*defp?\s+([A-Za-z_]\w*[!?]?)\s*(?:\(|do\b)/gm },
+    { kind: "protocol", regex: /^\s*defprotocol\s+([A-Z]\w*(?:\.[A-Z]\w*)*)\s+do/gm }
   ]
 };
 
@@ -621,7 +657,12 @@ export function extractImports(language: Language, content: string): string[] {
     go: [/^\s*import\s+(?:"([^"]+)"|`([^`]+)`)/gm],
     java: [/^\s*import\s+([\w.*]+);/gm],
     rust: [/^\s*use\s+([^;]+);/gm],
-    swift: [/^\s*import\s+([A-Za-z_][\w.]*)/gm]
+    swift: [/^\s*import\s+([A-Za-z_][\w.]*)/gm],
+    csharp: [/^\s*using\s+(?:static\s+)?([\w.]+);/gm],
+    php: [/^\s*use\s+([A-Za-z_\\][\w\\]*)\s*;/gm, /^\s*require(?:_once)?\s*["']([^"']+)["']/gm],
+    kotlin: [/^\s*import\s+([\w.*]+)/gm],
+    ruby: [/^\s*require(?:_relative)?\s+["']([^"']+)["']/gm, /^\s*include\s+([A-Z]\w*(?:::[A-Z]\w*)*)/gm],
+    elixir: [/^\s*(?:import|alias|use|require)\s+([A-Z]\w*(?:\.[A-Z]\w*)*)/gm]
   };
   for (const regex of patternsByLanguage[language] ?? []) {
     for (const match of content.matchAll(regex)) {
@@ -633,13 +674,18 @@ export function extractImports(language: Language, content: string): string[] {
 }
 
 function extractRoutes(filePath: string, language: Language, content: string): SymbolNode[] {
-  if (!["typescript", "javascript", "python", "java", "go"].includes(language)) {
+  if (!["typescript", "javascript", "python", "java", "go", "csharp", "kotlin"].includes(language)) {
     return [];
   }
-  const routeRegexes = [
-    /\b(?:app|router|server)\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/gi,
-    /@(Get|Post|Put|Patch|Delete|RequestMapping)\(\s*["']?([^"')]+)?["']?\s*\)/g,
-    /@(?:app|router)\.route\(\s*["']([^"']+)["']/g
+  const routeRegexes: Array<{ regex: RegExp; methodGroup?: number; pathGroup: number; defaultMethod?: string }> = [
+    { regex: /\b(?:app|router|server)\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/gi, methodGroup: 1, pathGroup: 2 },
+    {
+      regex:
+        /(?:@|\[)(HttpGet|HttpPost|HttpPut|HttpPatch|HttpDelete|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|Get|Post|Put|Patch|Delete|RequestMapping)\(\s*(?:value\s*=\s*)?["']?([^"')\]]+)?["']?\s*\)?\]?/g,
+      methodGroup: 1,
+      pathGroup: 2
+    },
+    { regex: /@(?:app|router)\.route\(\s*["']([^"']+)["']/g, pathGroup: 1, defaultMethod: "ROUTE" }
   ];
   const routes: SymbolNode[] = [];
   const nextRoutePath = nextRoutePathFromFile(filePath);
@@ -662,10 +708,10 @@ function extractRoutes(filePath: string, language: Language, content: string): S
       }
     }
   }
-  for (const regex of routeRegexes) {
-    for (const match of content.matchAll(regex)) {
-      const method = match[1]?.toUpperCase() ?? "ROUTE";
-      const routePath = match[2] ?? match[1];
+  for (const routePattern of routeRegexes) {
+    for (const match of content.matchAll(routePattern.regex)) {
+      const method = normalizeRouteMethod(routePattern.methodGroup ? match[routePattern.methodGroup] : routePattern.defaultMethod);
+      const routePath = normalizeRouteLiteral(match[routePattern.pathGroup] ?? "/");
       const line = offsetToLine(content, match.index ?? 0);
       routes.push(
         makeSymbol(filePath, language, "route", `${method} ${routePath}`, line, line, undefined, true, {
@@ -676,6 +722,15 @@ function extractRoutes(filePath: string, language: Language, content: string): S
     }
   }
   return routes;
+}
+
+function normalizeRouteMethod(value?: string): string {
+  const method = (value ?? "ROUTE").replace(/^Http/i, "").replace(/Mapping$/i, "");
+  return method === "Request" ? "ROUTE" : method.toUpperCase();
+}
+
+function normalizeRouteLiteral(value: string): string {
+  return value.trim().replace(/\{([A-Za-z_][\w-]*)\}/g, ":$1") || "/";
 }
 
 function nextRoutePathFromFile(filePath: string): string | null {
@@ -2073,6 +2128,9 @@ function findBlockEndLine(language: Language, lines: string[], startLine: number
     }
     return lines.length;
   }
+  if (language === "ruby" || language === "elixir") {
+    return findEndKeywordBlockEndLine(lines, startLine);
+  }
 
   let depth = 0;
   let sawBrace = false;
@@ -2086,6 +2144,24 @@ function findBlockEndLine(language: Language, lines: string[], startLine: number
       }
     }
     if (sawBrace && depth <= 0) {
+      return i + 1;
+    }
+  }
+  return startLine;
+}
+
+function findEndKeywordBlockEndLine(lines: string[], startLine: number): number {
+  let depth = 0;
+  for (let i = startLine - 1; i < lines.length; i += 1) {
+    const text = lines[i].replace(/(["'])(?:\\.|(?!\1).)*\1/g, " ");
+    const keywordOpens =
+      text.match(/\b(?:class|module|case|if|unless|begin|for|while|defmodule|defprotocol|defp?)\b/g)?.length ?? 0;
+    const hasStandaloneDo = /\bdo\b/.test(text) && keywordOpens === 0;
+    const opens = keywordOpens + (hasStandaloneDo ? 1 : 0);
+    const closes = text.match(/\bend\b/g)?.length ?? 0;
+    depth += opens;
+    depth -= closes;
+    if (depth <= 0 && i >= startLine - 1) {
       return i + 1;
     }
   }
@@ -2112,11 +2188,11 @@ function isCallableName(name: string): boolean {
 }
 
 function isTypeSymbol(symbol: SymbolNode): boolean {
-  return ["class", "interface", "type", "struct", "enum", "protocol", "actor", "trait"].includes(symbol.kind);
+  return ["class", "interface", "type", "struct", "enum", "protocol", "actor", "trait", "record", "object", "module"].includes(symbol.kind);
 }
 
 function shouldScanTypeUses(symbol: SymbolNode): boolean {
-  return ["function", "method", "class", "interface", "type", "struct", "enum", "protocol", "actor", "trait"].includes(symbol.kind);
+  return ["function", "method", "class", "interface", "type", "struct", "enum", "protocol", "actor", "trait", "record", "object", "module"].includes(symbol.kind);
 }
 
 function declarationTextForSymbol(symbol: SymbolNode, fileContents: Map<string, string>): string {
@@ -2171,10 +2247,10 @@ function declarationTypeRelations(symbol: SymbolNode, declaration: string): Arra
   if (rustTraitBounds?.[1]) {
     relations.push({ type: "INHERITS", targets: typeNamesFromList(rustTraitBounds[1]), reason: "trait bound" });
   }
-  if (["swift", "kotlin"].includes(symbol.language) || ["struct", "enum", "protocol", "actor"].includes(symbol.kind)) {
-    const swiftConformance = /\b(?:class|struct|enum|actor|protocol)\s+[A-Za-z_]\w*(?:<[^>{}]+>)?\s*:\s*([^{}]+)/.exec(compact);
-    if (swiftConformance?.[1]) {
-      relations.push({ targets: typeNamesFromList(swiftConformance[1]), reason: "swift inheritance or conformance" });
+  if (["swift", "kotlin", "csharp"].includes(symbol.language) || ["struct", "enum", "protocol", "actor", "record"].includes(symbol.kind)) {
+    const colonConformance = /\b(?:class|struct|enum|actor|protocol|interface|record)\s+[A-Za-z_]\w*(?:<[^>{}]+>)?\s*:\s*([^{}]+)/.exec(compact);
+    if (colonConformance?.[1]) {
+      relations.push({ targets: typeNamesFromList(colonConformance[1]), reason: "colon inheritance or conformance" });
     }
   }
 

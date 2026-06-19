@@ -21,9 +21,9 @@ npm run test:skip-gate
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 57 tests, 56 passing, 0 failures, 1 sandbox-only dashboard socket skip.
-- Test skip gate passed with explicit policies for the dashboard sandbox socket skip and git-unavailable skips.
-- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, version/update status with npm-compatible registry checks, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, git-aware watch skipping unchanged polls and refreshing dirty worktrees, MCP startup auto-indexing and git-aware auto-sync wiring from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, index-time graph package writing with `--write-package`, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema including relationship patterns and label property hints, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, `SKIP`, `IN`, and numeric comparisons, relative and workspace-package import cycle resolution, git-history hotspot extraction, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
+- Node test suite passed: 66 tests, 65 passing, 0 failures, 1 sandbox-only dashboard socket skip.
+- Test skip gate passed: 2 skip policies and 4 allowed skip calls.
+- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, version/update status with npm-compatible registry checks, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, git-aware watch skipping unchanged polls and refreshing dirty worktrees, MCP startup auto-indexing and git-aware auto-sync wiring from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, index-time graph package writing with `--write-package`, Swift extraction, C#/PHP/Kotlin/Ruby/Elixir extraction, ASP.NET and Spring route annotation extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema including relationship patterns and label property hints, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, `SKIP`, `IN`, and numeric comparisons, relative and workspace-package import cycle resolution, git-history hotspot extraction, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
 
 ## Package And Release
 
@@ -54,9 +54,9 @@ Result:
 
 - Production dependency audit passed with `npm run audit:prod`: 0 vulnerabilities.
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 183,403 bytes packed, 938,818 bytes unpacked, 86 runtime/doc entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 196.6 kB packed, 1.0 MB unpacked, 89 runtime/doc entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, selected public docs, `llms.txt`, scripts, `package.json`, `server.json`, `install.sh`, and `install.ps1`; compiled tests, source TypeScript, local graph memory, SQLite databases, graph packages, fixtures, private validation output, and local workstation paths are excluded.
-- Package contents gate passed: 86 files inspected.
+- Package contents gate passed: 89 files inspected.
 - Installer audit passed for `install.sh` dry-run setup under a temporary home and target directory. `install.ps1` dry-run audit is enforced when `pwsh` is available and in CI.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
@@ -170,18 +170,18 @@ Latest benchmark result:
 - Files discovered: 853
 - Files indexed: 818
 - Files skipped: 35
-- Symbols: 5,812
-- Edges: 38,645
+- Symbols: 5,826
+- Edges: 38,995
 - Lines: 100,100
-- Full index elapsed: 16,484 ms
-- No-op incremental elapsed: 233 ms
+- Full index elapsed: 14,919 ms
+- No-op incremental elapsed: 101 ms
 - No-op incremental unchanged files: 853
-- Throughput: 49.62 files/s and 352.58 symbols/s for full indexing; 3,660.94 discovered files/s for no-op incremental indexing.
+- Throughput: 54.83 files/s and 390.51 symbols/s for full indexing; 8,445.54 discovered files/s for no-op incremental indexing.
 - Redacted secret scan: 0 high-confidence and 0 medium-confidence findings across 61,746 indexed non-test lines.
 - Graph export: `/path/to/large-workspace/.repolens/repolens-testing-benchmark-graph.html` (1,500 nodes, 1,500 edges)
 - HTML report: `/path/to/large-workspace/.repolens/repolens-testing-benchmark-report.html`
-- Graph package: `/path/to/large-workspace/.repolens/repolens-testing-benchmark-graph.rlgz` (10,955,684 bytes from a 73,871,360-byte SQLite snapshot, SHA-256 `6be8fdf102af01114dfa5ddc49f5923935aa597be1887a57c29460a78831ebf0`)
-- Imported benchmark graph package totals: 818 indexed files, 5,812 symbols, and 38,645 edges.
+- Graph package: `/path/to/large-workspace/.repolens/repolens-testing-benchmark-graph.rlgz` (10,976,987 bytes from a 74,117,120-byte SQLite snapshot, SHA-256 `fea5fb5bc6f0a5de01e50abb98eeec2d77fd16c237da82d3811526924f2dbeed`)
+- Imported benchmark graph package totals: 818 indexed files, 5,826 symbols, and 38,995 edges.
 
 Command:
 
@@ -275,28 +275,28 @@ Result:
 - Files discovered: 853
 - Files indexed: 818
 - Files skipped: 35
-- Symbols: 5,812
-- Edges: 38,634
+- Symbols: 5,826
+- Edges: 38,995
 - Lines indexed: 100,100
-- Full index elapsed: 19,291 ms
-- No-op incremental elapsed: 275 ms
+- Full index elapsed: 14,919 ms
+- No-op incremental elapsed: 101 ms
 - No-op incremental unchanged files: 853
 - No-op incremental removed files: 0
 - Full-text code-search rows: 85,063 `code_lines` rows and 85,063 `code_fts` rows
-- Local vector rows: 4,558 `symbol_vectors` rows at 384 dimensions.
+- Local vector rows: 4,572 `symbol_vectors` rows at 384 dimensions.
 - Reference lookup returned the `getLiveSessionRepository` definition in `apps/web-admin/src/lib/server/repositories/live-session-repository.ts` plus exact route and test references under `apps/web-admin/src/app/api/...`.
-- Type relationship graph rows: 5,957 `USES_TYPE` edges, 99 `IMPLEMENTS` edges, and 1 `INHERITS` edge. Live-session samples include `parseSort -> LiveSessionFeedSort`, `enforceLifecycleRules -> LiveSession`, and repository classes implementing repository interfaces.
-- Data-flow graph rows: 976 conservative `DATA_FLOWS` edges. Live-session samples include `getValidatedComment -> getById`, `requestJson -> parseJsonSafe`, `toDomainFromSupabase -> parseCount`, and `filterFeedSessions -> normalizedStatuses`.
+- Type relationship graph rows: 5,974 `USES_TYPE` edges, 99 `IMPLEMENTS` edges, and 1 `INHERITS` edge. Live-session samples include `parseSort -> LiveSessionFeedSort`, `enforceLifecycleRules -> LiveSession`, and repository classes implementing repository interfaces.
+- Data-flow graph rows: 983 conservative `DATA_FLOWS` edges. Live-session samples include `getValidatedComment -> getById`, `requestJson -> parseJsonSafe`, `toDomainFromSupabase -> parseCount`, and `filterFeedSessions -> normalizedStatuses`.
 - Channel graph rows: 5 `channel` nodes, 6 `EMITS` edges, and 7 `LISTENS_ON` edges
-- Import graph rows: 642 `IMPORTS_FILE` edges resolving local relative, source-root, workspace-package, and path-alias imports.
+- Import graph rows: 653 `IMPORTS_FILE` edges resolving local relative, source-root, workspace-package, and path-alias imports.
 - HTTP route/call graph rows: 153 Next.js `route` nodes, 30 `http_call` nodes, 30 `CALLS_HTTP_ENDPOINT` edges, and 20 generated `HTTP_CALLS` route edges
 - Lockfile graph rows: 1 `lockfile` node, 387 `locked_dependency` nodes, and 387 `LOCKS` edges from `pnpm-lock.yaml`.
-- Architecture report HTML: `/path/to/large-workspace/.repolens/repolens-architecture-report.html` (62,527 bytes)
-- Architecture report Markdown: `/path/to/large-workspace/.repolens/repolens-architecture-report.md` (11,772 bytes)
-- Graph export: `/path/to/large-workspace/.repolens/repolens-testing-graph.html` (1,000 nodes, 1,000 edges, 348,985 bytes)
+- Architecture report HTML: `/path/to/large-workspace/.repolens/repolens-architecture-report.html` (176,008 bytes)
+- Architecture report Markdown: `/path/to/large-workspace/.repolens/repolens-architecture-report.md` (11,789 bytes)
+- Graph export: `/path/to/large-workspace/.repolens/repolens-testing-graph.html` (1,500 nodes, 1,500 edges, 514,239 bytes)
 - Graph export JSON: `/path/to/large-workspace/.repolens/repolens-testing-graph-1000.json` (1,000 nodes, 1,000 edges, 428,932 bytes)
-- Graph package: `/path/to/large-workspace/.repolens/repolens-validation.rlgz` (14,184,723 bytes from an 81,072,128-byte SQLite snapshot, SHA-256 `a18d45eae59a1c377b26267904cb5c120301049bab9712b8f9fa18ab2411c053`)
-- Imported graph package totals: 818 indexed files, 5,812 symbols, 38,634 edges, plus 4,558 persisted vector rows at 384 dimensions.
+- Graph package: `/path/to/large-workspace/.repolens/repolens-validation.rlgz` (10,976,987 bytes from a 74,117,120-byte SQLite snapshot, SHA-256 `fea5fb5bc6f0a5de01e50abb98eeec2d77fd16c237da82d3811526924f2dbeed`)
+- Imported graph package totals: 818 indexed files, 5,826 symbols, 38,995 edges, plus 4,572 persisted vector rows at 384 dimensions.
 - Redacted secret scan: 0 high-confidence and 0 medium-confidence findings across 61,746 indexed non-test lines.
 - Graph communities sampled: order repository, iOS load flows, access/cart clearing, auth/request helpers, address book, live-session tests, cart, and menu management communities.
 - Validation DB: `/path/to/large-workspace/.repolens/repolens-validation.db`
@@ -309,13 +309,13 @@ Top language coverage:
 | Language | Files | Lines | Symbols |
 | --- | ---: | ---: | ---: |
 | Swift | 212 | 42,029 | 2,627 |
-| TypeScript | 404 | 40,663 | 1,655 |
+| TypeScript | 404 | 40,663 | 1,667 |
 | Markdown | 104 | 6,828 | 868 |
 | YAML | 4 | 3,888 | 392 |
 | SQL | 49 | 2,188 | 167 |
 | JSON | 12 | 410 | 60 |
 | Shell | 28 | 3,569 | 28 |
-| JavaScript | 3 | 491 | 8 |
+| JavaScript | 3 | 491 | 10 |
 
 Graph schema:
 
@@ -329,17 +329,17 @@ Graph schema:
 | Class nodes | 205 |
 | Route nodes | 153 |
 | Lockfile nodes | 1 |
-| `CALLS` edges | 20,111 |
-| `USES_TYPE` edges | 5,957 |
-| `DEFINES` edges | 4,435 |
-| `CALLS_LOCAL` edges | 3,163 |
+| `CALLS` edges | 20,358 |
+| `USES_TYPE` edges | 5,974 |
+| `DEFINES` edges | 4,449 |
+| `CALLS_LOCAL` edges | 3,229 |
 | `IMPORTS` edges | 1,321 |
 | `SIMILAR_TO` edges | 1,194 |
-| `DATA_FLOWS` edges | 976 |
-| `IMPORTS_FILE` edges | 642 |
+| `DATA_FLOWS` edges | 983 |
+| `IMPORTS_FILE` edges | 653 |
 | `LOCKS` edges | 387 |
 | `DECLARES` edges | 167 |
-| `SEMANTICALLY_RELATED` edges | 118 |
+| `SEMANTICALLY_RELATED` edges | 117 |
 | HTTP call nodes | 30 |
 | `CALLS_HTTP_ENDPOINT` edges | 30 |
 | `HTTP_CALLS` edges | 20 |
@@ -355,7 +355,7 @@ node --experimental-sqlite dist/src/cli.js index /path/to/large-workspace \
   --incremental
 ```
 
-Confirmed a no-op incremental pass preserved 5,812 symbols and 38,634 edges while marking all 853 discovered files unchanged.
+Confirmed a no-op incremental pass preserved 5,826 symbols and 38,995 edges while marking all 853 discovered files unchanged.
 
 Representative hotspots:
 
@@ -717,7 +717,7 @@ node --experimental-sqlite dist/src/cli.js unpack-graph \
   --overwrite
 ```
 
-Confirmed the package exporter created a checksummed `.rlgz` artifact and the importer restored a graph with 818 indexed files, 5,812 symbols, and 38,634 edges.
+Confirmed the package exporter created a checksummed `.rlgz` artifact and the importer restored a graph with 818 indexed files, 5,826 symbols, and 38,995 edges.
 
 Watch mode:
 
@@ -729,7 +729,7 @@ node --experimental-sqlite dist/src/cli.js watch /path/to/large-workspace \
   --runs 2
 ```
 
-Confirmed two watch-mode incremental passes over the large validation database preserved the graph. The refreshed validation database currently contains 5,812 symbols and 38,634 edges. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
+Confirmed two watch-mode incremental passes over the large validation database preserved the graph. The refreshed validation database currently contains 5,826 symbols and 38,995 edges. A concurrent package export and watch refresh also completed after adding SQLite connection-level busy timeouts.
 
 Index lock:
 
@@ -752,7 +752,7 @@ curl --fail 'http://127.0.0.1:9759/api/query-graph?q=MATCH%20(a)-%5Br%3ADATA_FLO
 curl --fail http://127.0.0.1:9759/api/architecture
 ```
 
-Confirmed the dashboard served the validation database, returned the 818-indexed-file / 5,812-symbol / 38,634-edge schema, returned `DATA_FLOWS` rows through `/api/query-graph`, and returned the architecture summary through `/api/architecture`. Sandboxed local networking required approval for the bind and curl checks.
+Confirmed the dashboard served the validation database, returned the 818-indexed-file / 5,826-symbol / 38,995-edge schema, returned `DATA_FLOWS` rows through `/api/query-graph`, and returned the architecture summary through `/api/architecture`. Sandboxed local networking required approval for the bind and curl checks.
 
 Trace:
 
