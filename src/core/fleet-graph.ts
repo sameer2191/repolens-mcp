@@ -118,7 +118,14 @@ export function buildFleetGraph(summary: FleetSummary, options: FleetGraphOption
         target: routeId,
         type: "CALLS_ENDPOINT",
         weight: 1,
-        metadata: { filePath: call.filePath, line: call.line ?? 0 }
+        metadata: {
+          filePath: call.filePath,
+          line: call.line ?? 0,
+          ...(call.host ? { host: call.host } : {}),
+          ...(call.scheme ? { scheme: call.scheme } : {}),
+          ...(call.url ? { url: call.url } : {}),
+          ...(call.urlKind ? { urlKind: call.urlKind } : {})
+        }
       });
     }
   }
@@ -163,6 +170,9 @@ export function buildFleetGraph(summary: FleetSummary, options: FleetGraphOption
       weight: Math.max(1, link.calls),
       metadata: {
         route: link.route,
+        ...(link.host ? { host: link.host } : {}),
+        confidence: link.confidence,
+        matchReason: link.matchReason,
         calls: link.calls,
         callFiles: link.callFiles,
         providerFiles: link.providerFiles

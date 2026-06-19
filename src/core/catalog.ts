@@ -54,9 +54,11 @@ export async function fleetSummary(limit = 50): Promise<FleetSummary> {
   const dependencyProjects = new Map<string, Set<string>>();
   const routeProjects = new Map<string, Map<string, FleetProjectSummary["routes"]>>();
   const httpCallProjects = new Map<string, Map<string, FleetProjectSummary["httpCalls"]>>();
+  const projectHostAliases = new Map<string, Set<string>>();
 
   for (const project of projects) {
     const projectName = projectLabel(project);
+    projectHostAliases.set(projectName, hostAliasesForProject(projectName, project));
     for (const language of project.languages) {
       const current = languageMap.get(language.language) ?? { language: language.language, files: 0, symbols: 0, projects: new Set<string>() };
       current.files += language.files;
@@ -83,7 +85,7 @@ export async function fleetSummary(limit = 50): Promise<FleetSummary> {
     }
   }
 
-  const serviceLinks = buildServiceLinks(routeProjects, httpCallProjects);
+  const serviceLinks = buildServiceLinks(routeProjects, httpCallProjects, projectHostAliases);
 
   const risks = [
     ...projects.filter((project) => !project.dbExists).map((project) => `${projectLabel(project)} database missing`),
@@ -254,10 +256,15 @@ function routeSummary(symbol: SymbolNode): FleetProjectSummary["routes"][number]
 }
 
 function httpCallSummary(symbol: SymbolNode): FleetProjectSummary["httpCalls"][number] {
+  const urlKind = metadataString(symbol, "urlKind");
   return {
     name: symbol.name,
     method: metadataString(symbol, "method") ?? symbol.name.split(/\s+/)[0],
     path: metadataString(symbol, "path"),
+    host: metadataString(symbol, "host"),
+    scheme: metadataString(symbol, "scheme"),
+    url: metadataString(symbol, "url"),
+    ...(urlKind === "absolute" || urlKind === "relative" ? { urlKind } : {}),
     filePath: symbol.filePath,
     line: metadataNumber(symbol, "line") ?? symbol.startLine
   };
@@ -281,7 +288,8 @@ function endpointKey(method: string | undefined, routePath: string | undefined):
 
 function buildServiceLinks(
   routeProjects: Map<string, Map<string, FleetProjectSummary["routes"]>>,
-  httpCallProjects: Map<string, Map<string, FleetProjectSummary["httpCalls"]>>
+  httpCallProjects: Map<string, Map<string, FleetProjectSummary["httpCalls"]>>,
+  projectHostAliases: Map<string, Set<string>>
 ): FleetSummary["serviceLinks"] {
   const links: FleetSummary["serviceLinks"] = [];
   for (const [route, callersByProject] of httpCallProjects.entries()) {
@@ -289,23 +297,168 @@ function buildServiceLinks(
     if (!providersByProject) {
       continue;
     }
+    const providerNames = [...providersByProject.keys()];
     for (const [consumer, calls] of callersByProject.entries()) {
       for (const [provider, providerRoutes] of providersByProject.entries()) {
         if (consumer === provider) {
+          continue;
+        }
+        const scored = scoreServiceLink(route, calls, consumer, provider, providerNames, projectHostAliases.get(provider));
+        if (!scored) {
           continue;
         }
         links.push({
           consumer,
           provider,
           route,
-          calls: calls.length,
-          callFiles: uniqueNames(calls.map((call) => call.filePath)),
+          ...(scored.host ? { host: scored.host } : {}),
+          confidence: scored.confidence,
+          matchReason: scored.matchReason,
+          calls: scored.calls.length,
+          callFiles: uniqueNames(scored.calls.map((call) => call.filePath)),
           providerFiles: uniqueNames(providerRoutes.map((providerRoute) => providerRoute.filePath))
         });
       }
     }
   }
-  return links.sort((a, b) => b.calls - a.calls || a.consumer.localeCompare(b.consumer) || a.provider.localeCompare(b.provider) || a.route.localeCompare(b.route)).slice(0, 100);
+  return links
+    .sort(
+      (a, b) =>
+        b.confidence - a.confidence ||
+        b.calls - a.calls ||
+        a.consumer.localeCompare(b.consumer) ||
+        a.provider.localeCompare(b.provider) ||
+        a.route.localeCompare(b.route)
+    )
+    .slice(0, 100);
+}
+
+function scoreServiceLink(
+  route: string,
+  calls: FleetProjectSummary["httpCalls"],
+  consumer: string,
+  provider: string,
+  providerNames: string[],
+  providerAliases?: Set<string>
+): { calls: FleetProjectSummary["httpCalls"]; host?: string; confidence: number; matchReason: string } | null {
+  const hostCalls = calls.filter((call) => call.host && isServiceHost(call.host));
+  const providerHostCalls = hostCalls.filter((call) => call.host && hostMatchesProject(call.host, providerAliases));
+  const relativeCalls = calls.filter((call) => !call.host || !isServiceHost(call.host));
+  const methodIsAny = route.split(/\s+/, 1)[0] === "ANY" || calls.some((call) => (call.method ?? "ANY").toUpperCase() === "ANY");
+
+  if (providerHostCalls.length > 0) {
+    return {
+      calls: providerHostCalls,
+      host: uniqueNames(providerHostCalls.map((call) => call.host).filter((host): host is string => Boolean(host)))[0],
+      confidence: 0.95,
+      matchReason: "method_path_host"
+    };
+  }
+
+  if (hostCalls.length > 0 && relativeCalls.length === 0) {
+    return null;
+  }
+
+  if (relativeCalls.length === 0) {
+    return null;
+  }
+
+  const candidateProviders = providerNames.filter((name) => name !== consumer).length;
+  if (candidateProviders <= 1) {
+    return {
+      calls: relativeCalls,
+      confidence: methodIsAny ? 0.65 : 0.85,
+      matchReason: methodIsAny ? "any_path_unique" : "method_path_unique"
+    };
+  }
+
+  return {
+    calls: relativeCalls,
+    confidence: 0.45,
+    matchReason: methodIsAny ? "any_path_ambiguous" : "method_path_ambiguous"
+  };
+}
+
+function hostAliasesForProject(projectName: string, project: FleetProjectSummary): Set<string> {
+  const aliases = new Set<string>();
+  for (const value of [projectName, path.basename(project.root), ...project.packages]) {
+    addHostAliasVariants(aliases, value);
+  }
+  return aliases;
+}
+
+function hostMatchesProject(host: string, aliases: Set<string> | undefined): boolean {
+  if (!aliases || aliases.size === 0) {
+    return false;
+  }
+  const hostAliases = new Set<string>();
+  addHostAliasVariants(hostAliases, stripHostPort(host));
+  for (const alias of hostAliases) {
+    if (aliases.has(alias)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isServiceHost(host: string): boolean {
+  const normalized = stripHostPort(host);
+  return Boolean(normalized) && !isLocalHost(normalized);
+}
+
+function stripHostPort(host: string): string {
+  const normalized = host.trim().toLowerCase().replace(/\.$/, "");
+  const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(normalized);
+  if (bracketed) {
+    return bracketed[1];
+  }
+  return normalized.replace(/:\d+$/, "");
+}
+
+function isLocalHost(host: string): boolean {
+  return host === "localhost" || host === "0.0.0.0" || host === "::1" || host.startsWith("127.") || host === "host.docker.internal";
+}
+
+function addHostAliasVariants(aliases: Set<string>, value: string): void {
+  for (const candidate of hostAliasCandidates(value)) {
+    const normalized = normalizeHostAlias(candidate);
+    if (!normalized) {
+      continue;
+    }
+    aliases.add(normalized);
+    const firstLabel = normalized.split(".")[0];
+    if (firstLabel) {
+      aliases.add(firstLabel);
+      const stripped = stripServiceSuffix(firstLabel);
+      if (stripped) {
+        aliases.add(stripped);
+      }
+    }
+    const stripped = stripServiceSuffix(normalized);
+    if (stripped) {
+      aliases.add(stripped);
+    }
+  }
+}
+
+function hostAliasCandidates(value: string): string[] {
+  const trimmed = value.trim();
+  const segments = trimmed.split(/[/:]/).filter(Boolean);
+  return [trimmed, segments[segments.length - 1] ?? trimmed];
+}
+
+function normalizeHostAlias(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/^@[^/]+\//, "")
+    .replace(/[_\s]+/g, "-")
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "");
+}
+
+function stripServiceSuffix(value: string): string {
+  return value.replace(/-(?:api|service|server|backend|app)$/i, "");
 }
 
 async function deleteDbArtifacts(project: ProjectRecord): Promise<{ deleted: string[]; skipped: string[] }> {

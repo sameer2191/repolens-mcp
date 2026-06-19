@@ -465,7 +465,17 @@ export interface FleetProjectSummary {
   totals?: { files: number; symbols: number; edges: number };
   languages: Array<{ language: Language; files: number; symbols: number }>;
   routes: Array<{ name: string; method?: string; path?: string; filePath: string }>;
-  httpCalls: Array<{ name: string; method?: string; path?: string; filePath: string; line?: number }>;
+  httpCalls: Array<{
+    name: string;
+    method?: string;
+    path?: string;
+    host?: string;
+    scheme?: string;
+    url?: string;
+    urlKind?: "absolute" | "relative";
+    filePath: string;
+    line?: number;
+  }>;
   packages: string[];
   dependencies: string[];
   risks: string[];
@@ -490,7 +500,17 @@ export interface FleetSummary {
   languages: Array<{ language: Language; files: number; symbols: number; projects: number }>;
   sharedDependencies: Array<{ name: string; projects: string[]; count: number }>;
   routeOverlaps: Array<{ route: string; projects: string[]; count: number }>;
-  serviceLinks: Array<{ consumer: string; provider: string; route: string; calls: number; callFiles: string[]; providerFiles: string[] }>;
+  serviceLinks: Array<{
+    consumer: string;
+    provider: string;
+    route: string;
+    host?: string;
+    confidence: number;
+    matchReason: string;
+    calls: number;
+    callFiles: string[];
+    providerFiles: string[];
+  }>;
   risks: string[];
 }
 
