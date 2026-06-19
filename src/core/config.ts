@@ -11,6 +11,7 @@ export interface RepoLensConfig {
   root?: string;
   dbPath?: string;
   maxFileBytes?: number;
+  autoIndexFileLimit?: number | false;
   autoIndexLabel?: string;
   bootstrapPackage?: string | false;
 }
@@ -39,6 +40,12 @@ const keyAliases = new Map<string, keyof RepoLensConfig>([
   ["maxfilebytes", "maxFileBytes"],
   ["max-file-bytes", "maxFileBytes"],
   ["max_file_bytes", "maxFileBytes"],
+  ["autoindexfilelimit", "autoIndexFileLimit"],
+  ["auto-index-file-limit", "autoIndexFileLimit"],
+  ["auto_index_file_limit", "autoIndexFileLimit"],
+  ["autoindexlimit", "autoIndexFileLimit"],
+  ["auto-index-limit", "autoIndexFileLimit"],
+  ["auto_index_limit", "autoIndexFileLimit"],
   ["autoindexlabel", "autoIndexLabel"],
   ["auto-index-label", "autoIndexLabel"],
   ["auto_index_label", "autoIndexLabel"],
@@ -137,6 +144,12 @@ function normalizeRawConfigValue(key: keyof RepoLensConfig, value: unknown): Rep
   if (key === "maxFileBytes" && typeof value === "number") {
     return parsePositiveInteger(value, "maxFileBytes");
   }
+  if (key === "autoIndexFileLimit" && typeof value === "number") {
+    return parsePositiveInteger(value, "autoIndexFileLimit");
+  }
+  if (key === "autoIndexFileLimit" && value === false) {
+    return false;
+  }
   if (key === "bootstrapPackage" && value === false) {
     return false;
   }
@@ -163,6 +176,12 @@ function parseConfigValue(key: keyof RepoLensConfig, value: string): RepoLensCon
   }
   if (key === "maxFileBytes") {
     return parsePositiveInteger(Number(trimmed), "maxFileBytes");
+  }
+  if (key === "autoIndexFileLimit" && ["0", "false", "off", "no", "none", "unlimited"].includes(trimmed.toLowerCase())) {
+    return false;
+  }
+  if (key === "autoIndexFileLimit") {
+    return parsePositiveInteger(Number(trimmed), "autoIndexFileLimit");
   }
   if (key === "bootstrapPackage" && ["0", "false", "off", "no"].includes(trimmed.toLowerCase())) {
     return false;
@@ -191,7 +210,7 @@ function normalizeConfigKey(key: string): keyof RepoLensConfig {
 
 function sortConfig(config: RepoLensConfig): RepoLensConfig {
   const sorted: RepoLensConfig = {};
-  for (const key of ["autoIndex", "autoSync", "autoSyncIntervalMs", "root", "dbPath", "maxFileBytes", "autoIndexLabel", "bootstrapPackage"] as const) {
+  for (const key of ["autoIndex", "autoSync", "autoSyncIntervalMs", "root", "dbPath", "maxFileBytes", "autoIndexFileLimit", "autoIndexLabel", "bootstrapPackage"] as const) {
     if (config[key] !== undefined) {
       sorted[key] = config[key] as never;
     }

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -48,6 +49,8 @@ import { agentProfiles, installAgentSetup, type AgentId } from "../core/agents.j
 import { configValueFromEnvOrConfig, loadRepoLensConfig } from "../core/config.js";
 import { watchRepository } from "../core/watcher.js";
 import type { IndexResult } from "../core/types.js";
+
+const DEFAULT_AUTO_INDEX_FILE_LIMIT = 20_000;
 
 export async function startMcpServer(): Promise<void> {
   await maybeAutoIndexOnStartup().catch((error: unknown) => {
@@ -167,7 +170,7 @@ export async function startMcpServer(): Promise<void> {
       description: "Read or update the persistent RepoLens config used for defaults such as MCP startup auto-indexing.",
       inputSchema: {
         action: z.enum(["list", "get", "set", "reset"]).default("list"),
-        key: z.string().optional().describe("Config key, such as autoIndex, root, dbPath, maxFileBytes, autoIndexLabel, or bootstrapPackage."),
+        key: z.string().optional().describe("Config key, such as autoIndex, root, dbPath, maxFileBytes, autoIndexFileLimit, autoIndexLabel, or bootstrapPackage."),
         value: z.string().optional().describe("Value for set actions."),
         configPath: z.string().optional().describe("Optional alternate config file path.")
       }
@@ -644,6 +647,11 @@ export async function maybeAutoIndexOnStartup(env: NodeJS.ProcessEnv = process.e
     return undefined;
   }
   const root = path.resolve(cwd, env.REPOLENS_ROOT ?? config.root ?? ".");
+  const autoIndexFileLimit = parseAutoIndexFileLimit(
+    configValueFromEnvOrConfig(env.REPOLENS_AUTO_INDEX_LIMIT, config.autoIndexFileLimit),
+    "REPOLENS_AUTO_INDEX_LIMIT"
+  );
+  assertAutoIndexWithinLimit(root, autoIndexFileLimit);
   const result = await runIndex({
     root,
     dbPath: env.REPOLENS_DB ?? config.dbPath,
@@ -666,6 +674,11 @@ export function maybeStartAutoSyncOnStartup(env: NodeJS.ProcessEnv = process.env
 
   const autoIndexMode = parseAutoIndexMode(configValueFromEnvOrConfig(env.REPOLENS_AUTO_INDEX, config.autoIndex));
   const root = path.resolve(cwd, env.REPOLENS_ROOT ?? config.root ?? ".");
+  const autoIndexFileLimit = parseAutoIndexFileLimit(
+    configValueFromEnvOrConfig(env.REPOLENS_AUTO_INDEX_LIMIT, config.autoIndexFileLimit),
+    "REPOLENS_AUTO_INDEX_LIMIT"
+  );
+  assertAutoIndexWithinLimit(root, autoIndexFileLimit);
   const intervalMs =
     parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_AUTO_SYNC_INTERVAL_MS, config.autoSyncIntervalMs), "REPOLENS_AUTO_SYNC_INTERVAL_MS") ??
     2500;
@@ -715,6 +728,62 @@ function parseAutoIndexMode(value: string | undefined): { incremental: boolean }
     return { incremental: true };
   }
   throw new Error("Invalid REPOLENS_AUTO_INDEX. Use 1, true, incremental, full, or 0.");
+}
+
+function parseAutoIndexFileLimit(value: string | undefined, name: string): number | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return DEFAULT_AUTO_INDEX_FILE_LIMIT;
+  }
+  if (["0", "false", "off", "no", "none", "unlimited"].includes(normalized)) {
+    return undefined;
+  }
+  return parsePositiveIntEnv(value, name);
+}
+
+function assertAutoIndexWithinLimit(root: string, limit: number | undefined): void {
+  if (limit === undefined) {
+    return;
+  }
+  const count = countAutoIndexCandidateFiles(root, limit);
+  if (count > limit) {
+    throw new Error(
+      `Auto-index safety limit exceeded: found more than ${limit} candidate files under ${root}. Set REPOLENS_AUTO_INDEX_LIMIT to a higher value, set it to off, or run an explicit index command.`
+    );
+  }
+}
+
+function countAutoIndexCandidateFiles(root: string, limit: number): number {
+  const stack = [root];
+  let count = 0;
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (!shouldSkipAutoIndexCountDirectory(entry.name)) {
+          stack.push(path.join(current, entry.name));
+        }
+        continue;
+      }
+      if (entry.isFile() || entry.isSymbolicLink()) {
+        count += 1;
+        if (count > limit) {
+          return count;
+        }
+      }
+    }
+  }
+  return count;
+}
+
+function shouldSkipAutoIndexCountDirectory(name: string): boolean {
+  return new Set([".git", ".repolens", "node_modules", "dist", "build", "coverage", ".next", ".turbo", ".cache"]).has(name);
 }
 
 function parseBooleanEnv(value: string | undefined, name: string): boolean {

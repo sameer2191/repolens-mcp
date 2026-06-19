@@ -16,8 +16,8 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance plus opt-in hook/reminder files for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
-- **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`, and keep long-running MCP sessions fresh with git-aware `REPOLENS_AUTO_SYNC`.
-- **Persistent local config**: `config set auto-index incremental` and `config set auto-sync true` store defaults for MCP startup indexing, live-session syncing, root, database path, max file size, labels, and graph-package bootstrap without requiring shell env vars.
+- **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`, bound startup indexing with `REPOLENS_AUTO_INDEX_LIMIT`, and keep long-running MCP sessions fresh with git-aware `REPOLENS_AUTO_SYNC`.
+- **Persistent local config**: `config set auto-index incremental` and `config set auto-sync true` store defaults for MCP startup indexing, startup file-count limits, live-session syncing, root, database path, max file size, labels, and graph-package bootstrap without requiring shell env vars.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes, optionally skipping unchanged git polls with `--git-aware`.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI; first index can bootstrap a missing database from `.repolens/graph.rlgz`.
 - **Operational dashboard**: browse graph previews, structural filters, references, semantic/vector search, schema counts, relationship patterns, label property hints, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
@@ -296,19 +296,21 @@ Optional startup indexing for MCP sessions:
 [mcp_servers.repolens.env]
 REPOLENS_DB = ".repolens/memory.db"
 REPOLENS_AUTO_INDEX = "1"          # incremental startup refresh
+REPOLENS_AUTO_INDEX_LIMIT = "20000" # fail startup auto-index above this candidate-file count; set "off" for explicit unlimited
 REPOLENS_AUTO_SYNC = "1"           # keep a long-running MCP session fresh after git changes
 REPOLENS_AUTO_SYNC_INTERVAL_MS = "2500"
 REPOLENS_ROOT = "."                # optional, defaults to process cwd
 REPOLENS_MAX_FILE_BYTES = "750000" # optional
 ```
 
-Set `REPOLENS_AUTO_INDEX=full` to force a full rebuild on startup. Leave it unset for the default manual-index behavior.
+Set `REPOLENS_AUTO_INDEX=full` to force a full rebuild on startup. Leave it unset for the default manual-index behavior. Startup auto-index and auto-sync use a default `REPOLENS_AUTO_INDEX_LIMIT=20000` safety budget; raise the limit for intentionally large repos or set it to `off` when you want explicit unlimited startup indexing.
 `REPOLENS_AUTO_SYNC=1` starts a background git-aware watcher after startup; unchanged HEAD/status polls are skipped, while committed or dirty worktree changes trigger incremental refreshes.
 
 You can also persist those defaults without shell env vars:
 
 ```bash
 node --experimental-sqlite dist/src/cli.js config set auto-index incremental
+node --experimental-sqlite dist/src/cli.js config set auto-index-limit 20000
 node --experimental-sqlite dist/src/cli.js config set auto-sync true
 node --experimental-sqlite dist/src/cli.js config set auto-sync-interval-ms 2500
 node --experimental-sqlite dist/src/cli.js config set root /path/to/repo

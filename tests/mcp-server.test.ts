@@ -168,6 +168,36 @@ test("MCP startup auto-index indexes the configured repository", async () => {
   assert.equal(fullResult?.root, fixture);
 });
 
+test("MCP startup auto-index enforces the configured file safety limit", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-mcp-auto-index-limit-"));
+  await assert.rejects(
+    () =>
+      maybeAutoIndexOnStartup(
+        {
+          REPOLENS_AUTO_INDEX: "1",
+          REPOLENS_AUTO_INDEX_LIMIT: "1",
+          REPOLENS_ROOT: fixture,
+          REPOLENS_DB: path.join(tmp, "blocked.db"),
+          REPOLENS_CONFIG: path.join(tmp, "missing-config.json")
+        },
+        process.cwd()
+      ),
+    /Auto-index safety limit exceeded/
+  );
+
+  const allowed = await maybeAutoIndexOnStartup(
+    {
+      REPOLENS_AUTO_INDEX: "1",
+      REPOLENS_AUTO_INDEX_LIMIT: "off",
+      REPOLENS_ROOT: fixture,
+      REPOLENS_DB: path.join(tmp, "allowed.db"),
+      REPOLENS_CONFIG: path.join(tmp, "missing-config.json")
+    },
+    process.cwd()
+  );
+  assert.equal(allowed?.mode, "incremental");
+});
+
 test("MCP startup auto-index reads persistent RepoLens config", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-mcp-config-auto-index-"));
   const dbPath = path.join(tmp, "memory.db");
@@ -180,6 +210,7 @@ test("MCP startup auto-index reads persistent RepoLens config", async () => {
         root: fixture,
         dbPath,
         maxFileBytes: 750000,
+        autoIndexFileLimit: 1000,
         autoIndexLabel: "config-startup-test"
       },
       null,
