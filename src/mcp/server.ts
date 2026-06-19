@@ -471,9 +471,9 @@ export async function startMcpServer(): Promise<void> {
   server.registerTool(
     "query_graph",
     {
-      description: "Execute a read-only Cypher-like graph query over indexed symbols and edges. Supports MATCH node and one-hop edge patterns with simple WHERE and RETURN clauses.",
+      description: "Execute a read-only Cypher-like graph query over indexed symbols and edges. Supports MATCH node, one-hop edge, and bounded typed variable-length edge patterns with WHERE and RETURN clauses.",
       inputSchema: {
-        query: z.string().describe("Example: MATCH (a:Function)-[:CALLS]->(b) WHERE a.name = 'main' RETURN a.name,b.name LIMIT 10"),
+        query: z.string().describe("Example: MATCH (a:Function)-[:CALLS*1..3]->(b) WHERE a.name = 'main' RETURN b.name LIMIT 10"),
         limit: z.number().int().positive().max(500).optional(),
         dbPath: z.string().optional()
       }

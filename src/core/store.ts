@@ -36,6 +36,11 @@ import type {
   VectorSearchMatch
 } from "./types.js";
 
+const MAX_GRAPH_QUERY_LENGTH = 10_000;
+const MAX_GRAPH_SKIP = 5_000;
+const MAX_GRAPH_IN_VALUES = 100;
+const MAX_GRAPH_PATH_HOPS = 5;
+
 interface CountRow {
   count: number;
 }
@@ -94,10 +99,26 @@ interface SymbolVectorRow {
   updated_at: string;
 }
 
+interface GraphHopRange {
+  min: number;
+  max: number;
+}
+
 interface ParsedGraphQuery {
   pattern:
     | { kind: "node"; alias: string; label?: string }
-    | { kind: "edge"; leftAlias: string; leftLabel?: string; edgeAlias: string; edgeType?: string; rightAlias: string; rightLabel?: string; direction: "outbound" | "inbound" };
+    | {
+        kind: "edge";
+        leftAlias: string;
+        leftLabel?: string;
+        edgeAlias: string;
+        edgeAliasExplicit: boolean;
+        edgeType?: string;
+        hopRange?: GraphHopRange;
+        rightAlias: string;
+        rightLabel?: string;
+        direction: "outbound" | "inbound";
+      };
   where: GraphWhereClause[];
   returns: GraphReturnExpression[];
   orderBy: GraphOrderExpression[];
@@ -127,6 +148,12 @@ interface GraphOrderExpression {
   alias: string;
   property: string;
   direction: "ASC" | "DESC";
+}
+
+interface VariablePathAnchor {
+  side: "left" | "right";
+  column: string;
+  values: Array<string | number>;
 }
 
 export class MemoryStore {
@@ -1055,58 +1082,52 @@ export class MemoryStore {
 
   queryGraph(query: string, limit = 100): GraphQueryResult {
     const parsed = parseGraphQuery(query, clampPositive(limit, 1, 500));
-    const params: Array<string | number> = [];
+    const pathAnchor = parsed.pattern.kind === "edge" && parsed.pattern.hopRange ? variablePathAnchor(parsed.pattern, parsed.where) : undefined;
+    if (parsed.pattern.kind === "edge" && parsed.pattern.hopRange && !pathAnchor) {
+      throw new Error("Variable-length path queries require a selective WHERE anchor on one endpoint alias");
+    }
+    const prefixParams: Array<string | number> = [];
+    const whereParams: Array<string | number> = [];
     const where: string[] = [];
-    const aliasMap =
-      parsed.pattern.kind === "node"
-        ? new Map([[parsed.pattern.alias, "s"]])
-        : new Map([
-            [parsed.pattern.leftAlias, "left_symbol"],
-            [parsed.pattern.rightAlias, "right_symbol"],
-            [parsed.pattern.edgeAlias, "edges"],
-            ["e", "edges"]
-          ]);
+    const aliasMap = graphAliasMap(parsed.pattern);
+    const sourceSql = graphSourceSql(parsed.pattern, prefixParams, pathAnchor ?? undefined);
+    where.push(...sourceSql.where);
+    whereParams.push(...sourceSql.whereParams);
 
     if (parsed.pattern.kind === "node" && parsed.pattern.label) {
       where.push("lower(s.kind) = lower(?)");
-      params.push(normalizeGraphLabel(parsed.pattern.label));
+      whereParams.push(normalizeGraphLabel(parsed.pattern.label));
     } else if (parsed.pattern.kind === "edge") {
       if (parsed.pattern.leftLabel) {
         where.push("lower(left_symbol.kind) = lower(?)");
-        params.push(normalizeGraphLabel(parsed.pattern.leftLabel));
+        whereParams.push(normalizeGraphLabel(parsed.pattern.leftLabel));
       }
       if (parsed.pattern.rightLabel) {
         where.push("lower(right_symbol.kind) = lower(?)");
-        params.push(normalizeGraphLabel(parsed.pattern.rightLabel));
+        whereParams.push(normalizeGraphLabel(parsed.pattern.rightLabel));
       }
-      if (parsed.pattern.edgeType) {
+      if (parsed.pattern.edgeType && !parsed.pattern.hopRange) {
         where.push("edges.type = ?");
-        params.push(parsed.pattern.edgeType.toUpperCase());
+        whereParams.push(parsed.pattern.edgeType.toUpperCase());
       }
     }
 
     if (parsed.where.length > 0) {
       where.push(
         `(${parsed.where
-          .map((clause) => `(${clause.map((condition) => whereSql(condition, aliasMap, params)).join(" AND ")})`)
+          .map((clause) => `(${clause.map((condition) => whereSql(condition, aliasMap, whereParams)).join(" AND ")})`)
           .join(" OR ")})`
       );
     }
 
     const selectSql = parsed.returns.map((expr, index) => `${returnSql(expr, aliasMap)} AS c${index}`);
-    const fromSql =
-      parsed.pattern.kind === "node"
-        ? "symbols s"
-        : parsed.pattern.direction === "outbound"
-          ? "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.source JOIN symbols right_symbol ON right_symbol.qualified_name = edges.target"
-          : "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.target JOIN symbols right_symbol ON right_symbol.qualified_name = edges.source";
     const orderSql = parsed.orderBy.map((expr) => `${propertySql(expr.alias, expr.property, aliasMap)} ${expr.direction}`);
     const sql =
-      `SELECT ${parsed.distinct ? "DISTINCT " : ""}${selectSql.join(", ")} FROM ${fromSql}` +
+      `${sourceSql.withSql}SELECT ${parsed.distinct ? "DISTINCT " : ""}${selectSql.join(", ")} FROM ${sourceSql.fromSql}` +
       `${where.length ? ` WHERE ${where.join(" AND ")}` : ""}` +
       `${orderSql.length ? ` ORDER BY ${orderSql.join(", ")}` : ""}` +
       " LIMIT ? OFFSET ?";
-    const rows = this.db.prepare(sql).all(...params, parsed.limit, parsed.skip) as Array<Record<string, string | number | boolean | null>>;
+    const rows = this.db.prepare(sql).all(...prefixParams, ...whereParams, parsed.limit, parsed.skip) as Array<Record<string, string | number | boolean | null>>;
     return {
       query,
       columns: parsed.returns.map((expr) => expr.output),
@@ -2000,6 +2021,8 @@ export class MemoryStore {
       CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source);
       CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target);
       CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(type);
+      CREATE INDEX IF NOT EXISTS idx_edges_type_source ON edges(type, source);
+      CREATE INDEX IF NOT EXISTS idx_edges_type_target ON edges(type, target);
       CREATE TABLE IF NOT EXISTS symbol_vectors (
         qualified_name TEXT PRIMARY KEY,
         dimensions INTEGER NOT NULL,
@@ -2782,10 +2805,166 @@ function stableCommunityId(label: string, members: string[]): string {
   return `community-${hash.toString(16).padStart(8, "0")}`;
 }
 
+function graphAliasMap(pattern: ParsedGraphQuery["pattern"]): Map<string, string> {
+  const map = new Map<string, string>();
+  if (pattern.kind === "node") {
+    addGraphAlias(map, pattern.alias, "s");
+    return map;
+  }
+
+  addGraphAlias(map, pattern.leftAlias, "left_symbol");
+  addGraphAlias(map, pattern.rightAlias, "right_symbol");
+  if (pattern.hopRange) {
+    if (pattern.edgeAliasExplicit) {
+      throw new Error("Relationship aliases are not supported for variable-length path queries");
+    }
+    return map;
+  }
+
+  if (pattern.edgeAliasExplicit || !map.has(pattern.edgeAlias)) {
+    addGraphAlias(map, pattern.edgeAlias, "edges");
+  }
+  return map;
+}
+
+function addGraphAlias(map: Map<string, string>, alias: string, table: string): void {
+  if (map.has(alias)) {
+    throw new Error(`Duplicate query alias '${alias}'`);
+  }
+  map.set(alias, table);
+}
+
+function graphSourceSql(
+  pattern: ParsedGraphQuery["pattern"],
+  prefixParams: Array<string | number>,
+  pathAnchor?: VariablePathAnchor
+): { withSql: string; fromSql: string; where: string[]; whereParams: Array<string | number> } {
+  if (pattern.kind === "node") {
+    return { withSql: "", fromSql: "symbols s", where: [], whereParams: [] };
+  }
+  if (!pattern.hopRange) {
+    return {
+      withSql: "",
+      fromSql:
+        pattern.direction === "outbound"
+          ? "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.source JOIN symbols right_symbol ON right_symbol.qualified_name = edges.target"
+          : "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.target JOIN symbols right_symbol ON right_symbol.qualified_name = edges.source",
+      where: [],
+      whereParams: []
+    };
+  }
+  if (!pattern.edgeType) {
+    throw new Error("Variable-length path queries require an explicit relationship type");
+  }
+  if (!pathAnchor) {
+    throw new Error("Variable-length path queries require a selective WHERE anchor on one endpoint alias");
+  }
+
+  const edgeType = pattern.edgeType.toUpperCase();
+  const baseLeft = pattern.direction === "outbound" ? "e.source" : "e.target";
+  const baseRight = pattern.direction === "outbound" ? "e.target" : "e.source";
+  const anchorColumn = pathAnchor.side === "left" ? baseLeft : baseRight;
+  const anchorPlaceholders = pathAnchor.values.map(() => "?").join(", ");
+  const recursive =
+    pathAnchor.side === "left"
+      ? graphForwardRecursiveSql(pattern.direction)
+      : graphBackwardRecursiveSql(pattern.direction);
+  prefixParams.push(edgeType, ...pathAnchor.values.map((value) => String(value).toLowerCase()), edgeType, pattern.hopRange.max);
+
+  return {
+    withSql:
+      "WITH RECURSIVE paths(left_qn, right_qn, depth, visited) AS (" +
+      `SELECT ${baseLeft}, ${baseRight}, 1, char(0) || ${baseLeft} || char(0) || ${baseRight} || char(0) ` +
+      `FROM edges e WHERE e.type = ? AND ${anchorColumn} IN (` +
+      `SELECT qualified_name FROM symbols WHERE lower(CAST(${pathAnchor.column} AS TEXT)) IN (${anchorPlaceholders})` +
+      ") " +
+      "UNION ALL " +
+      recursive +
+      ") ",
+    fromSql:
+      "paths JOIN symbols left_symbol ON left_symbol.qualified_name = paths.left_qn " +
+      "JOIN symbols right_symbol ON right_symbol.qualified_name = paths.right_qn",
+    where: ["paths.depth >= ?"],
+    whereParams: [pattern.hopRange.min]
+  };
+}
+
+function graphForwardRecursiveSql(direction: "outbound" | "inbound"): string {
+  const joinCondition = direction === "outbound" ? "e.source = paths.right_qn" : "e.target = paths.right_qn";
+  const nextNode = direction === "outbound" ? "e.target" : "e.source";
+  return (
+    `SELECT paths.left_qn, ${nextNode}, paths.depth + 1, paths.visited || ${nextNode} || char(0) ` +
+    `FROM paths JOIN edges e ON ${joinCondition} AND e.type = ? ` +
+    `WHERE paths.depth < ? AND instr(paths.visited, char(0) || ${nextNode} || char(0)) = 0`
+  );
+}
+
+function graphBackwardRecursiveSql(direction: "outbound" | "inbound"): string {
+  const joinCondition = direction === "outbound" ? "e.target = paths.left_qn" : "e.source = paths.left_qn";
+  const nextNode = direction === "outbound" ? "e.source" : "e.target";
+  return (
+    `SELECT ${nextNode}, paths.right_qn, paths.depth + 1, char(0) || ${nextNode} || paths.visited ` +
+    `FROM paths JOIN edges e ON ${joinCondition} AND e.type = ? ` +
+    `WHERE paths.depth < ? AND instr(paths.visited, char(0) || ${nextNode} || char(0)) = 0`
+  );
+}
+
+function variablePathAnchor(pattern: Extract<ParsedGraphQuery["pattern"], { kind: "edge" }>, where: GraphWhereClause[]): VariablePathAnchor | null {
+  if (where.length === 0) {
+    return null;
+  }
+  let anchor: VariablePathAnchor | null = null;
+  for (const clause of where) {
+    const condition = clause.find(
+      (candidate) =>
+        (candidate.alias === pattern.leftAlias || candidate.alias === pattern.rightAlias) &&
+        (candidate.operator === "=" || candidate.operator === "IN") &&
+        isVariablePathAnchorProperty(candidate.property)
+    );
+    if (!condition) {
+      return null;
+    }
+    const side = condition.alias === pattern.leftAlias ? "left" : "right";
+    const column = variablePathAnchorColumn(condition.property);
+    if (anchor && (anchor.side !== side || anchor.column !== column)) {
+      return null;
+    }
+    const values = Array.isArray(condition.value) ? condition.value : [condition.value];
+    const previousValues: Array<string | number> = anchor ? anchor.values : [];
+    anchor = {
+      side,
+      column,
+      values: [...new Set([...previousValues, ...values])]
+    };
+    if (anchor.values.length > MAX_GRAPH_IN_VALUES) {
+      throw new Error(`Variable-length path anchors support at most ${MAX_GRAPH_IN_VALUES} values`);
+    }
+  }
+  return anchor;
+}
+
+function isVariablePathAnchorProperty(property: string): boolean {
+  return ["name", "filepath", "file", "qualifiedname", "qualified"].includes(normalizeGraphProperty(property));
+}
+
+function variablePathAnchorColumn(property: string): string {
+  const normalized = normalizeGraphProperty(property);
+  if (normalized === "filepath" || normalized === "file") {
+    return "file_path";
+  }
+  if (normalized === "qualifiedname" || normalized === "qualified") {
+    return "qualified_name";
+  }
+  return "name";
+}
+
 function parseGraphQuery(query: string, defaultLimit: number): ParsedGraphQuery {
   const trimmed = trimTrailingSemicolons(query.trim());
   if (!trimmed) {
     throw new Error("query_graph requires a query");
+  }
+  if (trimmed.length > MAX_GRAPH_QUERY_LENGTH) {
+    throw new Error(`query_graph query length must be ${MAX_GRAPH_QUERY_LENGTH} characters or less`);
   }
   if (hasMutationKeyword(stripQuotedStrings(trimmed))) {
     throw new Error("query_graph is read-only; mutation keywords are not supported");
@@ -2795,6 +2974,9 @@ function parseGraphQuery(query: string, defaultLimit: number): ParsedGraphQuery 
   const limit = limitClause.value === undefined ? defaultLimit : clampPositive(limitClause.value, 1, 500);
   const skipClause = consumeTrailingNumberClause(limitClause.text, "SKIP");
   const skip = skipClause.value === undefined ? 0 : Math.max(0, skipClause.value);
+  if (skip > MAX_GRAPH_SKIP) {
+    throw new Error(`SKIP must be ${MAX_GRAPH_SKIP} or less`);
+  }
   const orderClause = consumeTrailingKeywordClause(skipClause.text, "ORDER BY");
   const orderBy = orderClause.value === undefined ? [] : parseOrderBy(orderClause.value);
   const shape = parseQueryShape(orderClause.text);
@@ -2846,7 +3028,9 @@ function parseMatchPattern(pattern: string): ParsedGraphQuery["pattern"] {
       leftAlias: parsedLeft.node.alias,
       leftLabel: parsedLeft.node.label,
       edgeAlias: parsedLeft.edge.alias,
+      edgeAliasExplicit: parsedLeft.edge.aliasExplicit,
       edgeType: parsedLeft.edge.type,
+      hopRange: parsedLeft.edge.hopRange,
       rightAlias: parsedRight.alias,
       rightLabel: parsedRight.label,
       direction
@@ -2863,7 +3047,9 @@ function parseMatchPattern(pattern: string): ParsedGraphQuery["pattern"] {
     leftAlias: parsedLeft.alias,
     leftLabel: parsedLeft.label,
     edgeAlias: parsedRight.edge.alias,
+    edgeAliasExplicit: parsedRight.edge.aliasExplicit,
     edgeType: parsedRight.edge.type,
+    hopRange: parsedRight.edge.hopRange,
     rightAlias: parsedRight.node.alias,
     rightLabel: parsedRight.node.label,
     direction
@@ -3048,6 +3234,9 @@ function parseWhereList(value: string): Array<string | number> {
   if (values.length === 0) {
     throw new Error("IN requires at least one value");
   }
+  if (values.length > MAX_GRAPH_IN_VALUES) {
+    throw new Error(`IN lists support at most ${MAX_GRAPH_IN_VALUES} values`);
+  }
   return values;
 }
 
@@ -3080,7 +3269,10 @@ function parseNodePattern(value: string): { alias: string; label?: string } | nu
   return { alias, ...(label ? { label } : {}) };
 }
 
-function parseNodeEdgeSide(value: string, nodeSide: "left" | "right"): { node: { alias: string; label?: string }; edge: { alias: string; type?: string } } | null {
+function parseNodeEdgeSide(
+  value: string,
+  nodeSide: "left" | "right"
+): { node: { alias: string; label?: string }; edge: { alias: string; aliasExplicit: boolean; type?: string; hopRange?: GraphHopRange } } | null {
   const trimmed = value.trim();
   const bracketStart = trimmed.indexOf("[");
   const bracketEnd = trimmed.indexOf("]");
@@ -3111,25 +3303,55 @@ function parseNodeEdgeSide(value: string, nodeSide: "left" | "right"): { node: {
   return node ? { node, edge } : null;
 }
 
-function parseEdgePattern(value: string): { alias: string; type?: string } | null {
+function parseEdgePattern(value: string): { alias: string; aliasExplicit: boolean; type?: string; hopRange?: GraphHopRange } | null {
   const trimmed = value.trim();
   if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
     return null;
   }
-  const body = trimmed.slice(1, -1).trim();
+  let body = trimmed.slice(1, -1).trim();
+  let hopRange: GraphHopRange | undefined;
+  const rangeIndex = body.indexOf("*");
+  if (rangeIndex >= 0) {
+    if (body.indexOf("*", rangeIndex + 1) >= 0) {
+      return null;
+    }
+    hopRange = parseGraphHopRange(body.slice(rangeIndex + 1).trim());
+    body = body.slice(0, rangeIndex).trim();
+  }
   if (!body) {
-    return { alias: "e" };
+    return { alias: "e", aliasExplicit: false, ...(hopRange ? { hopRange } : {}) };
   }
   const colon = body.indexOf(":");
   const alias = colon < 0 ? body : body.slice(0, colon);
   const type = colon < 0 ? undefined : body.slice(colon + 1);
+  const aliasExplicit = alias.length > 0;
   if (alias && !isIdentifier(alias)) {
     return null;
   }
   if (type !== undefined && !isLabelIdentifier(type)) {
     return null;
   }
-  return { alias: alias || "e", ...(type ? { type } : {}) };
+  return { alias: alias || "e", aliasExplicit, ...(type ? { type } : {}), ...(hopRange ? { hopRange } : {}) };
+}
+
+function parseGraphHopRange(value: string): GraphHopRange {
+  const exact = /^(\d+)$/.exec(value);
+  const range = exact ? undefined : /^(\d+)\.\.(\d+)$/.exec(value);
+  if (!exact && !range) {
+    throw new Error("Variable-length paths require explicit hop bounds like *1..3");
+  }
+  const min = Number(exact ? exact[1] : range?.[1]);
+  const max = Number(exact ? exact[1] : range?.[2]);
+  if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1) {
+    throw new Error("Variable-length path bounds must start at 1 or greater");
+  }
+  if (max < min) {
+    throw new Error("Variable-length path max hops must be greater than or equal to min hops");
+  }
+  if (max > MAX_GRAPH_PATH_HOPS) {
+    throw new Error(`Variable-length path max hops must be ${MAX_GRAPH_PATH_HOPS} or less`);
+  }
+  return { min, max };
 }
 
 function parseQueryShape(text: string): { matchText: string; whereText?: string; returnText: string } | null {

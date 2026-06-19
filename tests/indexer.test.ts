@@ -300,6 +300,82 @@ export function checkout(order: Order) {
   }
 });
 
+test("query graph supports bounded variable-length paths with guardrails", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-path-query-"));
+  const store = new MemoryStore(path.join(tmp, "memory.db"));
+  const qualified = (name: string) => `src/chain.ts:function:${name}:1`;
+  try {
+    store.insertFile({
+      path: "src/chain.ts",
+      language: "typescript",
+      bytes: 160,
+      lines: 16,
+      sha256: "chain",
+      skipped: false
+    });
+    for (const [index, name] of ["alpha", "beta", "gamma", "delta"].entries()) {
+      store.insertSymbol({
+        filePath: "src/chain.ts",
+        language: "typescript",
+        kind: "function",
+        name,
+        qualifiedName: qualified(name),
+        startLine: index * 3 + 1,
+        endLine: index * 3 + 2,
+        exported: true
+      });
+    }
+    store.insertEdge({ source: qualified("alpha"), target: qualified("beta"), type: "CALLS" });
+    store.insertEdge({ source: qualified("beta"), target: qualified("gamma"), type: "CALLS" });
+    store.insertEdge({ source: qualified("gamma"), target: qualified("delta"), type: "CALLS" });
+    store.insertEdge({ source: qualified("delta"), target: qualified("beta"), type: "CALLS" });
+
+    const outbound = store.queryGraph(
+      "MATCH (a:Function)-[:CALLS*1..3]->(b:Function) WHERE a.name = 'alpha' RETURN b.name ORDER BY b.name LIMIT 10"
+    );
+    assert.deepEqual(outbound.rows.map((row) => row["b.name"]), ["beta", "delta", "gamma"]);
+
+    const capped = store.queryGraph(
+      "MATCH (a:Function)-[:CALLS*1..2]->(b:Function) WHERE a.name = 'alpha' RETURN b.name ORDER BY b.name LIMIT 10"
+    );
+    assert.deepEqual(capped.rows.map((row) => row["b.name"]), ["beta", "gamma"]);
+
+    const inbound = store.queryGraph(
+      "MATCH (a)<-[:CALLS*1..2]-(b) WHERE a.name = 'gamma' RETURN b.name ORDER BY b.name LIMIT 10"
+    );
+    assert.deepEqual(inbound.rows.map((row) => row["b.name"]), ["alpha", "beta", "delta"]);
+
+    const rightAnchored = store.queryGraph(
+      "MATCH (a)-[:CALLS*1..2]->(b) WHERE b.name = 'gamma' RETURN a.name ORDER BY a.name LIMIT 10"
+    );
+    assert.deepEqual(rightAnchored.rows.map((row) => row["a.name"]), ["alpha", "beta", "delta"]);
+
+    const nodeAliasE = store.queryGraph("MATCH (e)-[:CALLS]->(b) WHERE e.name = 'alpha' RETURN e.name,b.name LIMIT 1");
+    assert.equal(nodeAliasE.rows[0]?.["e.name"], "alpha");
+    assert.equal(nodeAliasE.rows[0]?.["b.name"], "beta");
+
+    assert.throws(
+      () => store.queryGraph("MATCH (a)-[:CALLS*1..999]->(b) WHERE a.name = 'alpha' RETURN b.name"),
+      /max hops must be 5 or less/
+    );
+    assert.throws(
+      () => store.queryGraph("MATCH (a)-[:CALLS*1..]->(b) WHERE a.name = 'alpha' RETURN b.name"),
+      /explicit hop bounds/
+    );
+    assert.throws(
+      () => store.queryGraph("MATCH (a)-[:CALLS*1..3]->(b) RETURN b.name LIMIT 10"),
+      /selective WHERE anchor/
+    );
+    assert.throws(
+      () => store.queryGraph("MATCH (a)-[r:CALLS*1..2]->(b) WHERE a.name = 'alpha' RETURN b.name"),
+      /Relationship aliases are not supported/
+    );
+    assert.throws(() => store.queryGraph("MATCH (a)-[a:CALLS]->(b) RETURN a.name LIMIT 1"), /Duplicate query alias 'a'/);
+  } finally {
+    store.close();
+  }
+});
+
 test("indexes a TypeScript repo with symbols, routes, search, and architecture", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-test-"));
   const dbPath = path.join(tmp, "memory.db");
