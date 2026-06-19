@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
-import { addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
+import { addCallEdges, addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
@@ -208,6 +208,41 @@ export function save(order: Order) {
 
   assert.deepEqual(flow?.metadata?.mappings, [{ argument: "order", parameter: "order" }]);
   assert.ok(!edges.some((edge) => edge.source === checkout && edge.target === remoteSave && edge.type === "DATA_FLOWS"));
+});
+
+test("resolves receiver method calls from constructor-assigned class instances", () => {
+  const content = `
+export class MemoryOrderRepository {
+  save(order: Order) {
+    return order;
+  }
+}
+
+export class AuditRepository {
+  save(order: Order) {
+    return order;
+  }
+}
+
+export function checkout(order: Order) {
+  const repo = new MemoryOrderRepository();
+  return repo.save(order);
+}
+`;
+  const extracted = extractFromFile("src/repository.ts", "typescript", content);
+  const edges = addCallEdges(extracted.symbols, new Map([["src/repository.ts", content]]));
+  const checkout = extracted.symbols.find((symbol) => symbol.name === "checkout")?.qualifiedName;
+  const memorySave = extracted.symbols.find((symbol) => symbol.kind === "method" && symbol.name === "save" && symbol.metadata?.parentClass === "MemoryOrderRepository")?.qualifiedName;
+  const auditSave = extracted.symbols.find((symbol) => symbol.kind === "method" && symbol.name === "save" && symbol.metadata?.parentClass === "AuditRepository")?.qualifiedName;
+  const typedEdge = edges.find((edge) => edge.source === checkout && edge.target === memorySave && edge.type === "CALLS_LOCAL");
+
+  assert.ok(memorySave);
+  assert.ok(auditSave);
+  assert.ok(typedEdge);
+  assert.equal(typedEdge.metadata?.resolution, "receiver_type");
+  assert.equal(typedEdge.metadata?.receiver, "repo");
+  assert.equal(typedEdge.metadata?.receiverType, "MemoryOrderRepository");
+  assert.ok(!edges.some((edge) => edge.source === checkout && edge.target === auditSave));
 });
 
 test("indexes data-flow edges and removes stale data-flow edges incrementally", async () => {
