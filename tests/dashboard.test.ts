@@ -4,53 +4,76 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { indexRepository } from "../src/core/indexer.js";
+import { runIndex } from "../src/core/api.js";
 import { serveDashboard } from "../src/dashboard/server.js";
 
 const fixture = path.join(process.cwd(), "tests", "fixtures", "sample-repo");
 
 test("dashboard serves graph, query, search, and report endpoints", async (t) => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-dashboard-"));
-  const dbPath = path.join(tmp, "memory.db");
-  await indexRepository({ root: fixture, dbPath });
-
-  let server: http.Server;
+  const previousCatalog = process.env.REPOLENS_CATALOG;
   try {
-    server = await serveDashboard({ dbPath, port: 0 });
-  } catch (error) {
-    if (isListenPermissionError(error)) {
-      t.skip("local sandbox does not permit binding a dashboard smoke-test port");
-      return;
+    process.env.REPOLENS_CATALOG = path.join(tmp, "projects.json");
+    const dbPath = path.join(tmp, "memory.db");
+    await Promise.all([
+      runIndex({ root: fixture, dbPath, runLabel: "dashboard-service-a" }),
+      runIndex({ root: fixture, dbPath: path.join(tmp, "service-b.db"), runLabel: "dashboard-service-b" })
+    ]);
+
+    let server: http.Server;
+    try {
+      server = await serveDashboard({ dbPath, port: 0 });
+    } catch (error) {
+      if (isListenPermissionError(error)) {
+        t.skip("local sandbox does not permit binding a dashboard smoke-test port");
+        return;
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  try {
-    const baseUrl = dashboardUrl(server);
-    const page = await fetchText(`${baseUrl}/`);
-    assert.match(page, /RepoLens MCP/);
+    try {
+      const baseUrl = dashboardUrl(server);
+      const page = await fetchText(`${baseUrl}/`);
+      assert.match(page, /RepoLens MCP/);
+      assert.match(page, /Fleet Galaxy/);
 
-    const schema = await fetchJson<{ totals: { files: number; symbols: number; edges: number } }>(`${baseUrl}/api/schema`);
-    assert.equal(schema.totals.files, 22);
-    assert.ok(schema.totals.symbols > 0);
-    assert.ok(schema.totals.edges > 0);
+      const schema = await fetchJson<{ totals: { files: number; symbols: number; edges: number } }>(`${baseUrl}/api/schema`);
+      assert.equal(schema.totals.files, 22);
+      assert.ok(schema.totals.symbols > 0);
+      assert.ok(schema.totals.edges > 0);
 
-    const graph = await fetchJson<{ nodes: unknown[]; edges: unknown[] }>(`${baseUrl}/api/graph?limit=25`);
-    assert.ok(graph.nodes.length > 0);
-    assert.ok(graph.edges.length > 0);
+      const graph = await fetchJson<{ nodes: unknown[]; edges: unknown[] }>(`${baseUrl}/api/graph?limit=25`);
+      assert.ok(graph.nodes.length > 0);
+      assert.ok(graph.edges.length > 0);
 
-    const search = await fetchJson<{ code: unknown[]; symbols: Array<{ name: string }> }>(`${baseUrl}/api/search?q=createOrder`);
-    assert.ok(search.symbols.some((symbol) => symbol.name === "createOrder"));
+      const fleetGraph = await fetchJson<{ totals: { projectNodes: number; graphNodes: number; crossRepoEdges: number }; nodes: unknown[]; edges: unknown[] }>(
+        `${baseUrl}/api/fleet-graph?limit=20&maxNodes=200&maxEdges=500`
+      );
+      assert.equal(fleetGraph.totals.projectNodes, 2);
+      assert.ok(fleetGraph.totals.graphNodes >= 2);
+      assert.ok(fleetGraph.totals.crossRepoEdges >= 1);
+      assert.ok(fleetGraph.nodes.length >= 2);
+      assert.ok(fleetGraph.edges.length >= 1);
 
-    const query = await fetchJson<{ rows: Array<Record<string, unknown>> }>(
-      `${baseUrl}/api/query-graph?q=${encodeURIComponent("MATCH (f:Function) RETURN f.name,f.filePath LIMIT 3")}`
-    );
-    assert.ok(query.rows.length > 0);
+      const search = await fetchJson<{ code: unknown[]; symbols: Array<{ name: string }> }>(`${baseUrl}/api/search?q=createOrder`);
+      assert.ok(search.symbols.some((symbol) => symbol.name === "createOrder"));
 
-    const report = await fetchText(`${baseUrl}/api/report?format=markdown&graphLimit=25`);
-    assert.match(report, /# RepoLens Architecture Report/);
+      const query = await fetchJson<{ rows: Array<Record<string, unknown>> }>(
+        `${baseUrl}/api/query-graph?q=${encodeURIComponent("MATCH (f:Function) RETURN f.name,f.filePath LIMIT 3")}`
+      );
+      assert.ok(query.rows.length > 0);
+
+      const report = await fetchText(`${baseUrl}/api/report?format=markdown&graphLimit=25`);
+      assert.match(report, /# RepoLens Architecture Report/);
+    } finally {
+      await closeServer(server);
+    }
   } finally {
-    await closeServer(server);
+    if (previousCatalog === undefined) {
+      delete process.env.REPOLENS_CATALOG;
+    } else {
+      process.env.REPOLENS_CATALOG = previousCatalog;
+    }
   }
 });
 

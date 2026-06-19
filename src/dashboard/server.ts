@@ -1,5 +1,5 @@
 import http from "node:http";
-import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, findReferences, fleetSummary, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols, vectorSearch } from "../core/api.js";
+import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, findReferences, fleetGraph, fleetSummary, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols, vectorSearch } from "../core/api.js";
 
 export interface DashboardOptions {
   dbPath?: string;
@@ -52,6 +52,15 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
         sendJson(response, findDependencyCycles(numberParam(url, "limit") ?? 25, options.dbPath));
       } else if (url.pathname === "/api/fleet") {
         sendJson(response, await fleetSummary(numberParam(url, "limit") ?? 50));
+      } else if (url.pathname === "/api/fleet-graph") {
+        sendJson(
+          response,
+          await fleetGraph({
+            limit: numberParam(url, "limit") ?? 20,
+            maxNodes: numberParam(url, "maxNodes") ?? 500,
+            maxEdges: numberParam(url, "maxEdges") ?? 1000
+          })
+        );
       } else if (url.pathname === "/api/report") {
         const format = url.searchParams.get("format") === "html" ? "html" : "markdown";
         const body = architectureReport({ format, graphLimit: numberParam(url, "graphLimit") ?? 300 }, options.dbPath);
@@ -239,6 +248,18 @@ function dashboardHtml(): string {
         <h2>Graph Preview</h2>
         <canvas id="graph-canvas"></canvas>
       </section>
+      <section>
+        <h2>Fleet Galaxy</h2>
+        <div class="sub" id="fleet-galaxy-summary">Loading indexed project graph.</div>
+        <canvas id="fleet-canvas"></canvas>
+        <div class="toolbar" style="margin-top:10px">
+          <span class="pill">Project</span>
+          <span class="pill">Dependency</span>
+          <span class="pill">Route</span>
+          <span class="pill">Language</span>
+          <span class="pill">Cross-repo call</span>
+        </div>
+      </section>
       <div class="wide-grid">
         <section>
           <h2>Languages</h2>
@@ -307,7 +328,11 @@ function dashboardHtml(): string {
     const cypherQuery = document.querySelector('#cypher-query');
     const canvas = document.querySelector('#graph-canvas');
     const ctx = canvas.getContext('2d');
+    const fleetCanvas = document.querySelector('#fleet-canvas');
+    const fleetCtx = fleetCanvas.getContext('2d');
+    const fleetGalaxySummary = document.querySelector('#fleet-galaxy-summary');
     let graphState = { nodes: [], edges: [] };
+    let fleetState = { nodes: [], edges: [] };
 
     function metric(label, value) { return '<div class="metric"><b>' + fmt.format(value) + '</b><span>' + label + '</span></div>'; }
     function item(text, cls='') { return '<div class="' + cls + '">' + text + '</div>'; }
@@ -321,13 +346,14 @@ function dashboardHtml(): string {
       return url.toString();
     }
     async function load() {
-      const [arch, schema, graph, dead, communityRows, fleet] = await Promise.all([
+      const [arch, schema, graph, dead, communityRows, fleet, fleetGalaxy] = await Promise.all([
         fetch('/api/architecture').then(r => r.json()),
         fetch('/api/schema').then(r => r.json()),
         fetch('/api/graph?limit=500').then(r => r.json()),
         fetch('/api/dead-code?limit=8').then(r => r.json()),
         fetch('/api/communities?limit=8&minSize=4').then(r => r.json()),
-        fetch('/api/fleet?limit=20').then(r => r.json())
+        fetch('/api/fleet?limit=20').then(r => r.json()),
+        fetch('/api/fleet-graph?limit=20&maxNodes=500&maxEdges=1000').then(r => r.json())
       ]);
       indexed.textContent = 'Indexed ' + new Date(arch.indexedAt).toLocaleString();
       metrics.innerHTML = metric('files', arch.totals.files) + metric('symbols', arch.totals.symbols) + metric('edges', arch.totals.edges) + metric('lines', arch.totals.lines);
@@ -345,8 +371,12 @@ function dashboardHtml(): string {
       cycles.innerHTML = arch.dependencyCycles.length ? arch.dependencyCycles.map(c => item('<b>' + escapeHtml(c.clusters.join(' -> ')) + '</b><div class="sub">' + fmt.format(c.edges) + ' internal cycle edges</div><div class="path">' + escapeHtml(c.recommendation) + '</div>')).join('') : item('No cross-cluster dependency cycles found.');
       communities.innerHTML = communityRows.length ? communityRows.map(c => item('<b>' + escapeHtml(c.label) + '</b><div class="sub">' + fmt.format(c.members) + ' members - cohesion ' + c.cohesion.toFixed(2) + ' - ' + fmt.format(c.internalEdges) + ' internal edges</div><div class="path">' + escapeHtml(c.files.slice(0, 4).join(' | ')) + '</div><div class="sub">' + escapeHtml(c.representativeSymbols.slice(0, 4).map(s => s.name).join(', ')) + '</div>')).join('') : item('No graph communities found.');
       graphState = prepareGraph(graph);
+      fleetState = prepareFleetGraph(fleetGalaxy);
+      fleetGalaxySummary.textContent = fmt.format(fleetGalaxy.totals.projectNodes) + ' projects, ' + fmt.format(fleetGalaxy.totals.graphNodes) + ' nodes, ' + fmt.format(fleetGalaxy.totals.graphEdges) + ' edges, ' + fmt.format(fleetGalaxy.totals.crossRepoEdges) + ' cross-repo links.';
       resizeGraph();
+      resizeFleetGraph();
       drawGraph();
+      drawFleetGraph();
     }
     async function doSearch() {
       const q = search.value.trim();
@@ -397,6 +427,12 @@ function dashboardHtml(): string {
       canvas.height = Math.max(320, Math.floor(rect.height * devicePixelRatio));
       ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     }
+    function resizeFleetGraph() {
+      const rect = fleetCanvas.getBoundingClientRect();
+      fleetCanvas.width = Math.max(320, Math.floor(rect.width * devicePixelRatio));
+      fleetCanvas.height = Math.max(320, Math.floor(rect.height * devicePixelRatio));
+      fleetCtx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
     function drawGraph() {
       const w = canvas.clientWidth, h = canvas.clientHeight;
       for (let step = 0; step < 2; step += 1) {
@@ -425,13 +461,83 @@ function dashboardHtml(): string {
       }
       requestAnimationFrame(drawGraph);
     }
+    function prepareFleetGraph(graph) {
+      const nodes = graph.nodes.map(node => ({ ...node, x: 0, y: 0 }));
+      const byId = new Map(nodes.map(node => [node.id, node]));
+      const projects = nodes.filter(node => node.group === 'project');
+      const cx = 360, cy = 210;
+      const ring = Math.max(120, Math.min(230, projects.length * 34));
+      projects.forEach((node, index) => {
+        const angle = projects.length === 1 ? -Math.PI / 2 : (Math.PI * 2 * index) / projects.length - Math.PI / 2;
+        node.x = cx + Math.cos(angle) * ring;
+        node.y = cy + Math.sin(angle) * ring * 0.62;
+      });
+      const satellites = new Map();
+      for (const edge of graph.edges) {
+        const source = byId.get(edge.source), target = byId.get(edge.target);
+        if (!source || !target) continue;
+        const project = source.group === 'project' ? source : target.group === 'project' ? target : null;
+        const other = project === source ? target : source;
+        if (project && other.group !== 'project') {
+          const list = satellites.get(project.id) || [];
+          if (!list.includes(other)) list.push(other);
+          satellites.set(project.id, list);
+        }
+      }
+      for (const [projectId, list] of satellites.entries()) {
+        const project = byId.get(projectId);
+        if (!project) continue;
+        list.forEach((node, index) => {
+          if (node.x || node.y) return;
+          const angle = (Math.PI * 2 * index) / Math.max(1, list.length);
+          const radius = node.group === 'language' ? 42 : node.group === 'route' ? 66 : 88;
+          node.x = project.x + Math.cos(angle) * radius;
+          node.y = project.y + Math.sin(angle) * radius;
+        });
+      }
+      nodes.forEach((node, index) => {
+        if (!node.x && !node.y) {
+          const angle = (Math.PI * 2 * index) / Math.max(1, nodes.length);
+          node.x = cx + Math.cos(angle) * 260;
+          node.y = cy + Math.sin(angle) * 160;
+        }
+      });
+      return { nodes, edges: graph.edges.map(edge => ({ ...edge, sourceNode: byId.get(edge.source), targetNode: byId.get(edge.target) })).filter(edge => edge.sourceNode && edge.targetNode) };
+    }
+    function drawFleetGraph() {
+      const w = fleetCanvas.clientWidth, h = fleetCanvas.clientHeight;
+      fleetCtx.clearRect(0, 0, w, h);
+      const scaleX = w / 720, scaleY = h / 430;
+      const edgeColors = { CROSS_REPO_HTTP_CALLS:'#be123c', ROUTE_OVERLAP:'#b45309', SHARES_DEPENDENCY:'#7c3aed', DEPENDS_ON:'#64748b', USES_LANGUAGE:'#0f766e', PROVIDES_ROUTE:'#2563eb', CALLS_ENDPOINT:'#0891b2' };
+      for (const edge of fleetState.edges) {
+        fleetCtx.strokeStyle = edgeColors[edge.type] || 'rgba(71,85,105,.22)';
+        fleetCtx.lineWidth = edge.type === 'CROSS_REPO_HTTP_CALLS' ? 2.2 : 1;
+        fleetCtx.beginPath();
+        fleetCtx.moveTo(edge.sourceNode.x * scaleX, edge.sourceNode.y * scaleY);
+        fleetCtx.lineTo(edge.targetNode.x * scaleX, edge.targetNode.y * scaleY);
+        fleetCtx.stroke();
+      }
+      const palette = { project:'#111827', language:'#0f766e', dependency:'#6d28d9', route:'#be123c' };
+      for (const node of fleetState.nodes) {
+        const x = node.x * scaleX, y = node.y * scaleY;
+        fleetCtx.fillStyle = palette[node.group] || '#64748b';
+        fleetCtx.beginPath();
+        fleetCtx.arc(x, y, node.group === 'project' ? 9 : 5, 0, Math.PI * 2);
+        fleetCtx.fill();
+        if (node.group === 'project') {
+          fleetCtx.fillStyle = '#1f2937';
+          fleetCtx.font = '12px Inter, system-ui, sans-serif';
+          fleetCtx.fillText(node.label.slice(0, 28), x + 12, y + 4);
+        }
+      }
+    }
     search.addEventListener('input', () => { clearTimeout(window.__t); window.__t = setTimeout(doSearch, 120); });
     referencesRun.addEventListener('click', doReferences);
     semanticRun.addEventListener('click', doSemanticSearch);
     vectorRun.addEventListener('click', doVectorSearch);
     graphRun.addEventListener('click', doGraphSearch);
     cypherRun.addEventListener('click', doCypherQuery);
-    window.addEventListener('resize', resizeGraph);
+    window.addEventListener('resize', () => { resizeGraph(); resizeFleetGraph(); drawFleetGraph(); });
     load().catch(err => { document.body.innerHTML = '<pre>' + escapeHtml(err.stack || err) + '</pre>'; });
   </script>
 </body>
