@@ -29,7 +29,7 @@ Run the MCP server with:
 node --experimental-sqlite dist/src/cli.js mcp
 ```
 
-The server exposes tools for indexing, benchmarking, config management, project cataloging, fleet summaries, cross-repo graphing, code search, secret scanning, symbol/reference lookup, graph schema, graph search, semantic/vector search, context packs, read-only graph queries, trace ingestion, impact analysis, architecture reports, ADR memory, and graph package import/export.
+The server exposes tools for indexing, benchmarking, config management, project cataloging, fleet summaries, cross-repo graphing, code search, secret scanning, symbol/reference lookup, graph schema with relationship patterns and label properties, graph search, semantic/vector search, context packs, read-only graph queries, trace ingestion, impact analysis, architecture reports, ADR memory, and graph package import/export.
 
 ## Local Data Rules
 

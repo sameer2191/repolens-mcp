@@ -34,7 +34,7 @@ On Windows PowerShell, the local installer mirrors the shell installer:
 ## Before Editing
 
 1. Run `index` or `benchmark` for the target repository.
-2. Use `architecture`, `schema`, `communities`, or `fleet-summary` to understand the project shape.
+2. Use `architecture`, `schema`, `communities`, or `fleet-summary` to understand the project shape. `schema` includes relationship patterns and label property hints for safer graph queries.
 3. Use `search`, `symbols`, `references`, `trace`, `cycles`, and `context-pack` for focused code context.
 4. Use `changes` after edits to map uncommitted files back to graph impact.
 
@@ -47,6 +47,7 @@ On Windows PowerShell, the local installer mirrors the shell installer:
 - `trace_symbol` / `trace_path`: walk call, data-flow, or cross-service relationships.
 - `context_pack`: combine semantic, vector, graph, search, snippets, and nearby edges.
 - `get_architecture`: summarize languages, hotspots, packages, entrypoints, risks, and recommendations.
+- `get_graph_schema`: inspect labels, edge types, relationship patterns, and label properties before writing graph queries.
 - `scan_secrets`: return redacted high-signal secret findings from indexed lines.
 - `architecture_report`: generate Markdown or HTML reports.
 - `export_graph_package` / `import_graph_package`: share or bootstrap local graph snapshots.

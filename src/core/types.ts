@@ -227,6 +227,11 @@ export interface GraphSchema {
   languages: Array<{ language: Language; files: number; symbols: number }>;
   nodeLabels: Array<{ kind: string; count: number }>;
   edgeTypes: Array<{ type: string; count: number }>;
+  relationshipPatterns: Array<{ sourceKind: string; type: string; targetKind: string; count: number }>;
+  labelProperties: Array<{
+    kind: string;
+    properties: Array<{ name: string; type: string; source: "column" | "metadata"; count: number }>;
+  }>;
 }
 
 export interface GraphSearchOptions {
