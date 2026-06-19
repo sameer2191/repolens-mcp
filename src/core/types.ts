@@ -507,13 +507,34 @@ export interface DeleteProjectResult {
 export interface WatchIndexOptions extends IndexOptions {
   intervalMs?: number;
   maxRuns?: number;
+  maxPolls?: number;
+  gitAware?: boolean;
+  skipInitialRun?: boolean;
   signal?: AbortSignal;
   onResult?: (result: IndexResult) => void;
+  onSkip?: (event: WatchSkipEvent) => void;
+}
+
+export interface GitWatchFingerprint {
+  gitRoot: string;
+  head: string;
+  statusHash: string;
+  trackedFiles: number;
+  key: string;
+}
+
+export interface WatchSkipEvent {
+  root: string;
+  checkedAt: string;
+  reason: "git-unchanged";
+  fingerprint: GitWatchFingerprint;
 }
 
 export interface WatchIndexSummary {
   root: string;
   dbPath: string;
   runs: IndexResult[];
+  polls: number;
+  skippedPolls: WatchSkipEvent[];
   stoppedAt: string;
 }

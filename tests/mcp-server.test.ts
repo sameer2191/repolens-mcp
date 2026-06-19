@@ -7,7 +7,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import fc from "fast-check";
-import { maybeAutoIndexOnStartup } from "../src/mcp/server.js";
+import { maybeAutoIndexOnStartup, maybeStartAutoSyncOnStartup } from "../src/mcp/server.js";
 
 const fixture = path.join(process.cwd(), "tests", "fixtures", "sample-repo");
 const cliPath = path.join(process.cwd(), "dist", "src", "cli.js");
@@ -193,6 +193,27 @@ test("MCP startup auto-index reads persistent RepoLens config", async () => {
   assert.equal(result?.root, fixture);
   assert.equal(result?.dbPath, dbPath);
   assert.ok((result?.symbols ?? 0) > 0);
+});
+
+test("MCP startup auto-sync is disabled by default and can start from env", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-mcp-auto-sync-"));
+  const disabled = maybeStartAutoSyncOnStartup({ REPOLENS_CONFIG: path.join(tmp, "missing-config.json") }, fixture);
+  assert.equal(disabled, undefined);
+
+  const enabled = maybeStartAutoSyncOnStartup(
+    {
+      REPOLENS_AUTO_SYNC: "1",
+      REPOLENS_AUTO_INDEX: "1",
+      REPOLENS_AUTO_SYNC_INTERVAL_MS: "250",
+      REPOLENS_AUTO_SYNC_POLLS: "1",
+      REPOLENS_ROOT: fixture,
+      REPOLENS_DB: path.join(tmp, "memory.db"),
+      REPOLENS_CONFIG: path.join(tmp, "missing-config.json")
+    },
+    process.cwd()
+  );
+  assert.ok(enabled);
+  enabled.abort();
 });
 
 test("MCP stdio JSON-RPC initializes and lists registered tools", async () => {

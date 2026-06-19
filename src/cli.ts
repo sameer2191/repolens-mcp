@@ -93,10 +93,13 @@ async function main(): Promise<void> {
         dbPath: stringFlag(args, "db"),
         intervalMs: numberFlag(args, "interval-ms"),
         maxRuns: numberFlag(args, "runs"),
+        maxPolls: numberFlag(args, "polls"),
+        gitAware: booleanFlag(args, "git-aware"),
         maxFileBytes: numberFlag(args, "max-file-bytes"),
         runLabel: stringFlag(args, "label"),
         signal: controller.signal,
-        onResult: (result) => process.stderr.write(`${jsonBlock({ event: "indexed", ...result })}\n`)
+        onResult: (result) => process.stderr.write(`${jsonBlock({ event: "indexed", ...result })}\n`),
+        onSkip: (event) => process.stderr.write(`${jsonBlock({ event: "skipped", ...event })}\n`)
       });
       print(summary);
       break;
@@ -635,7 +638,7 @@ Usage:
   repolens-mcp impact <path-or-symbol...> [--db path]
   repolens-mcp schema [--db path]
   repolens-mcp communities [--db path] [--limit n] [--min-size n]
-  repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--max-file-bytes n] [--label name]
+  repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--polls n] [--git-aware] [--max-file-bytes n] [--label name]
   repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern wildcard] [--file-pattern src/] [--min-degree n] [--db path]
   repolens-mcp semantic "meaningful concept query" [--db path] [--limit n]
   repolens-mcp vector "meaningful concept query" [--db path] [--limit n]
