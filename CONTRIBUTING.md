@@ -29,6 +29,14 @@ Avoid committing local `.repolens` databases, graph exports containing private s
 
 Use pull requests for changes that affect published behavior. The protected `main` branch is expected to keep `verify` and CodeQL `Analyze` green before merge.
 
+## Commit Sign-Offs
+
+Substantial code, workflow, release, or documentation changes should include a Developer Certificate of Origin sign-off. See [DCO.md](DCO.md).
+
+```bash
+git commit -s
+```
+
 ## Security-Sensitive Changes
 
 Changes that touch indexing, import resolution, file walking, graph package import/export, dashboard APIs, secret scanning, install scripts, or GitHub workflows need extra review. Include the threat model in the pull request body and add regression coverage for traversal, unsafe deserialization, unredacted secret output, or workflow permission changes when applicable.
@@ -37,7 +45,7 @@ Report vulnerabilities through the process in [SECURITY.md](SECURITY.md), not pu
 
 ## Package Boundary
 
-The npm package is intentionally limited to runtime JavaScript, user-facing docs, the server manifest, the installer, and license/security files. Before publishing or changing the `files` list, run:
+The npm package is intentionally limited to runtime JavaScript, user-facing docs, governance notices, the server manifest, the installer, and license/security files. Before publishing or changing the `files` list, run:
 
 ```bash
 npm run build

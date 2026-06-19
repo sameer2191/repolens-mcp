@@ -24,7 +24,7 @@ before committing any generated memory artifacts.
 
 ## Published Package Boundary
 
-The npm package is restricted to runtime JavaScript, public documentation, the server manifest, installer, license, contribution guide, and security policy. The CI package gate checks the dry-run tarball and blocks local graph artifacts such as `.repolens/`, SQLite database files, WAL/shm sidecars, graph packages, and legacy local memory folders.
+The npm package is restricted to runtime JavaScript, public documentation, the server manifest, installer, license, governance notices, contribution guide, third-party notices, and security policy. The CI package gate checks the dry-run tarball and blocks local graph artifacts such as `.repolens/`, SQLite database files, WAL/shm sidecars, graph packages, and legacy local memory folders.
 
 Run this before publishing or reviewing release-file changes:
 
