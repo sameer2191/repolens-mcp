@@ -71,7 +71,7 @@ export const agentProfiles: AgentProfile[] = [
 
 export async function installAgentSetup(options: AgentSetupOptions): Promise<AgentSetupResult> {
   const targetDir = path.resolve(options.targetDir ?? process.cwd());
-  const serverName = options.serverName ?? "repolens";
+  const serverName = assertSafeServerName(options.serverName ?? "repolens");
   const selected = selectAgents(options.agents);
   const dbPath = options.dbPath ?? ".repolens/memory.db";
   const renderOptions = {
@@ -152,7 +152,7 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
 
 export async function uninstallAgentSetup(options: Omit<AgentSetupOptions, "command" | "cliPath" | "dbPath">): Promise<AgentSetupResult> {
   const targetDir = path.resolve(options.targetDir ?? process.cwd());
-  const serverName = options.serverName ?? "repolens";
+  const serverName = assertSafeServerName(options.serverName ?? "repolens");
   const selected = selectAgents(options.agents);
   const hookPaths = options.withHooks ? ["docs/repolens-agent-hooks.md", ...selected.map((profile) => profile.hookPath ?? profile.instructionPath)] : [];
   const relativePaths = ["docs/repolens-agent-setup.md", ...selected.map((profile) => profile.instructionPath), ...hookPaths];
@@ -305,33 +305,34 @@ ${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "context
 }
 
 export function agentConfigSnippet(agent: AgentId, options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
+  const serverName = assertSafeServerName(options.serverName);
   const args = ["--experimental-sqlite", options.cliPath, "mcp"];
-  const jsonServer = mcpServerConfig({ ...options, managed: false });
+  const jsonServer = mcpServerConfig({ ...options, serverName, managed: false });
 
   switch (agent) {
     case "codex":
-      return `[mcp_servers.${options.serverName}]
+      return `[mcp_servers.${serverName}]
 command = ${JSON.stringify(options.command)}
 args = ${JSON.stringify(args)}
 startup_timeout_sec = 120
 
-[mcp_servers.${options.serverName}.env]
+[mcp_servers.${serverName}.env]
 NODE_NO_WARNINGS = "1"
 REPOLENS_DB = ${JSON.stringify(options.dbPath)}`;
     case "claude":
     case "gemini":
     case "antigravity":
-      return JSON.stringify({ mcpServers: { [options.serverName]: jsonServer } }, null, 2);
+      return JSON.stringify({ mcpServers: { [serverName]: jsonServer } }, null, 2);
     case "vscode":
-      return JSON.stringify({ servers: { [options.serverName]: jsonServer } }, null, 2);
+      return JSON.stringify({ servers: { [serverName]: jsonServer } }, null, 2);
     case "zed":
-      return JSON.stringify({ context_servers: { [options.serverName]: { command: { path: options.command, args } } } }, null, 2);
+      return JSON.stringify({ context_servers: { [serverName]: { command: { path: options.command, args } } } }, null, 2);
     case "opencode":
-      return JSON.stringify({ mcp: { [options.serverName]: { type: "local", command: [options.command, ...args] } } }, null, 2);
+      return JSON.stringify({ mcp: { [serverName]: { type: "local", command: [options.command, ...args] } } }, null, 2);
     case "kilocode":
     case "openclaw":
     case "kiro":
-      return JSON.stringify({ mcpServers: { [options.serverName]: jsonServer } }, null, 2);
+      return JSON.stringify({ mcpServers: { [serverName]: jsonServer } }, null, 2);
     case "aider":
       return `# Add this project instruction file to Aider context:
 /read CONVENTIONS.md
@@ -434,10 +435,11 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function assertSafeServerName(serverName: string): void {
+function assertSafeServerName(serverName: string): string {
   if (!/^[A-Za-z0-9_-]+$/.test(serverName)) {
     throw new Error("Server name for generated agent config must contain only letters, numbers, underscores, or hyphens.");
   }
+  return serverName;
 }
 
 function agentInstructionBlock(options: { profile: AgentProfile; serverName: string; command: string; cliPath: string; dbPath: string }): string {

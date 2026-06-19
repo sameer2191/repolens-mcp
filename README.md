@@ -288,7 +288,7 @@ repolens-mcp install-codex --db .repolens/memory.db
 repolens-mcp uninstall-codex --dry-run
 ```
 
-`install-codex` refuses to replace an existing unmanaged `mcp_servers.repolens` entry unless `--force` is passed. `uninstall-codex` removes only the RepoLens managed block and leaves unmanaged MCP entries untouched.
+`install-codex` refuses to replace an existing unmanaged `mcp_servers.repolens` entry unless `--force` is passed. Custom `--name` values are limited to letters, numbers, underscores, and hyphens so generated MCP config stays structurally safe. `uninstall-codex` removes only the RepoLens managed block and leaves unmanaged MCP entries untouched.
 
 Optional startup indexing for MCP sessions:
 

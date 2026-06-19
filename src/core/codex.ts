@@ -52,7 +52,7 @@ export interface CodexUninstallResult {
 
 export async function installCodexConfig(options: CodexInstallOptions): Promise<CodexInstallResult> {
   const configPath = path.resolve(options.configPath ?? defaultCodexConfigPath());
-  const serverName = options.serverName ?? "repolens";
+  const serverName = assertSafeServerName(options.serverName ?? "repolens");
   const block = codexManagedBlock({
     serverName,
     command: options.command,
@@ -101,6 +101,7 @@ export async function installCodexConfig(options: CodexInstallOptions): Promise<
 }
 
 export async function codexDoctor(cliPath: string, command: string, configPath = defaultCodexConfigPath(), serverName = "repolens"): Promise<CodexDoctorResult> {
+  const safeServerName = assertSafeServerName(serverName);
   const resolvedConfigPath = path.resolve(configPath);
   const existing = await fs.readFile(resolvedConfigPath, "utf8").catch(() => "");
   return {
@@ -108,7 +109,7 @@ export async function codexDoctor(cliPath: string, command: string, configPath =
     cliPath,
     configPath: resolvedConfigPath,
     configExists: existing.length > 0,
-    repolensConfigured: hasMcpServer(existing, serverName),
+    repolensConfigured: hasMcpServer(existing, safeServerName),
     managedBlockPresent: hasManagedBlock(existing),
     recommendedCommand: `repolens-mcp install-codex --db .repolens/memory.db`
   };
@@ -116,7 +117,7 @@ export async function codexDoctor(cliPath: string, command: string, configPath =
 
 export async function uninstallCodexConfig(options: CodexUninstallOptions = {}): Promise<CodexUninstallResult> {
   const configPath = path.resolve(options.configPath ?? defaultCodexConfigPath());
-  const serverName = options.serverName ?? "repolens";
+  const serverName = assertSafeServerName(options.serverName ?? "repolens");
   const existing = await fs.readFile(configPath, "utf8").catch(() => "");
   const managedBlockPresent = hasManagedBlock(existing);
   if (!managedBlockPresent) {
@@ -143,14 +144,15 @@ export async function uninstallCodexConfig(options: CodexUninstallOptions = {}):
 }
 
 export function codexManagedBlock(options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
+  const serverName = assertSafeServerName(options.serverName);
   const args = ["--experimental-sqlite", options.cliPath, "mcp"];
   return `${MANAGED_START}
-[mcp_servers.${options.serverName}]
+[mcp_servers.${serverName}]
 command = ${tomlString(options.command)}
 args = ${tomlArray(args)}
 startup_timeout_sec = 120
 
-[mcp_servers.${options.serverName}.env]
+[mcp_servers.${serverName}.env]
 NODE_NO_WARNINGS = "1"
 REPOLENS_DB = ${tomlString(options.dbPath)}
 ${MANAGED_END}
@@ -173,7 +175,7 @@ function stripManagedBlock(config: string): string {
 }
 
 function removeMcpServerSections(config: string, serverName: string): string {
-  const table = `mcp_servers.${serverName}`;
+  const table = `mcp_servers.${assertSafeServerName(serverName)}`;
   const lines = config.split(/\r?\n/);
   const kept: string[] = [];
   let skipping = false;
@@ -193,7 +195,7 @@ function removeMcpServerSections(config: string, serverName: string): string {
 }
 
 export function hasMcpServer(config: string, serverName: string): boolean {
-  return new RegExp(`^\\s*\\[mcp_servers\\.${escapeRegExp(serverName)}\\]\\s*$`, "m").test(config);
+  return new RegExp(`^\\s*\\[mcp_servers\\.${escapeRegExp(assertSafeServerName(serverName))}\\]\\s*$`, "m").test(config);
 }
 
 export function hasManagedBlock(config: string): boolean {
@@ -210,6 +212,13 @@ function tomlArray(values: string[]): string {
 
 function tomlString(value: string): string {
   return JSON.stringify(value);
+}
+
+function assertSafeServerName(serverName: string): string {
+  if (!/^[A-Za-z0-9_-]+$/.test(serverName)) {
+    throw new Error("Codex MCP server name must contain only letters, numbers, underscores, or hyphens.");
+  }
+  return serverName;
 }
 
 function escapeRegExp(value: string): string {

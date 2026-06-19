@@ -24,6 +24,33 @@ test("renders multi-agent MCP config snippets", () => {
   assert.equal(vscode.servers.repolens.command, "/usr/bin/node");
 });
 
+test("agent setup rejects unsafe MCP server names", async () => {
+  const unsafeName = 'repolens]\n[mcp_servers.evil';
+  const base = {
+    serverName: unsafeName,
+    command: "/usr/bin/node",
+    cliPath: "/repo/dist/src/cli.js",
+    dbPath: ".repolens/memory.db"
+  };
+
+  assert.throws(() => agentConfigSnippet("codex", base), /server name/i);
+
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agents-"));
+  await assert.rejects(
+    () =>
+      installAgentSetup({
+        targetDir: tmp,
+        agents: ["codex"],
+        serverName: unsafeName,
+        command: "node",
+        cliPath: "/repo/cli.js",
+        dryRun: true
+      }),
+    /server name/i
+  );
+  await assert.rejects(() => fs.readFile(path.join(tmp, "docs", "repolens-agent-setup.md"), "utf8"));
+});
+
 test("agent setup dry-run reports files without writing", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agents-"));
   const result = await installAgentSetup({
