@@ -23,6 +23,7 @@ import {
   getCodeSnippet,
   getGraphSchema,
   getProjectStatus,
+  getVersionStatus,
   graphSnapshot,
   impactAnalysis,
   ingestTraces,
@@ -75,6 +76,13 @@ async function main(): Promise<void> {
       print(result);
       break;
     }
+    case "version":
+      print(await getVersionStatus({ checkRemote: booleanFlag(args, "check"), registryUrl: stringFlag(args, "registry"), timeoutMs: numberFlag(args, "timeout-ms") }));
+      break;
+    case "update-check":
+    case "check-update":
+      print(await getVersionStatus({ checkRemote: true, registryUrl: stringFlag(args, "registry"), timeoutMs: numberFlag(args, "timeout-ms") }));
+      break;
     case "watch": {
       const root = path.resolve(args.positional[0] ?? process.cwd());
       const controller = new AbortController();
@@ -608,6 +616,8 @@ function help(): string {
 
 Usage:
   repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--write-package [graph.rlgz]]
+  repolens-mcp version [--check] [--registry url] [--timeout-ms n]
+  repolens-mcp update-check [--registry url] [--timeout-ms n]
   repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--no-secret-scan] [--secret-limit n]
   repolens-mcp list-projects [--limit n]
   repolens-mcp project-status [root-or-db-or-label]

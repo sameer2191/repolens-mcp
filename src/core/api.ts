@@ -12,6 +12,7 @@ import { buildFleetGraph, type FleetGraphOptions } from "./fleet-graph.js";
 import { indexRepository } from "./indexer.js";
 import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
+import { getVersionStatus as readVersionStatus, type VersionStatusOptions } from "./version.js";
 import { watchRepository } from "./watcher.js";
 import type { ArchitectureReportOptions } from "./report.js";
 import type {
@@ -32,6 +33,10 @@ export async function runIndex(options: IndexOptions) {
   const result = await indexRepository(options);
   await recordProjectIndex(result, options.runLabel);
   return result;
+}
+
+export async function getVersionStatus(options: VersionStatusOptions = {}) {
+  return readVersionStatus(options);
 }
 
 export async function runWatch(options: WatchIndexOptions) {

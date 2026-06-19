@@ -109,8 +109,8 @@ interface ParsedGraphQuery {
 interface GraphWhereCondition {
   alias: string;
   property: string;
-  operator: "=" | "<>" | "CONTAINS" | "STARTS WITH" | "ENDS WITH";
-  value: string;
+  operator: "=" | "<>" | "CONTAINS" | "STARTS WITH" | "ENDS WITH" | "IN" | ">" | ">=" | "<" | "<=";
+  value: string | number | Array<string | number>;
 }
 
 interface GraphReturnExpression {
@@ -2989,7 +2989,7 @@ function parseAliasClause(value: string): string {
 }
 
 function parseWherePart(part: string): GraphWhereCondition | null {
-  const operators: GraphWhereCondition["operator"][] = ["STARTS WITH", "ENDS WITH", "CONTAINS", "<>", "="];
+  const operators: GraphWhereCondition["operator"][] = ["STARTS WITH", "ENDS WITH", "CONTAINS", "IN", ">=", "<=", "<>", ">", "<", "="];
   for (const operator of operators) {
     const index = findOperatorOutsideQuotes(part, operator);
     if (index < 0) {
@@ -3003,21 +3003,40 @@ function parseWherePart(part: string): GraphWhereCondition | null {
       alias: propertyRef.alias,
       property: propertyRef.property,
       operator,
-      value: parseWhereValue(part.slice(index + operator.length).trim())
+      value: operator === "IN" ? parseWhereList(part.slice(index + operator.length).trim()) : parseWhereValue(part.slice(index + operator.length).trim(), operator)
     };
   }
   return null;
 }
 
-function parseWhereValue(value: string): string {
-  if (!value) {
-    return "";
-  }
+function parseWhereValue(value: string, operator: GraphWhereCondition["operator"]): string | number {
   const first = value[0];
-  if ((first === "'" || first === "\"") && value.endsWith(first)) {
-    return value.slice(1, -1);
+  const unquotedValue = (first === "'" || first === "\"") && value.endsWith(first) ? value.slice(1, -1) : value;
+  if (operator === ">" || operator === ">=" || operator === "<" || operator === "<=") {
+    if (!unquotedValue) {
+      throw new Error(`${operator} requires a numeric WHERE value`);
+    }
+    const parsed = Number(unquotedValue);
+    if (!Number.isFinite(parsed)) {
+      throw new Error(`${operator} requires a numeric WHERE value`);
+    }
+    return parsed;
   }
-  return value;
+  return unquotedValue;
+}
+
+function parseWhereList(value: string): Array<string | number> {
+  const trimmed = value.trim();
+  const first = trimmed[0];
+  const last = trimmed[trimmed.length - 1];
+  if (!((first === "[" && last === "]") || (first === "(" && last === ")"))) {
+    throw new Error("IN requires a bracketed or parenthesized value list");
+  }
+  const values = splitList(trimmed.slice(1, -1)).map((part) => parseWhereValue(part.trim(), "="));
+  if (values.length === 0) {
+    throw new Error("IN requires at least one value");
+  }
+  return values;
 }
 
 function parsePropertyRef(value: string): { alias: string; property?: string } | null {
@@ -3206,7 +3225,7 @@ function splitWords(text: string): string[] {
 }
 
 function findOperatorOutsideQuotes(text: string, operator: string): number {
-  if (operator === "=" || operator === "<>") {
+  if (operator === "=" || operator === "<>" || operator === ">" || operator === ">=" || operator === "<" || operator === "<=") {
     return findSymbolOperatorOutsideQuotes(text, operator);
   }
   return findKeywordOutsideQuotes(text, operator);
@@ -3332,20 +3351,31 @@ function whereSql(condition: GraphWhereCondition, aliasMap: Map<string, string>,
   const column = propertySql(condition.alias, condition.property, aliasMap);
   switch (condition.operator) {
     case "=":
-      params.push(condition.value);
+      params.push(String(condition.value));
       return `lower(CAST(${column} AS TEXT)) = lower(?)`;
     case "<>":
-      params.push(condition.value);
+      params.push(String(condition.value));
       return `lower(CAST(${column} AS TEXT)) <> lower(?)`;
     case "CONTAINS":
-      params.push(`%${condition.value.toLowerCase()}%`);
+      params.push(`%${String(condition.value).toLowerCase()}%`);
       return `lower(CAST(${column} AS TEXT)) LIKE ?`;
     case "STARTS WITH":
-      params.push(`${condition.value.toLowerCase()}%`);
+      params.push(`${String(condition.value).toLowerCase()}%`);
       return `lower(CAST(${column} AS TEXT)) LIKE ?`;
     case "ENDS WITH":
-      params.push(`%${condition.value.toLowerCase()}`);
+      params.push(`%${String(condition.value).toLowerCase()}`);
       return `lower(CAST(${column} AS TEXT)) LIKE ?`;
+    case "IN": {
+      const values = Array.isArray(condition.value) ? condition.value : [condition.value];
+      params.push(...values.map((value) => String(value).toLowerCase()));
+      return `lower(CAST(${column} AS TEXT)) IN (${values.map(() => "?").join(", ")})`;
+    }
+    case ">":
+    case ">=":
+    case "<":
+    case "<=":
+      params.push(Number(condition.value));
+      return `CAST(${column} AS REAL) ${condition.operator} ?`;
   }
 }
 

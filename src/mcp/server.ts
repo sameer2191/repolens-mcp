@@ -23,6 +23,7 @@ import {
   getCodeSnippet,
   getGraphSchema,
   getProjectStatus,
+  getVersionStatus,
   graphSnapshot,
   impactAnalysis,
   ingestTraces,
@@ -232,6 +233,18 @@ export async function startMcpServer(): Promise<void> {
           dryRun: !write
         })
       )
+  );
+
+  server.registerTool(
+    "version_status",
+    {
+      description: "Report the installed RepoLens package version and optionally check the npm registry for a newer release without installing anything.",
+      inputSchema: {
+        checkRemote: z.boolean().optional().describe("When true, query the npm registry for dist-tags.latest. Defaults to false."),
+        timeoutMs: z.number().int().positive().max(30000).optional().describe("Remote check timeout in milliseconds. Defaults to 3000.")
+      }
+    },
+    async ({ checkRemote, timeoutMs }) => text(await getVersionStatus({ checkRemote, timeoutMs }))
   );
 
   server.registerTool(
