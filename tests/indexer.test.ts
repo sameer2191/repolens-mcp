@@ -532,6 +532,25 @@ test("packs and imports a reusable graph package", async () => {
   }
 });
 
+test("index can write a reusable graph package", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-index-package-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(repo, ".repolens", "memory.db");
+  const packagePath = path.join(repo, ".repolens", "graph.rlgz");
+  const importedDbPath = path.join(tmp, "imported.db");
+  await fs.cp(fixture, repo, { recursive: true });
+
+  const result = await indexRepository({ root: repo, dbPath, runLabel: "index-package", writePackage: ".repolens/graph.rlgz" });
+  assert.equal(result.graphPackage?.outPath, packagePath);
+  assert.equal(result.graphPackage?.label, "index-package");
+  assert.ok(result.graphPackage.packageBytes > 0);
+
+  const imported = await unpackGraph(packagePath, importedDbPath);
+  assert.equal(imported.totals.files, result.filesIndexed);
+  assert.equal(imported.totals.symbols, result.symbols);
+  assert.equal(imported.totals.edges, result.edges);
+});
+
 test("bootstraps a missing database from a default graph package", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-bootstrap-"));
   const repo = path.join(tmp, "repo");
