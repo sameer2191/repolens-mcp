@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import fc from "fast-check";
 import { dashboardErrorBody } from "../src/dashboard/server.js";
+import { queryGraph } from "../src/core/api.js";
 import { buildResolvedImportEdges } from "../src/core/import-resolver.js";
 import { MemoryStore } from "../src/core/store.js";
 import type { SymbolNode } from "../src/core/types.js";
@@ -15,6 +17,65 @@ test("dashboard API errors return a generic message", () => {
   assert.equal(body, JSON.stringify({ error: "Internal server error" }));
   assert.ok(!body.includes("query_graph"));
   assert.ok(!body.includes("Error:"));
+});
+
+test("queryGraph opens databases read-only and does not create missing paths", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-readonly-query-"));
+  const missingDir = path.join(tmp, "nested");
+  const missingDb = path.join(missingDir, "memory.db");
+
+  assert.throws(() => queryGraph("MATCH (s) RETURN count(s) AS symbols", 1, missingDb), /database does not exist/);
+  assert.equal(fsSync.existsSync(missingDir), false);
+  assert.equal(fsSync.existsSync(missingDb), false);
+});
+
+test("read-only store can query existing databases but rejects writes", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-readonly-existing-"));
+  const dbPath = path.join(tmp, "memory.db");
+  let store = new MemoryStore(dbPath);
+  try {
+    store.insertFile({
+      path: "src/orders.ts",
+      language: "typescript",
+      bytes: 80,
+      lines: 3,
+      sha256: "orders",
+      skipped: false
+    });
+    store.insertSymbol({
+      filePath: "src/orders.ts",
+      language: "typescript",
+      kind: "function",
+      name: "createOrder",
+      qualifiedName: "src/orders.ts:createOrder",
+      startLine: 1,
+      endLine: 3
+    });
+  } finally {
+    store.close();
+  }
+
+  const result = queryGraph("MATCH (s:Function) WHERE s.name = 'createOrder' RETURN s.name LIMIT 1", 10, dbPath);
+  assert.equal(result.rows[0]?.["s.name"], "createOrder");
+
+  store = MemoryStore.openReadOnly(dbPath);
+  try {
+    assert.throws(
+      () =>
+        store.insertSymbol({
+          filePath: "src/orders.ts",
+          language: "typescript",
+          kind: "function",
+          name: "updateOrder",
+          qualifiedName: "src/orders.ts:updateOrder",
+          startLine: 4,
+          endLine: 6
+        }),
+      /readonly|read-only|not open for writing/i
+    );
+  } finally {
+    store.close();
+  }
 });
 
 test("tsconfig JSON comments do not corrupt comment markers inside strings", () => {

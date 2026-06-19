@@ -129,21 +129,39 @@ interface GraphOrderExpression {
   direction: "ASC" | "DESC";
 }
 
+interface MemoryStoreOptions {
+  readOnly?: boolean;
+}
+
 export class MemoryStore {
   readonly dbPath: string;
   private readonly db: DatabaseSync;
   private readonly lockOwners = new Map<string, string>();
   private codeFtsAvailable = false;
 
-  constructor(dbPath: string) {
+  constructor(dbPath: string, options: MemoryStoreOptions = {}) {
     this.dbPath = dbPath;
-    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-    this.db = new DatabaseSync(dbPath, { timeout: 5000 });
+    if (options.readOnly) {
+      if (!fs.existsSync(dbPath)) {
+        throw new Error(`RepoLens database does not exist: ${dbPath}`);
+      }
+    } else {
+      fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    }
+    this.db = new DatabaseSync(dbPath, { timeout: 5000, readOnly: options.readOnly });
     this.db.exec("PRAGMA busy_timeout = 5000");
-    this.db.exec("PRAGMA journal_mode = WAL");
-    this.db.exec("PRAGMA foreign_keys = ON");
-    this.initSchema();
-    this.codeFtsAvailable = this.initSearchIndex();
+    if (!options.readOnly) {
+      this.db.exec("PRAGMA journal_mode = WAL");
+      this.db.exec("PRAGMA foreign_keys = ON");
+      this.initSchema();
+      this.codeFtsAvailable = this.initSearchIndex();
+    } else {
+      this.codeFtsAvailable = this.hasSearchIndex();
+    }
+  }
+
+  static openReadOnly(dbPath: string): MemoryStore {
+    return new MemoryStore(dbPath, { readOnly: true });
   }
 
   close(): void {
@@ -2058,6 +2076,15 @@ export class MemoryStore {
         }
       }
       return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private hasSearchIndex(): boolean {
+    try {
+      const row = this.db.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'code_fts'").get() as { ok: number } | undefined;
+      return row?.ok === 1;
     } catch {
       return false;
     }

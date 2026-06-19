@@ -134,6 +134,17 @@ export function withStore<T>(rootOrDbPath: string | undefined, fn: (store: Memor
   }
 }
 
+export function withReadOnlyStore<T>(rootOrDbPath: string | undefined, fn: (store: MemoryStore) => T): T {
+  const root = path.resolve(process.cwd());
+  const dbPath = path.resolve(rootOrDbPath ?? process.env.REPOLENS_DB ?? defaultDbPath(root));
+  const store = MemoryStore.openReadOnly(dbPath);
+  try {
+    return fn(store);
+  } finally {
+    store.close();
+  }
+}
+
 export function getArchitecture(dbPath?: string) {
   return withStore(dbPath, (store) => store.architecture());
 }
@@ -187,7 +198,7 @@ export function vectorSearch(query: string | string[], limit?: number, dbPath?: 
 }
 
 export function queryGraph(query: string, limit?: number, dbPath?: string) {
-  return withStore(dbPath, (store) => store.queryGraph(query, limit));
+  return withReadOnlyStore(dbPath, (store) => store.queryGraph(query, limit));
 }
 
 export function findDeadCode(limit?: number, dbPath?: string) {
