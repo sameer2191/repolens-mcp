@@ -15,6 +15,22 @@ export async function submitOrder(input: unknown) {
   return response.json();
 }
 
+export const appRouter = router({
+  orders: publicProcedure.query(() => [])
+});
+
+export function readOrdersGraphql() {
+  return gql`query GetOrders { orders { id total } }`;
+}
+
+export function createOrderGrpc(client: unknown) {
+  return makeUnaryRequest("/OrderService/CreateOrder", client);
+}
+
+export function useOrdersProcedure() {
+  return trpc.orders.useQuery();
+}
+
 export function notifyOrderCreated(id: string) {
   orderEvents.emit("order.created", { id });
 }

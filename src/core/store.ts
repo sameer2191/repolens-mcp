@@ -2257,7 +2257,20 @@ function traceEdgeTypes(options: TraceOptions): string[] {
     case "data_flow":
       return ["CALLS", "CALLS_LOCAL", "DATA_FLOWS"];
     case "cross_service":
-      return ["HTTP_CALLS", "CALLS_HTTP_ENDPOINT", "OBSERVED_HTTP_CALLS", "EMITS", "LISTENS_ON", "OBSERVED_EMITS", "OBSERVED_LISTENS_ON"];
+      return [
+        "HTTP_CALLS",
+        "CALLS_HTTP_ENDPOINT",
+        "CALLS_GRAPHQL_OPERATION",
+        "CALLS_GRPC",
+        "CALLS_GRPC_METHOD",
+        "CALLS_TRPC",
+        "CALLS_TRPC_PROCEDURE",
+        "OBSERVED_HTTP_CALLS",
+        "EMITS",
+        "LISTENS_ON",
+        "OBSERVED_EMITS",
+        "OBSERVED_LISTENS_ON"
+      ];
     case "all":
       return [];
   }

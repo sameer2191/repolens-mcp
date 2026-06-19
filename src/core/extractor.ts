@@ -579,6 +579,111 @@ export function addHttpEdges(symbols: SymbolNode[], fileContents: Map<string, st
   return edges;
 }
 
+export function addProtocolCallEdges(symbols: SymbolNode[]): Edge[] {
+  const edges: Edge[] = [];
+  const seen = new Set<string>();
+  const addEdge = (edge: Edge) => {
+    const key = `${edge.source}\0${edge.target}\0${edge.type}`;
+    if (edge.source === edge.target || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    edges.push(edge);
+  };
+
+  const declaredGraphqlOperations = symbols.filter(
+    (symbol) => symbol.kind === "graphql_operation" && symbol.metadata?.source !== "template"
+  );
+  const graphqlTemplates = symbols.filter(
+    (symbol) => symbol.kind === "graphql_operation" && symbol.metadata?.source === "template"
+  );
+  const graphqlByKey = new Map<string, SymbolNode[]>();
+  for (const operation of declaredGraphqlOperations) {
+    const key = graphqlOperationKey(operation);
+    if (!key) continue;
+    graphqlByKey.set(key, [...(graphqlByKey.get(key) ?? []), operation]);
+  }
+  for (const template of graphqlTemplates) {
+    const key = graphqlOperationKey(template);
+    if (!key) continue;
+    for (const target of graphqlByKey.get(key) ?? []) {
+      const source = sourceSymbolForLine(symbols, template.startLine, template.filePath)?.qualifiedName ?? fileQualifiedName(template.filePath);
+      addEdge({
+        source,
+        target: target.qualifiedName,
+        type: "CALLS_GRAPHQL_OPERATION",
+        weight: 0.86,
+        metadata: {
+          protocol: "graphql",
+          operation: template.metadata?.operation,
+          name: template.metadata?.name,
+          call: template.qualifiedName,
+          matchReason: "operation_name"
+        }
+      });
+    }
+  }
+
+  const trpcProcedures = symbols.filter((symbol) => symbol.kind === "trpc_procedure" && typeof symbol.metadata?.procedure === "string");
+  const trpcCalls = symbols.filter((symbol) => symbol.kind === "trpc_call" && typeof symbol.metadata?.procedure === "string");
+  for (const call of trpcCalls) {
+    const callProcedure = String(call.metadata?.procedure ?? "");
+    for (const procedure of trpcProcedures) {
+      const targetProcedure = String(procedure.metadata?.procedure ?? "");
+      if (!trpcProcedureMatches(callProcedure, targetProcedure)) {
+        continue;
+      }
+      const source = sourceSymbolForLine(symbols, call.startLine, call.filePath)?.qualifiedName ?? fileQualifiedName(call.filePath);
+      addEdge({
+        source,
+        target: procedure.qualifiedName,
+        type: "CALLS_TRPC_PROCEDURE",
+        weight: call.filePath === procedure.filePath ? 0.9 : 0.78,
+        metadata: {
+          protocol: "trpc",
+          procedure: callProcedure,
+          callType: call.metadata?.callType,
+          procedureType: procedure.metadata?.procedureType,
+          call: call.qualifiedName,
+          matchReason: "procedure_name"
+        }
+      });
+    }
+  }
+
+  const grpcRoutes = symbols.filter(
+    (symbol) => symbol.kind === "route" && symbol.metadata?.protocol === "grpc" && typeof symbol.metadata?.path === "string"
+  );
+  const grpcCalls = symbols.filter((symbol) => symbol.kind === "grpc_call" && typeof symbol.metadata?.path === "string");
+  const grpcRoutesByPath = new Map<string, SymbolNode[]>();
+  for (const route of grpcRoutes) {
+    const pathValue = String(route.metadata?.path ?? "");
+    grpcRoutesByPath.set(pathValue, [...(grpcRoutesByPath.get(pathValue) ?? []), route]);
+  }
+  for (const call of grpcCalls) {
+    const pathValue = String(call.metadata?.path ?? "");
+    for (const route of grpcRoutesByPath.get(pathValue) ?? []) {
+      const source = sourceSymbolForLine(symbols, call.startLine, call.filePath)?.qualifiedName ?? fileQualifiedName(call.filePath);
+      addEdge({
+        source,
+        target: route.qualifiedName,
+        type: "CALLS_GRPC_METHOD",
+        weight: 0.86,
+        metadata: {
+          protocol: "grpc",
+          path: pathValue,
+          service: call.metadata?.service,
+          rpc: call.metadata?.rpc,
+          call: call.qualifiedName,
+          matchReason: "service_method_path"
+        }
+      });
+    }
+  }
+
+  return edges;
+}
+
 function makeSymbol(
   filePath: string,
   language: Language,
@@ -945,6 +1050,12 @@ function extractProtocolLinks(filePath: string, language: Language, content: str
     edges.push({ source, target: symbol.qualifiedName, type: symbol.kind === "trpc_call" ? "CALLS_TRPC" : "DEFINES", weight: symbol.kind === "trpc_call" ? 0.75 : 0.9, metadata: symbol.metadata });
   }
 
+  for (const symbol of extractGrpcCalls(filePath, language, content)) {
+    protocolSymbols.push(symbol);
+    const source = sourceSymbolForLine(symbols, symbol.startLine, filePath)?.qualifiedName ?? fileNode;
+    edges.push({ source, target: symbol.qualifiedName, type: "CALLS_GRPC", weight: 0.75, metadata: symbol.metadata });
+  }
+
   return { symbols: protocolSymbols, edges, imports: [] };
 }
 
@@ -1072,6 +1183,53 @@ function extractTrpc(filePath: string, language: Language, content: string): Sym
   }
 
   return symbols;
+}
+
+function extractGrpcCalls(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const seen = new Set<string>();
+  const pathRegex = /(["'`])\/([A-Za-z_][\w.]*)\/([A-Za-z_]\w*)\1/g;
+  for (const match of content.matchAll(pathRegex)) {
+    const service = match[2];
+    const rpc = match[3];
+    if (!service || !rpc || (!/Service$/.test(service) && !/^[A-Z]/.test(rpc))) {
+      continue;
+    }
+    const pathValue = `/${service}/${rpc}`;
+    const line = offsetToLine(content, match.index ?? 0);
+    const key = `${pathValue}:${line}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    symbols.push(
+      makeSymbol(filePath, language, "grpc_call", `RPC ${pathValue}`, line, line, undefined, false, {
+        protocol: "grpc",
+        method: "RPC",
+        path: pathValue,
+        service,
+        rpc
+      })
+    );
+  }
+  return symbols;
+}
+
+function graphqlOperationKey(symbol: SymbolNode): string | null {
+  const operation = typeof symbol.metadata?.operation === "string" ? symbol.metadata.operation : undefined;
+  const name = typeof symbol.metadata?.name === "string" ? symbol.metadata.name : undefined;
+  return operation && name ? `${operation}:${name}` : null;
+}
+
+function trpcProcedureMatches(callProcedure: string, targetProcedure: string): boolean {
+  if (!callProcedure || !targetProcedure) {
+    return false;
+  }
+  return (
+    callProcedure === targetProcedure ||
+    callProcedure.endsWith(`.${targetProcedure}`) ||
+    targetProcedure.endsWith(`.${callProcedure}`)
+  );
 }
 
 function extractSwiftChannelOccurrences(content: string): ChannelOccurrence[] {

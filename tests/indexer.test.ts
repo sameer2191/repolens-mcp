@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
-import { addCallEdges, addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
+import { addCallEdges, addDataFlowEdges, addProtocolCallEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
@@ -90,6 +90,47 @@ paths:
 `
   );
   assert.ok(openapi.symbols.some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/:id" && symbol.metadata?.protocol === "openapi"));
+});
+
+test("links GraphQL, gRPC, and tRPC calls to declared protocol targets", () => {
+  const graphqlContent = `
+type Order { id: ID! }
+query GetOrders { orders { id } }
+`;
+  const protoContent = `
+service OrderService {
+  rpc CreateOrder (CreateOrderRequest) returns (OrderReply);
+}
+`;
+  const clientContent = `
+export const appRouter = router({
+  orders: publicProcedure.query(() => [])
+});
+
+export function readOrdersGraphql() {
+  return gql\`query GetOrders { orders { id } }\`;
+}
+
+export function createOrderGrpc(client: unknown) {
+  return makeUnaryRequest("/OrderService/CreateOrder", client);
+}
+
+export function useOrdersProcedure() {
+  return trpc.orders.useQuery();
+}
+`;
+  const graphql = extractFromFile("schema/orders.graphql", "graphql", graphqlContent);
+  const proto = extractFromFile("proto/orders.proto", "proto", protoContent);
+  const client = extractFromFile("src/client.ts", "typescript", clientContent);
+  const symbols = [...graphql.symbols, ...proto.symbols, ...client.symbols];
+  const edges = addProtocolCallEdges(symbols);
+  const source = (name: string) => symbols.find((symbol) => symbol.name === name)?.qualifiedName;
+  const target = (kind: string, name: string) => symbols.find((symbol) => symbol.kind === kind && symbol.name === name)?.qualifiedName;
+
+  assert.ok(client.symbols.some((symbol) => symbol.kind === "grpc_call" && symbol.name === "RPC /OrderService/CreateOrder"));
+  assert.ok(edges.some((edge) => edge.type === "CALLS_GRAPHQL_OPERATION" && edge.source === source("readOrdersGraphql") && edge.target === target("graphql_operation", "query GetOrders")));
+  assert.ok(edges.some((edge) => edge.type === "CALLS_GRPC_METHOD" && edge.source === source("createOrderGrpc") && edge.target === target("route", "RPC /OrderService/CreateOrder")));
+  assert.ok(edges.some((edge) => edge.type === "CALLS_TRPC_PROCEDURE" && edge.source === source("useOrdersProcedure") && edge.target === target("trpc_procedure", "query orders")));
 });
 
 test("captures host metadata for absolute HTTP call literals", () => {
@@ -364,13 +405,19 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(schema.nodeLabels.some((label) => label.kind === "module"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "channel"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "http_call"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "grpc_call"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "package"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "dependency"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "graphql_operation"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "graphql_type"));
     assert.ok(schema.nodeLabels.some((label) => label.kind === "grpc_service"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "trpc_procedure"));
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "trpc_call"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "DEFINES"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CALLS_HTTP_ENDPOINT"));
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CALLS_GRAPHQL_OPERATION"));
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CALLS_GRPC_METHOD"));
+    assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CALLS_TRPC_PROCEDURE"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "CONFIGURES"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "EMITS"));
     assert.ok(schema.edgeTypes.some((edgeType) => edgeType.type === "LISTENS_ON"));
@@ -518,6 +565,15 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     const crossServiceTrace = store.traceSymbol("loadOrders", "outbound", 2, { mode: "cross_service" });
     assert.ok(crossServiceTrace.some((edge) => edge.type === "CALLS_HTTP_ENDPOINT"));
     assert.ok(crossServiceTrace.every((edge) => ["HTTP_CALLS", "CALLS_HTTP_ENDPOINT", "OBSERVED_HTTP_CALLS", "EMITS", "LISTENS_ON", "OBSERVED_EMITS", "OBSERVED_LISTENS_ON"].includes(edge.type)));
+
+    const graphqlCallQuery = store.queryGraph("MATCH (a)-[r:CALLS_GRAPHQL_OPERATION]->(b) WHERE b.name = 'query GetOrders' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(graphqlCallQuery.rows.some((row) => row["a.name"] === "readOrdersGraphql" && row["r.type"] === "CALLS_GRAPHQL_OPERATION"));
+    const grpcCallQuery = store.queryGraph("MATCH (a)-[r:CALLS_GRPC_METHOD]->(b) WHERE b.name = 'RPC /OrderService/CreateOrder' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(grpcCallQuery.rows.some((row) => row["a.name"] === "createOrderGrpc" && row["r.type"] === "CALLS_GRPC_METHOD"));
+    const trpcCallQuery = store.queryGraph("MATCH (a)-[r:CALLS_TRPC_PROCEDURE]->(b) WHERE b.name = 'query orders' RETURN a.name,b.name,r.type LIMIT 5");
+    assert.ok(trpcCallQuery.rows.some((row) => row["a.name"] === "useOrdersProcedure" && row["r.type"] === "CALLS_TRPC_PROCEDURE"));
+    const protocolTrace = store.traceSymbol("readOrdersGraphql", "outbound", 2, { mode: "cross_service" });
+    assert.ok(protocolTrace.some((edge) => edge.type === "CALLS_GRAPHQL_OPERATION"));
 
     assert.ok(store.searchGraph({ kind: "graphql_operation", query: "GetOrders" }).some((match) => match.symbol.name === "query GetOrders"));
     assert.ok(store.searchGraph({ kind: "graphql_type", query: "Order" }).some((match) => match.symbol.name === "type Order"));
