@@ -145,6 +145,10 @@ int createOrder(int id) { return id; }
   assert.ok(cpp.symbols.some((symbol) => symbol.kind === "function" && symbol.name === "load_orders"));
   assert.ok(cpp.symbols.some((symbol) => symbol.kind === "function" && symbol.name === "createOrder"));
   assert.ok(addTypeRelationEdges(cpp.symbols, new Map([["src/orders.cpp", cppContent]])).some((edge) => edge.type === "INHERITS"));
+
+  const repeatedQualifiers = `${"inline ".repeat(6)}static constexpr int cached_order_count() { return 0; }`;
+  const qualifierStress = extractFromFile("src/qualifiers.cpp", "cpp", repeatedQualifiers);
+  assert.ok(qualifierStress.symbols.some((symbol) => symbol.kind === "function" && symbol.name === "cached_order_count"));
 });
 
 test("captures host metadata for absolute HTTP call literals", () => {

@@ -104,7 +104,7 @@ const patterns: Partial<Record<Language, Pattern[]>> = {
     {
       kind: "function",
       regex:
-        /^\s*(?:static\s+|inline\s+|extern\s+|const\s+|volatile\s+|unsigned\s+|signed\s+|long\s+|short\s+)*(?:[A-Za-z_]\w*\s+)+(?:\*\s*)?([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm
+        /^[^\S\r\n]*(?:(?:static|inline|extern|const|volatile|unsigned|signed|long|short)[^\S\r\n]+){0,8}[A-Za-z_]\w*(?:[^\S\r\n]+[\w*]+)*[^\S\r\n]+(?:\*[^\S\r\n]*)?([A-Za-z_]\w*)[^\S\r\n]*\([^;{}\n]*\)[^\S\r\n]*\{/gm
     }
   ],
   cpp: [
@@ -115,7 +115,7 @@ const patterns: Partial<Record<Language, Pattern[]>> = {
     {
       kind: "function",
       regex:
-        /^\s*(?:template\s*<[^>]+>\s*)?(?:inline\s+|static\s+|virtual\s+|constexpr\s+|consteval\s+|explicit\s+|friend\s+|extern\s+|typename\s+|class\s+|\s)*[A-Za-z_][\w:<>,~*&\[\]\s]*\s+(?:[A-Za-z_]\w*::)?([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?(?:final\s*)?\{/gm
+        /^[^\S\r\n]*(?:template[^\S\r\n]*<[^>\n]+>[^\S\r\n]*)?(?:(?:inline|static|virtual|constexpr|consteval|explicit|friend|extern|typename|class)[^\S\r\n]+){0,8}[A-Za-z_][\w:<>,~*&\[\]]*(?:[^\S\r\n]+[\w:<>,~*&\[\]]+)*[^\S\r\n]+(?:[A-Za-z_]\w*::)?([A-Za-z_]\w*)[^\S\r\n]*\([^;{}\n]*\)[^\S\r\n]*(?:const[^\S\r\n]*)?(?:noexcept[^\S\r\n]*)?(?:override[^\S\r\n]*)?(?:final[^\S\r\n]*)?\{/gm
     }
   ]
 };
