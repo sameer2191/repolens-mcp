@@ -6,6 +6,8 @@ export type Language =
   | "java"
   | "rust"
   | "swift"
+  | "c"
+  | "cpp"
   | "sql"
   | "yaml"
   | "markdown"

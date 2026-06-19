@@ -8,6 +8,7 @@ import test from "node:test";
 import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
 import { addCallEdges, addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
+import { detectLanguage } from "../src/core/language.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
 
@@ -90,6 +91,60 @@ paths:
 `
   );
   assert.ok(openapi.symbols.some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/:id" && symbol.metadata?.protocol === "openapi"));
+});
+
+test("extracts C and C++ symbols and include relationships", () => {
+  assert.equal(detectLanguage("src/orders.c"), "c");
+  assert.equal(detectLanguage("include/orders.h"), "c");
+  assert.equal(detectLanguage("src/orders.cpp"), "cpp");
+  assert.equal(detectLanguage("include/orders.hpp"), "cpp");
+
+  const c = extractFromFile(
+    "src/orders.c",
+    "c",
+    `#include "orders.h"
+#include <stdlib.h>
+#define ORDER_LIMIT 128
+typedef struct Order {
+  int id;
+} Order;
+
+enum OrderStatus {
+  ORDER_PENDING
+};
+
+static Order *create_order(int id) {
+  return NULL;
+}`
+  );
+  assert.ok(c.imports.includes("orders.h"));
+  assert.ok(c.imports.includes("stdlib.h"));
+  assert.ok(c.symbols.some((symbol) => symbol.kind === "macro" && symbol.name === "ORDER_LIMIT"));
+  assert.ok(c.symbols.some((symbol) => symbol.kind === "struct" && symbol.name === "Order"));
+  assert.ok(c.symbols.some((symbol) => symbol.kind === "enum" && symbol.name === "OrderStatus"));
+  assert.ok(c.symbols.some((symbol) => symbol.kind === "function" && symbol.name === "create_order"));
+
+  const cppContent = `#include "repository.hpp"
+#include <vector>
+namespace liveplate {
+class Repository {};
+class OrderService : public Repository {
+public:
+  OrderService() {}
+  std::vector<int> load_orders() const { return {}; }
+};
+
+int createOrder(int id) { return id; }
+}`;
+  const cpp = extractFromFile("src/orders.cpp", "cpp", cppContent);
+  assert.ok(cpp.imports.includes("repository.hpp"));
+  assert.ok(cpp.imports.includes("vector"));
+  assert.ok(cpp.symbols.some((symbol) => symbol.kind === "namespace" && symbol.name === "liveplate"));
+  assert.ok(cpp.symbols.some((symbol) => symbol.kind === "class" && symbol.name === "Repository"));
+  assert.ok(cpp.symbols.some((symbol) => symbol.kind === "class" && symbol.name === "OrderService"));
+  assert.ok(cpp.symbols.some((symbol) => symbol.kind === "function" && symbol.name === "load_orders"));
+  assert.ok(cpp.symbols.some((symbol) => symbol.kind === "function" && symbol.name === "createOrder"));
+  assert.ok(addTypeRelationEdges(cpp.symbols, new Map([["src/orders.cpp", cppContent]])).some((edge) => edge.type === "INHERITS"));
 });
 
 test("captures host metadata for absolute HTTP call literals", () => {

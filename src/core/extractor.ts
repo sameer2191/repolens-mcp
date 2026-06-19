@@ -96,6 +96,27 @@ const patterns: Partial<Record<Language, Pattern[]>> = {
     { kind: "protocol", regex: /^\s*(?:public|internal|private|fileprivate|\s)*protocol\s+([A-Za-z_]\w*)/gm },
     { kind: "actor", regex: /^\s*(?:public|open|internal|private|fileprivate|final|\s)*actor\s+([A-Za-z_]\w*)/gm },
     { kind: "function", regex: /^\s*(?:public|open|internal|private|fileprivate|static|class|mutating|nonisolated|override|async|\s)*func\s+([A-Za-z_]\w*)/gm }
+  ],
+  c: [
+    { kind: "struct", regex: /^\s*(?:typedef\s+)?struct\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:typedef\s+)?enum\s+([A-Za-z_]\w*)/gm },
+    { kind: "macro", regex: /^\s*#\s*define\s+([A-Za-z_]\w*)/gm },
+    {
+      kind: "function",
+      regex:
+        /^\s*(?:static\s+|inline\s+|extern\s+|const\s+|volatile\s+|unsigned\s+|signed\s+|long\s+|short\s+)*(?:[A-Za-z_]\w*\s+)+(?:\*\s*)?([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm
+    }
+  ],
+  cpp: [
+    { kind: "namespace", regex: /^\s*namespace\s+([A-Za-z_]\w*)\s*\{/gm },
+    { kind: "class", regex: /^\s*(?:template\s*<[^>]+>\s*)?(?:class|typename\s+)?class\s+([A-Za-z_]\w*)/gm },
+    { kind: "struct", regex: /^\s*(?:template\s*<[^>]+>\s*)?struct\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*enum(?:\s+class)?\s+([A-Za-z_]\w*)/gm },
+    {
+      kind: "function",
+      regex:
+        /^\s*(?:template\s*<[^>]+>\s*)?(?:inline\s+|static\s+|virtual\s+|constexpr\s+|consteval\s+|explicit\s+|friend\s+|extern\s+|typename\s+|class\s+|\s)*[A-Za-z_][\w:<>,~*&\[\]\s]*\s+(?:[A-Za-z_]\w*::)?([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?(?:final\s*)?\{/gm
+    }
   ]
 };
 
@@ -621,7 +642,9 @@ export function extractImports(language: Language, content: string): string[] {
     go: [/^\s*import\s+(?:"([^"]+)"|`([^`]+)`)/gm],
     java: [/^\s*import\s+([\w.*]+);/gm],
     rust: [/^\s*use\s+([^;]+);/gm],
-    swift: [/^\s*import\s+([A-Za-z_][\w.]*)/gm]
+    swift: [/^\s*import\s+([A-Za-z_][\w.]*)/gm],
+    c: [/^\s*#\s*include\s+[<"]([^>"]+)[>"]/gm],
+    cpp: [/^\s*#\s*include\s+[<"]([^>"]+)[>"]/gm, /^\s*import\s+([A-Za-z_][\w.:]*)\s*;/gm]
   };
   for (const regex of patternsByLanguage[language] ?? []) {
     for (const match of content.matchAll(regex)) {
@@ -2171,10 +2194,10 @@ function declarationTypeRelations(symbol: SymbolNode, declaration: string): Arra
   if (rustTraitBounds?.[1]) {
     relations.push({ type: "INHERITS", targets: typeNamesFromList(rustTraitBounds[1]), reason: "trait bound" });
   }
-  if (["swift", "kotlin"].includes(symbol.language) || ["struct", "enum", "protocol", "actor"].includes(symbol.kind)) {
-    const swiftConformance = /\b(?:class|struct|enum|actor|protocol)\s+[A-Za-z_]\w*(?:<[^>{}]+>)?\s*:\s*([^{}]+)/.exec(compact);
-    if (swiftConformance?.[1]) {
-      relations.push({ targets: typeNamesFromList(swiftConformance[1]), reason: "swift inheritance or conformance" });
+  if (["swift", "kotlin", "cpp"].includes(symbol.language) || ["struct", "enum", "protocol", "actor"].includes(symbol.kind)) {
+    const colonConformance = /\b(?:class|struct|enum|actor|protocol)\s+[A-Za-z_]\w*(?:<[^>{}]+>)?\s*:\s*([^{}]+)/.exec(compact);
+    if (colonConformance?.[1]) {
+      relations.push({ targets: typeNamesFromList(colonConformance[1]), reason: "colon inheritance or conformance" });
     }
   }
 
@@ -2196,6 +2219,7 @@ function typeNamesFromList(value: string): string[] {
   for (const segment of value.split(/[,|+&]/)) {
     const cleaned = segment
       .replace(/<[^<>]*>/g, " ")
+      .replace(/\b(?:public|private|protected|virtual|override|final)\b/g, " ")
       .replace(/\bwhere\b[\s\S]*$/i, " ")
       .trim();
     const match = /(?:[A-Za-z_$][\w$]*\.)*([A-Za-z_$][\w$]*)/.exec(cleaned);
