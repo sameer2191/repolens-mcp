@@ -15,12 +15,14 @@ Command:
 
 ```bash
 npm run verify
+npm run test:skip-gate
 ```
 
 Result:
 
 - TypeScript build passed.
 - Node test suite passed: 57 tests, 56 passing, 0 failures, 1 sandbox-only dashboard socket skip.
+- Test skip gate passed with explicit policies for the dashboard sandbox socket skip and git-unavailable skips.
 - Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, version/update status with npm-compatible registry checks, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, git-aware watch skipping unchanged polls and refreshing dirty worktrees, MCP startup auto-indexing and git-aware auto-sync wiring from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, index-time graph package writing with `--write-package`, Swift extraction, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema including relationship patterns and label property hints, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, `SKIP`, `IN`, and numeric comparisons, relative and workspace-package import cycle resolution, git-history hotspot extraction, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
 
 ## Package And Release
@@ -52,9 +54,9 @@ Result:
 
 - Production dependency audit passed with `npm run audit:prod`: 0 vulnerabilities.
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 182,143 bytes packed, 934,520 bytes unpacked, 85 runtime/doc entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 183,403 bytes packed, 938,818 bytes unpacked, 86 runtime/doc entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, selected public docs, `llms.txt`, scripts, `package.json`, `server.json`, `install.sh`, and `install.ps1`; compiled tests, source TypeScript, local graph memory, SQLite databases, graph packages, fixtures, private validation output, and local workstation paths are excluded.
-- Package contents gate passed: 85 files inspected.
+- Package contents gate passed: 86 files inspected.
 - Installer audit passed for `install.sh` dry-run setup under a temporary home and target directory. `install.ps1` dry-run audit is enforced when `pwsh` is available and in CI.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
@@ -71,7 +73,7 @@ Result:
 - Release workflow runs `npm run release:security-gate` with `security-events: read` before packaging/publishing; the gate uses the GitHub security summary to fail on actionable CodeQL, Dependabot, or secret-scanning alerts.
 - OpenSSF Scorecard workflow added with SARIF upload to GitHub code scanning.
 - Live GitHub security check reported 0 open Dependabot alerts, 0 open secret-scanning alerts, and 0 open CodeQL alerts. The remaining 3 open code-scanning alerts are OpenSSF Scorecard process signals: `MaintainedID`, `CodeReviewID`, and `CIIBestPracticesID`.
-- CI now also checks `npm pack --dry-run --json`, `npm run package:check`, `npm run installer:audit`, generates a CycloneDX SBOM, and self-indexes into `.repolens/ci.db`.
+- CI now also checks `npm run test:skip-gate`, `npm pack --dry-run --json`, `npm run package:check`, `npm run installer:audit`, generates a CycloneDX SBOM, and self-indexes into `.repolens/ci.db`.
 
 ## Self Index
 

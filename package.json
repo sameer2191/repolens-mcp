@@ -26,6 +26,7 @@
     "build": "tsc && chmod 755 dist/src/cli.js",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-sqlite dist/tests/*.test.js",
+    "test:skip-gate": "node scripts/test-skip-gate.mjs",
     "test:src": "npm run build && npm test",
     "lint": "tsc --noEmit",
     "verify": "npm run build && npm test",
