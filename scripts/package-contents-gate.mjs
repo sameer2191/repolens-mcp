@@ -17,6 +17,7 @@ const requiredFiles = [
   "docs/research-notes.md",
   "scripts/codeql-alert-gate.mjs",
   "scripts/github-security-summary.mjs",
+  "scripts/installer-audit.mjs",
   "scripts/package-contents-gate.mjs",
   "dist/src/cli.js",
   "dist/src/mcp/server.js"
@@ -37,6 +38,7 @@ const allowedExactFiles = new Set([
   "docs/research-notes.md",
   "scripts/codeql-alert-gate.mjs",
   "scripts/github-security-summary.mjs",
+  "scripts/installer-audit.mjs",
   "scripts/package-contents-gate.mjs"
 ]);
 

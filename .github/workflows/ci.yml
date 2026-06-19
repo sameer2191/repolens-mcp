@@ -24,6 +24,7 @@ jobs:
       - run: npm run audit:prod
       - run: npm pack --dry-run --json
       - run: npm run package:check
+      - run: npm run installer:audit
       - run: pwsh -NoLogo -NoProfile -Command '$parseErrors = $null; [System.Management.Automation.Language.Parser]::ParseFile("install.ps1", [ref]$null, [ref]$parseErrors) | Out-Null; if ($parseErrors.Count) { $parseErrors; exit 1 }'
       - run: npm sbom --sbom-format cyclonedx --json > sbom.cyclonedx.json
       - run: test -s sbom.cyclonedx.json

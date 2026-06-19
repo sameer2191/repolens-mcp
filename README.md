@@ -221,6 +221,7 @@ Supported result clauses include `RETURN DISTINCT`, `count(...)`, `ORDER BY`, `S
 ```bash
 npm run verify
 npm run package:check
+npm run installer:audit
 npm run audit:prod
 GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run security:github
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db
