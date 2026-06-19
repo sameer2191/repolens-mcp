@@ -401,6 +401,14 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.equal(nodeQuery.rows[0]?.["f.name"], "createOrder");
     assert.equal(nodeQuery.rows[0]?.["f.filePath"], "src/orders.ts");
 
+    const inQuery = store.queryGraph("MATCH (s) WHERE s.kind IN ['function', 'method'] RETURN s.kind LIMIT 10");
+    assert.ok(inQuery.rows.length > 0);
+    assert.ok(inQuery.rows.every((row) => row["s.kind"] === "function" || row["s.kind"] === "method"));
+
+    const numericQuery = store.queryGraph("MATCH (f:Function) WHERE f.startLine > 1 RETURN f.name,f.startLine LIMIT 10");
+    assert.ok(numericQuery.rows.length > 0);
+    assert.ok(numericQuery.rows.every((row) => Number(row["f.startLine"]) > 1));
+
     const countQuery = store.queryGraph("MATCH (f:Function) RETURN count(f) AS functions LIMIT 5");
     assert.ok(Number(countQuery.rows[0]?.functions) >= 5);
 
@@ -419,6 +427,10 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const callQuery = store.queryGraph("MATCH (a)-[r:CALLS]->(b:Function) WHERE b.name = 'createOrder' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(callQuery.rows.some((row) => row["b.name"] === "createOrder" && row["r.type"] === "CALLS"));
+
+    const weightedEdgeQuery = store.queryGraph("MATCH (a)-[r]->(b) WHERE r.weight >= 0.7 RETURN a.name,b.name,r.weight LIMIT 10");
+    assert.ok(weightedEdgeQuery.rows.length > 0);
+    assert.ok(weightedEdgeQuery.rows.every((row) => Number(row["r.weight"]) >= 0.7));
 
     const httpQuery = store.queryGraph("MATCH (a)-[r:HTTP_CALLS]->(b:Route) WHERE b.name CONTAINS '/orders' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(httpQuery.rows.some((row) => row["a.name"] === "loadOrders" && row["r.type"] === "HTTP_CALLS"));
@@ -458,6 +470,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(pack.edges.length > 0);
 
     assert.throws(() => store.queryGraph("MATCH (f) DELETE f RETURN f.name"), /read-only/);
+    assert.throws(() => store.queryGraph("MATCH (f:Function) WHERE f.startLine > RETURN f.name"), /> requires a numeric WHERE value/);
 
     const swiftSymbols = store.searchGraph({ kind: "class", filePattern: "ios" });
     assert.ok(swiftSymbols.some((match) => match.symbol.name === "CheckoutViewModel"));
