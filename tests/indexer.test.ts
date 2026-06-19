@@ -464,6 +464,12 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     assert.ok(inQuery.rows.length > 0);
     assert.ok(inQuery.rows.every((row) => row["s.kind"] === "function" || row["s.kind"] === "method"));
 
+    const orNodeQuery = store.queryGraph("MATCH (s) WHERE s.kind = 'route' OR s.kind = 'http_call' RETURN s.kind LIMIT 50");
+    const orNodeKinds = new Set(orNodeQuery.rows.map((row) => row["s.kind"]));
+    assert.ok(orNodeKinds.has("route"));
+    assert.ok(orNodeKinds.has("http_call"));
+    assert.ok(orNodeQuery.rows.every((row) => row["s.kind"] === "route" || row["s.kind"] === "http_call"));
+
     const numericQuery = store.queryGraph("MATCH (f:Function) WHERE f.startLine > 1 RETURN f.name,f.startLine LIMIT 10");
     assert.ok(numericQuery.rows.length > 0);
     assert.ok(numericQuery.rows.every((row) => Number(row["f.startLine"]) > 1));
@@ -486,6 +492,17 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     const callQuery = store.queryGraph("MATCH (a)-[r:CALLS]->(b:Function) WHERE b.name = 'createOrder' RETURN a.name,b.name,r.type LIMIT 5");
     assert.ok(callQuery.rows.some((row) => row["b.name"] === "createOrder" && row["r.type"] === "CALLS"));
+
+    const orEdgeQuery = store.queryGraph("MATCH (a)-[r]->(b) WHERE r.type = 'HTTP_CALLS' OR r.type = 'CALLS_HTTP_ENDPOINT' RETURN a.name,b.name,r.type LIMIT 20");
+    const orEdgeTypes = new Set(orEdgeQuery.rows.map((row) => row["r.type"]));
+    assert.ok(orEdgeTypes.has("HTTP_CALLS"));
+    assert.ok(orEdgeTypes.has("CALLS_HTTP_ENDPOINT"));
+    assert.ok(orEdgeQuery.rows.every((row) => row["r.type"] === "HTTP_CALLS" || row["r.type"] === "CALLS_HTTP_ENDPOINT"));
+
+    const precedenceQuery = store.queryGraph(
+      "MATCH (s) WHERE s.kind = 'function' AND s.name = 'loadOrders' OR s.kind = 'function' AND s.name = 'createOrder' RETURN s.name ORDER BY s.name LIMIT 5"
+    );
+    assert.deepEqual(precedenceQuery.rows.map((row) => row["s.name"]), ["createOrder", "loadOrders"]);
 
     const weightedEdgeQuery = store.queryGraph("MATCH (a)-[r]->(b) WHERE r.weight >= 0.7 RETURN a.name,b.name,r.weight LIMIT 10");
     assert.ok(weightedEdgeQuery.rows.length > 0);
@@ -530,6 +547,7 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
 
     assert.throws(() => store.queryGraph("MATCH (f) DELETE f RETURN f.name"), /read-only/);
     assert.throws(() => store.queryGraph("MATCH (f:Function) WHERE f.startLine > RETURN f.name"), /> requires a numeric WHERE value/);
+    assert.throws(() => store.queryGraph("MATCH (s) WHERE s.kind = 'function' OR RETURN s.name"), /Unsupported WHERE condition/);
 
     const swiftSymbols = store.searchGraph({ kind: "class", filePattern: "ios" });
     assert.ok(swiftSymbols.some((match) => match.symbol.name === "CheckoutViewModel"));
