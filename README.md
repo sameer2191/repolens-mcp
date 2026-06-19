@@ -220,6 +220,7 @@ Supported result clauses include `RETURN DISTINCT`, `count(...)`, `ORDER BY`, `S
 
 ```bash
 npm run verify
+npm run test:skip-gate
 npm run package:check
 npm run installer:audit
 npm run audit:prod

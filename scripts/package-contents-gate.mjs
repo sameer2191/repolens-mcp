@@ -19,6 +19,7 @@ const requiredFiles = [
   "scripts/github-security-summary.mjs",
   "scripts/installer-audit.mjs",
   "scripts/package-contents-gate.mjs",
+  "scripts/test-skip-gate.mjs",
   "dist/src/cli.js",
   "dist/src/mcp/server.js"
 ];
@@ -39,7 +40,8 @@ const allowedExactFiles = new Set([
   "scripts/codeql-alert-gate.mjs",
   "scripts/github-security-summary.mjs",
   "scripts/installer-audit.mjs",
-  "scripts/package-contents-gate.mjs"
+  "scripts/package-contents-gate.mjs",
+  "scripts/test-skip-gate.mjs"
 ]);
 
 const allowedPrefixes = ["dist/src/"];

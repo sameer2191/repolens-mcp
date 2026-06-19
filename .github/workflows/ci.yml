@@ -20,6 +20,7 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
+      - run: npm run test:skip-gate
       - run: npm run verify
       - run: npm run audit:prod
       - run: npm pack --dry-run --json

@@ -8,12 +8,14 @@ Command:
 
 ```bash
 npm run verify
+npm run test:skip-gate
 ```
 
 Latest result:
 
 - TypeScript build passed.
 - Node test suite passed: 57 tests, 56 passing, 0 failures, 1 sandbox-only dashboard socket skip.
+- Test skip gate passed with explicit policies for the dashboard sandbox socket skip and git-unavailable skips.
 - Coverage includes indexing, incremental refresh, git-aware watch refresh, MCP startup auto-index and auto-sync wiring, project catalog and fleet summaries, graph package import/export, code search, symbol/reference lookup, semantic and vector search, context packs, graph queries, dependency cycles, git-history hotspots, change impact, secret scanning, agent setup, Codex config safeguards, package bootstrap, installer metadata, and MCP JSON-RPC robustness.
 
 ## Package And Release Checks
