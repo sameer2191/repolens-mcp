@@ -255,7 +255,7 @@ function agentHookGuide(options: {
   const hookTargets = options.profiles.map((profile) => `- ${profile.label}: \`${profile.hookPath ?? profile.instructionPath}\``).join("\n");
   return `# RepoLens Agent Hook And Reminder Setup
 
-These files are opt-in, project-local reminders for coding agents that support session prompts, hook notes, or project rules. They are intentionally non-blocking and read-only: the agent should use RepoLens context tools before broad searches, but the files do not execute code by themselves.
+These files are opt-in, project-local reminders for coding agents that support session prompts, hook notes, or project rules. The reminder files do not execute code by themselves. The executable hook command below is designed to be non-blocking by default: it parses hook JSON from stdin and emits context guidance without querying or mutating the local graph unless you opt in with \`--with-query\`.
 
 Server name: \`${options.serverName}\`
 Database: \`${options.dbPath}\`
@@ -270,6 +270,16 @@ ${hookTargets}
 - Before risky edits, ask \`${options.serverName}.detect_changes\` after local changes and inspect impacted symbols.
 - Before graph queries, ask \`${options.serverName}.get_graph_schema\` first.
 - Keep hook behavior non-blocking: if RepoLens is unavailable, continue with normal local inspection and mention the miss.
+
+## Executable Hook Command
+
+For agents that can pass hook payload JSON to stdin, wire broad-search hooks to:
+
+\`\`\`bash
+${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "hook-augment", "--db", options.dbPath, "--name", options.serverName, "--claude"])}
+\`\`\`
+
+The hook runner recognizes PreToolUse-style Grep, Glob, and broad shell search payloads. It emits Claude-compatible \`hookSpecificOutput.additionalContext\`, exits successfully, and does not intercept Read/Edit/Write tools. Add \`--with-query\` only when you want the hook to open the local RepoLens database and append symbol metadata matches.
 
 ## Local Fallback Commands
 
@@ -295,6 +305,12 @@ Use this as a non-blocking project reminder:
 - For call-path or impact questions, call \`${options.serverName}.trace_symbol\`, \`${options.serverName}.trace_path\`, or \`${options.serverName}.detect_changes\`.
 - For custom graph queries, call \`${options.serverName}.get_graph_schema\` before \`${options.serverName}.query_graph\`.
 - If the MCP server is unavailable, continue without blocking and say that RepoLens context was unavailable.
+
+Executable hook command for agents that pass hook payload JSON to stdin:
+
+\`\`\`bash
+${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "hook-augment", "--db", options.dbPath, "--name", options.serverName, "--claude"])}
+\`\`\`
 
 Local fallback:
 
@@ -496,7 +512,11 @@ function snippetLanguage(agent: AgentId): string {
 }
 
 function shellJoin(parts: string[]): string {
-  return parts.map((part) => (/^[A-Za-z0-9_./:=@-]+$/.test(part) ? part : JSON.stringify(part))).join(" ");
+  return parts.map(posixShellQuote).join(" ");
+}
+
+function posixShellQuote(part: string): string {
+  return /^[A-Za-z0-9_./:=@-]+$/.test(part) ? part : `'${part.replace(/'/g, "'\\''")}'`;
 }
 
 function escapeRegExp(value: string): string {

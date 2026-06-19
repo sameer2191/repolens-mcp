@@ -49,15 +49,22 @@ test("agent setup can render opt-in hook reminder files", async () => {
     targetDir: tmp,
     agents: ["claude", "gemini"],
     command: "node",
-    cliPath: "/repo/cli.js",
-    dbPath: ".repolens/memory.db",
+    cliPath: "/repo path/cli.js",
+    dbPath: ".repolens/memory $(rm).db",
     withHooks: true,
     dryRun: true
   });
 
+  const hookGuide = result.files.find((file) => file.path.endsWith("docs/repolens-agent-hooks.md"))?.content ?? "";
   assert.equal(result.withHooks, true);
   assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-hooks.md") && file.changed));
   assert.ok(result.files.some((file) => file.path.endsWith(".claude/repolens-hooks.md") && file.content.includes("context_pack")));
+  assert.ok(result.files.some((file) => file.path.endsWith(".claude/repolens-hooks.md") && file.content.includes("hook-augment")));
+  assert.ok(result.files.some((file) => file.path.endsWith(".claude/repolens-hooks.md") && file.content.includes("--claude")));
+  assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-hooks.md") && file.content.includes("without querying or mutating")));
+  assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-hooks.md") && file.content.includes("--with-query")));
+  assert.match(hookGuide, /'\/repo path\/cli\.js'/);
+  assert.match(hookGuide, /'\.repolens\/memory \$\(rm\)\.db'/);
   assert.ok(result.files.some((file) => file.path.endsWith(".gemini/repolens-hooks.md") && file.content.includes("non-blocking")));
   await assert.rejects(() => fs.readFile(path.join(tmp, "docs/repolens-agent-hooks.md"), "utf8"));
 });

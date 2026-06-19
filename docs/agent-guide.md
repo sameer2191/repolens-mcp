@@ -24,6 +24,14 @@ node --experimental-sqlite dist/src/cli.js doctor
 node --experimental-sqlite dist/src/cli.js install-codex --dry-run
 ```
 
+For hook-capable agents, RepoLens can emit non-blocking broad-search context reminders from hook payload JSON:
+
+```bash
+node --experimental-sqlite dist/src/cli.js hook-augment --db .repolens/memory.db --claude
+```
+
+Use this for PreToolUse-style Grep, Glob, or broad shell-search hooks. It exits successfully when RepoLens is unavailable and does not intercept Read/Edit/Write tools. By default it only parses stdin and emits guidance; add `--with-query` when you want it to open the local RepoLens database and append symbol metadata matches.
+
 On Windows PowerShell, the local installer mirrors the shell installer:
 
 ```powershell

@@ -45,6 +45,7 @@ import {
   unpackGraph,
   vectorSearch
 } from "./core/api.js";
+import { evaluateAgentHookInput, renderAgentHookResult } from "./core/agent-hooks.js";
 import { agentProfiles, installAgentSetup, uninstallAgentSetup, type AgentId } from "./core/agents.js";
 import type { ReportFormat } from "./core/report.js";
 import type { TraceDirection, TraceMode } from "./core/types.js";
@@ -58,6 +59,9 @@ interface ParsedArgs {
   positional: string[];
   flags: Map<string, string | boolean>;
 }
+
+const AGENT_HOOK_MAX_STDIN_BYTES = 64 * 1024;
+const AGENT_HOOK_STDIN_TIMEOUT_MS = 1000;
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
@@ -390,6 +394,28 @@ async function main(): Promise<void> {
         })
       );
       break;
+    case "agent-hook":
+    case "hook-augment": {
+      const rawInput = await readStdinText();
+      const dbPath = stringFlag(args, "db");
+      const includeGraphMatches = (booleanFlag(args, "with-query") || booleanFlag(args, "with-graph")) && !booleanFlag(args, "no-query");
+      const result = enrichAgentHookResult(
+        evaluateAgentHookInput(rawInput, {
+          serverName: stringFlag(args, "name") ?? "repolens",
+          dbPath,
+          command: stringFlag(args, "command") ?? process.execPath,
+          cliPath: stringFlag(args, "cli") ?? currentCliPath()
+        }),
+        dbPath,
+        includeGraphMatches
+      );
+      const format = booleanFlag(args, "json") ? "json" : booleanFlag(args, "claude") ? "claude-json" : "text";
+      const rendered = renderAgentHookResult(result, format);
+      if (rendered) {
+        process.stdout.write(`${rendered}\n`);
+      }
+      break;
+    }
     case "mcp":
       await startMcpServer();
       break;
@@ -408,6 +434,35 @@ async function main(): Promise<void> {
       break;
     default:
       throw new Error(`Unknown command '${args.command}'. Run repolens-mcp help.`);
+  }
+}
+
+function enrichAgentHookResult<T extends { shouldRemind: boolean; query?: string; message?: string }>(result: T, dbPath: string | undefined, enabled: boolean): T {
+  if (!enabled || !result.shouldRemind || !result.query || !result.message) {
+    return result;
+  }
+  try {
+    const pack = contextPack(result.query, 3, 1, dbPath);
+    const seen = new Set<string>();
+    const symbols = [...pack.graph, ...pack.semantic, ...pack.vector]
+      .map((match) => match.symbol)
+      .filter((symbol) => {
+        if (seen.has(symbol.qualifiedName)) {
+          return false;
+        }
+        seen.add(symbol.qualifiedName);
+        return true;
+      })
+      .slice(0, 3);
+    if (symbols.length === 0) {
+      return result;
+    }
+    return {
+      ...result,
+      message: `${result.message}\nRepoLens graph matches:\n${symbols.map((symbol) => `- ${symbol.kind} ${symbol.name} (${symbol.filePath}:${symbol.startLine})`).join("\n")}`
+    };
+  } catch {
+    return result;
   }
 }
 
@@ -594,6 +649,47 @@ async function readTraceInput(input: string) {
   throw new Error("Trace input must be a JSON array or an object with a traces array.");
 }
 
+async function readStdinText(): Promise<string> {
+  if (process.stdin.isTTY) {
+    return "";
+  }
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      process.stdin.off("data", onData);
+      process.stdin.off("end", finish);
+      process.stdin.off("error", finish);
+      process.stdin.pause();
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    };
+    const onData = (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const remaining = AGENT_HOOK_MAX_STDIN_BYTES - total;
+      if (remaining <= 0) {
+        finish();
+        return;
+      }
+      chunks.push(buffer.length > remaining ? buffer.subarray(0, remaining) : buffer);
+      total += Math.min(buffer.length, remaining);
+      if (buffer.length >= remaining) {
+        finish();
+      }
+    };
+    const timer = setTimeout(finish, AGENT_HOOK_STDIN_TIMEOUT_MS);
+    process.stdin.on("data", onData);
+    process.stdin.once("end", finish);
+    process.stdin.once("error", finish);
+    process.stdin.resume();
+  });
+}
+
 function currentCliPath(): string {
   return path.resolve(process.argv[1] ?? "repolens-mcp");
 }
@@ -667,6 +763,7 @@ Usage:
   repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--db .repolens/memory.db] [--with-hooks]
   repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run] [--with-hooks]
   repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run] [--with-hooks]
+  repolens-mcp agent-hook|hook-augment [--db .repolens/memory.db] [--name repolens] [--json|--claude] [--with-query]
   repolens-mcp mcp
   repolens-mcp demo
 `;
