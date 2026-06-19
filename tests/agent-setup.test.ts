@@ -63,6 +63,7 @@ test("agent setup can render opt-in hook reminder files", async () => {
   assert.ok(result.files.some((file) => file.path.endsWith(".claude/repolens-hooks.md") && file.content.includes("--claude")));
   assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-hooks.md") && file.content.includes("without querying or mutating")));
   assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-hooks.md") && file.content.includes("--with-query")));
+  assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-hooks.md") && file.content.includes(".claude/settings.local.json")));
   assert.match(hookGuide, /'\/repo path\/cli\.js'/);
   assert.match(hookGuide, /'\.repolens\/memory \$\(rm\)\.db'/);
   assert.ok(result.files.some((file) => file.path.endsWith(".gemini/repolens-hooks.md") && file.content.includes("non-blocking")));
@@ -91,6 +92,83 @@ test("agent setup uninstall removes managed hook reminders when requested", asyn
   assert.ok(result.files.some((file) => file.path.endsWith(".claude/repolens-hooks.md") && file.removed));
   assert.ok(result.files.some((file) => file.path.endsWith("docs/repolens-agent-hooks.md") && file.removed));
   await assert.rejects(() => fs.readFile(hookPath, "utf8"));
+});
+
+test("agent setup installs and removes managed Claude hook settings", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-claude-hooks-"));
+  const settingsPath = path.join(tmp, ".claude", "settings.local.json");
+  await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+  await fs.writeFile(
+    settingsPath,
+    JSON.stringify(
+      {
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: "Bash",
+              hooks: [{ type: "command", command: "echo", args: ["keep"], statusMessage: "Keep this hook" }]
+            }
+          ],
+          Stop: [
+            {
+              hooks: [{ type: "command", command: "echo", args: ["done"] }]
+            }
+          ]
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  const dryRun = await installAgentSetup({
+    targetDir: tmp,
+    agents: ["claude"],
+    command: "node",
+    cliPath: "/repo/one.js",
+    dbPath: ".repolens/memory.db",
+    withHooks: true,
+    dryRun: true
+  });
+  assert.ok(dryRun.files.some((file) => file.path.endsWith(".claude/settings.local.json") && file.changed));
+  assert.ok(!(await fs.readFile(settingsPath, "utf8")).includes("hook-augment"));
+
+  await installAgentSetup({
+    targetDir: tmp,
+    agents: ["claude"],
+    command: "node",
+    cliPath: "/repo/one.js",
+    dbPath: ".repolens/memory.db",
+    withHooks: true
+  });
+  await installAgentSetup({
+    targetDir: tmp,
+    agents: ["claude"],
+    command: "node",
+    cliPath: "/repo/two.js",
+    dbPath: ".repolens/memory.db",
+    withHooks: true
+  });
+
+  const installed = JSON.parse(await fs.readFile(settingsPath, "utf8")) as {
+    hooks: { PreToolUse: Array<{ matcher?: string; hooks?: Array<{ command?: string; args?: string[]; statusMessage?: string }> }>; Stop: unknown[] };
+  };
+  const managedHooks = installed.hooks.PreToolUse.flatMap((entry) => entry.hooks ?? []).filter((hook) => hook.statusMessage?.includes("repolens-mcp"));
+  assert.equal(managedHooks.length, 1);
+  assert.equal(installed.hooks.PreToolUse.some((entry) => entry.matcher === "Bash"), true);
+  assert.equal(installed.hooks.Stop.length, 1);
+  assert.equal(managedHooks[0]?.command, "node");
+  assert.deepEqual(managedHooks[0]?.args, ["--experimental-sqlite", "/repo/two.js", "hook-augment", "--db", ".repolens/memory.db", "--name", "repolens", "--claude"]);
+
+  const result = await uninstallAgentSetup({
+    targetDir: tmp,
+    agents: ["claude"],
+    withHooks: true
+  });
+  const uninstalled = JSON.parse(await fs.readFile(settingsPath, "utf8")) as { hooks: { PreToolUse: Array<{ hooks?: Array<{ statusMessage?: string }> }>; Stop: unknown[] } };
+  assert.ok(result.files.some((file) => file.path.endsWith(".claude/settings.local.json") && file.changed && !file.removed));
+  assert.equal(uninstalled.hooks.PreToolUse.flatMap((entry) => entry.hooks ?? []).some((hook) => hook.statusMessage?.includes("repolens-mcp")), false);
+  assert.equal(uninstalled.hooks.Stop.length, 1);
 });
 
 test("agent setup writes and replaces managed instruction blocks", async () => {
