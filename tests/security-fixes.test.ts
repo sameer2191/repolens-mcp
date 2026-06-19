@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import fc from "fast-check";
-import { dashboardErrorBody } from "../src/dashboard/server.js";
+import { dashboardErrorBody, dashboardSecurityHeaders } from "../src/dashboard/server.js";
 import { buildResolvedImportEdges } from "../src/core/import-resolver.js";
 import { MemoryStore } from "../src/core/store.js";
 import type { SymbolNode } from "../src/core/types.js";
@@ -15,6 +15,17 @@ test("dashboard API errors return a generic message", () => {
   assert.equal(body, JSON.stringify({ error: "Internal server error" }));
   assert.ok(!body.includes("query_graph"));
   assert.ok(!body.includes("Error:"));
+});
+
+test("dashboard responses include defensive browser headers", () => {
+  const headers = dashboardSecurityHeaders();
+
+  assert.equal(headers["x-content-type-options"], "nosniff");
+  assert.equal(headers["x-frame-options"], "DENY");
+  assert.equal(headers["referrer-policy"], "no-referrer");
+  assert.match(headers["content-security-policy"], /default-src 'none'/);
+  assert.match(headers["content-security-policy"], /frame-ancestors 'none'/);
+  assert.match(headers["permissions-policy"], /camera=\(\)/);
 });
 
 test("tsconfig JSON comments do not corrupt comment markers inside strings", () => {

@@ -107,8 +107,21 @@ export function dashboardErrorBody(): string {
   return JSON.stringify({ error: "Internal server error" });
 }
 
+export function dashboardSecurityHeaders(): Record<string, string> {
+  return {
+    "content-security-policy":
+      "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data:; connect-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+    "cross-origin-resource-policy": "same-origin",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+  };
+}
+
 function send(response: http.ServerResponse, status: number, contentType: string, body: string): void {
   response.writeHead(status, {
+    ...dashboardSecurityHeaders(),
     "content-type": contentType,
     "cache-control": "no-store"
   });
