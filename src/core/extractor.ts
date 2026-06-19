@@ -205,6 +205,11 @@ export function extractFromFile(filePath: string, language: Language, content: s
     edges.push({ source: String(method.metadata?.parentQualifiedName ?? fileNode), target: method.qualifiedName, type: "DEFINES", weight: 0.95 });
   }
 
+  for (const testCase of extractTestCases(filePath, language, content, lines)) {
+    symbols.push(testCase);
+    edges.push({ source: fileNode, target: testCase.qualifiedName, type: "DEFINES", weight: 0.9 });
+  }
+
   const channels = extractChannelLinks(filePath, language, content, symbols);
   for (const symbol of channels.symbols) {
     symbols.push(symbol);
@@ -412,6 +417,53 @@ function isReservedMethodName(name: string): boolean {
   return ["constructor", "if", "for", "while", "switch", "catch", "function", "return"].includes(name.toLowerCase());
 }
 
+function extractTestCases(filePath: string, language: Language, content: string, lines: string[]): SymbolNode[] {
+  if (!isLikelyTestFile(filePath) && !hasInlineTestMarkers(language, content)) {
+    return [];
+  }
+  const symbols: SymbolNode[] = [];
+  if (["typescript", "javascript"].includes(language)) {
+    const regex = /\b(?:test|it)(?:\.(?:only|skip|todo|concurrent))?\s*\(\s*(['"`])([^'"`\n]{1,180})\1/g;
+    for (const match of content.matchAll(regex)) {
+      const name = normalizeTestName(match[2]);
+      if (!name) continue;
+      const line = offsetToLine(content, match.index ?? 0);
+      symbols.push(makeSymbol(filePath, language, "test", name, line, findBlockEndLine(language, lines, line), lines[line - 1]?.trim().slice(0, 220), false, { framework: "js-test" }));
+    }
+  } else if (language === "python") {
+    const regex = /^\s*(?:async\s+)?def\s+(test_[A-Za-z_]\w*)\s*\(/gm;
+    for (const match of content.matchAll(regex)) {
+      const line = offsetToLine(content, match.index ?? 0);
+      symbols.push(makeSymbol(filePath, language, "test", match[1], line, findBlockEndLine(language, lines, line), lines[line - 1]?.trim().slice(0, 220), false, { framework: "pytest" }));
+    }
+  } else if (language === "go") {
+    const regex = /^func\s+(Test[A-Za-z_]\w*)\s*\(/gm;
+    for (const match of content.matchAll(regex)) {
+      const line = offsetToLine(content, match.index ?? 0);
+      symbols.push(makeSymbol(filePath, language, "test", match[1], line, findBlockEndLine(language, lines, line), lines[line - 1]?.trim().slice(0, 220), false, { framework: "go-test" }));
+    }
+  } else if (language === "java") {
+    const regex = /@Test[\s\r\n]+(?:public|private|protected)?\s*(?:void|[\w<>\[\]]+)\s+([A-Za-z_]\w*)\s*\(/g;
+    for (const match of content.matchAll(regex)) {
+      const line = offsetToLine(content, match.index ?? 0);
+      symbols.push(makeSymbol(filePath, language, "test", match[1], line, findBlockEndLine(language, lines, line), lines[line - 1]?.trim().slice(0, 220), false, { framework: "junit" }));
+    }
+  } else if (language === "rust") {
+    const regex = /#\s*\[\s*test\s*\][\s\r\n]+(?:pub\s+)?fn\s+([A-Za-z_]\w*)\s*\(/g;
+    for (const match of content.matchAll(regex)) {
+      const line = offsetToLine(content, match.index ?? 0);
+      symbols.push(makeSymbol(filePath, language, "test", match[1], line, findBlockEndLine(language, lines, line), lines[line - 1]?.trim().slice(0, 220), false, { framework: "rust-test" }));
+    }
+  } else if (language === "swift") {
+    const regex = /^\s*(?:public|internal|private|fileprivate|\s)*func\s+(test[A-Za-z_]\w*)\s*\(/gm;
+    for (const match of content.matchAll(regex)) {
+      const line = offsetToLine(content, match.index ?? 0);
+      symbols.push(makeSymbol(filePath, language, "test", match[1], line, findBlockEndLine(language, lines, line), lines[line - 1]?.trim().slice(0, 220), false, { framework: "xctest" }));
+    }
+  }
+  return symbols;
+}
+
 export function addTypeRelationEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
   const typeSymbols = symbols.filter(isTypeSymbol);
   if (typeSymbols.length === 0) {
@@ -572,6 +624,53 @@ export function addHttpEdges(symbols: SymbolNode[], fileContents: Map<string, st
           matchReason,
           line: call.startLine,
           call: call.qualifiedName
+        }
+      });
+    }
+  }
+  return edges;
+}
+
+export function addTestEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
+  const tests = symbols.filter((symbol) => symbol.kind === "test");
+  if (tests.length === 0) {
+    return [];
+  }
+  const targets = symbols.filter(isTestTargetSymbol);
+  const targetNameCounts = new Map<string, number>();
+  for (const target of targets) {
+    targetNameCounts.set(target.name, (targetNameCounts.get(target.name) ?? 0) + 1);
+  }
+
+  const edges: Edge[] = [];
+  const seen = new Set<string>();
+  for (const testCase of tests) {
+    const body = textForSymbol(testCase, fileContents);
+    if (!body) {
+      continue;
+    }
+    for (const target of targets) {
+      if (target.qualifiedName === testCase.qualifiedName) {
+        continue;
+      }
+      const reason = testTargetsSymbol(body, testCase, target, targetNameCounts);
+      if (!reason) {
+        continue;
+      }
+      const key = `${testCase.qualifiedName}\0${target.qualifiedName}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      edges.push({
+        source: testCase.qualifiedName,
+        target: target.qualifiedName,
+        type: "TESTS",
+        weight: testCase.filePath === target.filePath ? 0.82 : 0.72,
+        metadata: {
+          testName: testCase.name,
+          targetKind: target.kind,
+          reason
         }
       });
     }
@@ -2117,6 +2216,52 @@ function isTypeSymbol(symbol: SymbolNode): boolean {
 
 function shouldScanTypeUses(symbol: SymbolNode): boolean {
   return ["function", "method", "class", "interface", "type", "struct", "enum", "protocol", "actor", "trait"].includes(symbol.kind);
+}
+
+function isTestTargetSymbol(symbol: SymbolNode): boolean {
+  return ["function", "method", "class", "route"].includes(symbol.kind) && !isLikelyTestFile(symbol.filePath);
+}
+
+function testTargetsSymbol(body: string, testCase: SymbolNode, target: SymbolNode, targetNameCounts: Map<string, number>): string | null {
+  if (target.kind === "route") {
+    const routePath = typeof target.metadata?.path === "string" ? target.metadata.path : undefined;
+    return routePath && body.includes(routePath) ? "route_path_literal" : null;
+  }
+  if (testCase.filePath !== target.filePath && (targetNameCounts.get(target.name) ?? 0) > 1) {
+    return null;
+  }
+  if (["function", "method"].includes(target.kind) && callsName(body, target.name, { allowMember: target.kind !== "method" })) {
+    return "call_reference";
+  }
+  if (target.kind === "class" && new RegExp(`\\bnew\\s+${escapeRegExp(target.name)}\\b`).test(body)) {
+    return "constructor_reference";
+  }
+  return null;
+}
+
+function isLikelyTestFile(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, "/");
+  return (
+    /(^|\/)(?:__tests__|tests?|specs?)\//i.test(normalized) ||
+    /\.(?:test|spec)\.[cm]?[jt]sx?$/i.test(normalized) ||
+    /(?:^|\/)test_[^/]+\.py$/i.test(normalized) ||
+    /_test\.go$/i.test(normalized) ||
+    /(?:^|\/)[^/]+Test\.java$/i.test(normalized) ||
+    /(?:^|\/)[^/]+Tests\.swift$/i.test(normalized)
+  );
+}
+
+function hasInlineTestMarkers(language: Language, content: string): boolean {
+  if (["typescript", "javascript"].includes(language)) return /\b(?:test|it)\s*\(/.test(content);
+  if (language === "java") return /@Test\b/.test(content);
+  if (language === "rust") return /#\s*\[\s*test\s*\]/.test(content);
+  if (language === "swift") return /\bfunc\s+test[A-Za-z_]\w*\s*\(/.test(content);
+  return false;
+}
+
+function normalizeTestName(value: string | undefined): string | null {
+  const normalized = value?.trim().replace(/\s+/g, " ");
+  return normalized && normalized.length <= 180 ? normalized : null;
 }
 
 function declarationTextForSymbol(symbol: SymbolNode, fileContents: Map<string, string>): string {

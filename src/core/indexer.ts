@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { exportGraphPackage, importGraphPackage } from "./artifact.js";
-import { addCallEdges, addDataFlowEdges, addHttpEdges, addTypeRelationEdges, extractFromFile } from "./extractor.js";
+import { addCallEdges, addDataFlowEdges, addHttpEdges, addTestEdges, addTypeRelationEdges, extractFromFile } from "./extractor.js";
 import { sha256 } from "./hash.js";
 import { buildResolvedImportEdges } from "./import-resolver.js";
 import { loadRepoIgnoreMatcher, shouldIgnoreDirectory, shouldIgnoreFile, type RepoIgnoreMatcher } from "./ignore.js";
@@ -154,6 +154,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
       const dataFlowEdges = addDataFlowEdges(allSymbols, fileContents, callEdges);
       const httpEdges = addHttpEdges(allSymbols, fileContents);
       const typeRelationEdges = addTypeRelationEdges(allSymbols, fileContents);
+      const testEdges = addTestEdges(allSymbols, fileContents);
       const resolvedImportEdges = buildResolvedImportEdges(allSymbols, fileContents);
       const semanticEdges = buildSemanticEdges(allSymbols, fileContents);
       store.transaction(() => {
@@ -163,6 +164,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
         for (const edge of dataFlowEdges) store.insertEdge(edge);
         for (const edge of httpEdges) store.insertEdge(edge);
         for (const edge of typeRelationEdges) store.insertEdge(edge);
+        for (const edge of testEdges) store.insertEdge(edge);
         for (const edge of semanticEdges) store.insertEdge(edge);
       });
       store.rebuildSymbolVectors();

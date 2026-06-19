@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
-import { addCallEdges, addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
+import { addCallEdges, addDataFlowEdges, addTestEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
@@ -113,6 +113,44 @@ export async function loadBillingOrders() {
   assert.ok(edge);
   assert.equal(edge.metadata?.host, "billing.internal");
   assert.equal(edge.metadata?.path, "/orders");
+});
+
+test("extracts test cases and links them to referenced targets", () => {
+  const sourceContent = `
+export function createOrder(id: string) {
+  return { id };
+}
+
+export function listOrders() {
+  return [];
+}
+`;
+  const testContent = `
+import { createOrder, listOrders } from "../src/orders";
+
+test("creates order records", () => {
+  const order = createOrder("1");
+  expect(listOrders()).toContain(order);
+});
+`;
+  const source = extractFromFile("src/orders.ts", "typescript", sourceContent);
+  const tests = extractFromFile("tests/orders.test.ts", "typescript", testContent);
+  const testCase = tests.symbols.find((symbol) => symbol.kind === "test" && symbol.name === "creates order records");
+  assert.ok(testCase);
+
+  const edges = addTestEdges(
+    [...source.symbols, ...tests.symbols],
+    new Map([
+      ["src/orders.ts", sourceContent],
+      ["tests/orders.test.ts", testContent]
+    ])
+  );
+  const createOrder = source.symbols.find((symbol) => symbol.name === "createOrder")?.qualifiedName;
+  const listOrders = source.symbols.find((symbol) => symbol.name === "listOrders")?.qualifiedName;
+
+  assert.ok(edges.some((edge) => edge.type === "TESTS" && edge.source === testCase.qualifiedName && edge.target === createOrder));
+  assert.ok(edges.some((edge) => edge.type === "TESTS" && edge.source === testCase.qualifiedName && edge.target === listOrders));
+  assert.ok(edges.every((edge) => edge.metadata?.reason === "call_reference"));
 });
 
 test("extracts typed inheritance, implementation, and usage edges", () => {
@@ -295,6 +333,56 @@ export function checkout(order: Order) {
   try {
     const stale = store.queryGraph("MATCH (a)-[r:DATA_FLOWS]->(b) RETURN a.name,b.name,r.type LIMIT 5");
     assert.equal(stale.rows.length, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test("indexes test case nodes and TESTS edges", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-test-graph-"));
+  const repo = path.join(tmp, "repo");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.mkdir(path.join(repo, "tests"), { recursive: true });
+  await fs.writeFile(
+    path.join(repo, "src", "orders.ts"),
+    `
+export function createOrder(id: string) {
+  return { id };
+}
+
+export function listOrders() {
+  return [];
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "tests", "orders.test.ts"),
+    `
+import { createOrder, listOrders } from "../src/orders";
+
+test("creates order records", () => {
+  const order = createOrder("1");
+  expect(listOrders()).toContain(order);
+});
+`
+  );
+
+  const dbPath = path.join(tmp, "memory.db");
+  await indexRepository({ root: repo, dbPath });
+  const store = new MemoryStore(dbPath);
+  try {
+    const schema = store.graphSchema();
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "test"));
+    assert.ok(schema.edgeTypes.some((edge) => edge.type === "TESTS" && edge.count === 2));
+
+    const query = store.queryGraph("MATCH (t)-[r:TESTS]->(f:Function) RETURN t.name,f.name,r.type ORDER BY f.name LIMIT 5");
+    assert.deepEqual(
+      query.rows.map((row) => [row["t.name"], row["f.name"], row["r.type"]]),
+      [
+        ["creates order records", "createOrder", "TESTS"],
+        ["creates order records", "listOrders", "TESTS"]
+      ]
+    );
   } finally {
     store.close();
   }
