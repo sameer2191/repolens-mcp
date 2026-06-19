@@ -210,12 +210,13 @@ MATCH (f:Function) WHERE f.name = 'main' RETURN f.name,f.filePath LIMIT 10
 MATCH (a)-[r:CALLS]->(b) WHERE b.name CONTAINS 'order' RETURN a.name,b.name,r.type LIMIT 10
 MATCH (a)<-[:CALLS]-(b) RETURN a.name,b.name LIMIT 10
 MATCH (s) WHERE s.kind IN ['function', 'method'] RETURN s.name,s.kind LIMIT 10
+MATCH (s) WHERE s.kind = 'route' OR s.kind = 'http_call' RETURN s.name,s.kind LIMIT 10
 MATCH (a)-[r]->(b) WHERE r.weight >= 0.7 RETURN a.name,b.name,r.weight LIMIT 10
 MATCH (f:Function) RETURN count(f) AS functions
 MATCH (f:Function) RETURN DISTINCT f.name ORDER BY f.name SKIP 10 LIMIT 10
 ```
 
-Supported `WHERE` operators are `=`, `<>`, `CONTAINS`, `STARTS WITH`, `ENDS WITH`, `IN`, `>`, `>=`, `<`, and `<=`, joined with `AND`.
+Supported `WHERE` operators are `=`, `<>`, `CONTAINS`, `STARTS WITH`, `ENDS WITH`, `IN`, `>`, `>=`, `<`, and `<=`, joined with `AND` or `OR`; `AND` binds tighter than `OR`.
 Supported result clauses include `RETURN DISTINCT`, `count(...)`, `ORDER BY`, `SKIP`, and `LIMIT`.
 
 ## Validation

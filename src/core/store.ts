@@ -98,13 +98,15 @@ interface ParsedGraphQuery {
   pattern:
     | { kind: "node"; alias: string; label?: string }
     | { kind: "edge"; leftAlias: string; leftLabel?: string; edgeAlias: string; edgeType?: string; rightAlias: string; rightLabel?: string; direction: "outbound" | "inbound" };
-  where: GraphWhereCondition[];
+  where: GraphWhereClause[];
   returns: GraphReturnExpression[];
   orderBy: GraphOrderExpression[];
   limit: number;
   skip: number;
   distinct: boolean;
 }
+
+type GraphWhereClause = GraphWhereCondition[];
 
 interface GraphWhereCondition {
   alias: string;
@@ -1083,8 +1085,12 @@ export class MemoryStore {
       }
     }
 
-    for (const condition of parsed.where) {
-      where.push(whereSql(condition, aliasMap, params));
+    if (parsed.where.length > 0) {
+      where.push(
+        `(${parsed.where
+          .map((clause) => `(${clause.map((condition) => whereSql(condition, aliasMap, params)).join(" AND ")})`)
+          .join(" OR ")})`
+      );
     }
 
     const selectSql = parsed.returns.map((expr, index) => `${returnSql(expr, aliasMap)} AS c${index}`);
@@ -2864,16 +2870,22 @@ function parseMatchPattern(pattern: string): ParsedGraphQuery["pattern"] {
   };
 }
 
-function parseWhere(where: string | undefined): GraphWhereCondition[] {
+function parseWhere(where: string | undefined): GraphWhereClause[] {
   if (!where) {
     return [];
   }
-  return splitKeyword(where, "AND").map((part) => {
-    const match = parseWherePart(part.trim());
-    if (!match) {
-      throw new Error(`Unsupported WHERE condition: ${part}`);
+  return splitKeyword(where, "OR").map((orPart) => {
+    const clause = splitKeyword(orPart, "AND").map((andPart) => {
+      const match = parseWherePart(andPart.trim());
+      if (!match) {
+        throw new Error(`Unsupported WHERE condition: ${andPart}`);
+      }
+      return match;
+    });
+    if (clause.length === 0) {
+      throw new Error(`Unsupported WHERE condition: ${orPart}`);
     }
-    return match;
+    return clause;
   });
 }
 
