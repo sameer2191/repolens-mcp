@@ -31,6 +31,7 @@
     "verify": "npm run build && npm test",
     "audit:prod": "npm audit --omit=dev",
     "package:check": "node scripts/package-contents-gate.mjs",
+    "installer:audit": "node scripts/installer-audit.mjs",
     "security:github": "node scripts/github-security-summary.mjs",
     "release:security-gate": "node scripts/github-security-summary.mjs --fail-on-actionable",
     "release:codeql-gate": "node scripts/codeql-alert-gate.mjs",

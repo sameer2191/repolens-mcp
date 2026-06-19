@@ -23,6 +23,7 @@ Commands:
 ```bash
 npm run audit:prod
 npm run package:check
+npm run installer:audit
 npm sbom --sbom-format cyclonedx --json
 GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="<token>" npm run security:github
 ```
@@ -32,6 +33,7 @@ Current package hygiene:
 - Production dependency audit reports 0 vulnerabilities.
 - Package contents are limited to runtime `dist/src`, public docs, README, license/security/contributing files, `llms.txt`, scripts, server manifest, and installers.
 - Compiled tests, TypeScript source, fixture data, local graph memory, SQLite databases, graph packages, private validation output, and workstation paths are blocked from npm packages.
+- Installer audit checks shipped shell and PowerShell installers, exercises dry-run Codex/agent setup under temporary home and target directories, and fails if dry runs write unexpected files.
 - The release workflow verifies build/tests/audit/package gates, generates a CycloneDX SBOM and SHA-256 checksums, creates build provenance attestations, uploads GitHub release assets, and publishes to npm with provenance.
 - The release security gate checks actionable GitHub Security alerts across CodeQL, Dependabot, and secret scanning before publication.
 

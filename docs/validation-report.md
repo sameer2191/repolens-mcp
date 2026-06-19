@@ -31,6 +31,7 @@ Commands:
 npm run audit:prod
 npm pack --dry-run --json
 npm run package:check
+npm run installer:audit
 GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run security:github
 node --experimental-sqlite dist/src/cli.js demo
 bash -n install.sh
@@ -51,9 +52,10 @@ Result:
 
 - Production dependency audit passed with `npm run audit:prod`: 0 vulnerabilities.
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 180,673 bytes packed, 929,624 bytes unpacked, 84 runtime/doc entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 182,143 bytes packed, 934,520 bytes unpacked, 85 runtime/doc entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, selected public docs, `llms.txt`, scripts, `package.json`, `server.json`, `install.sh`, and `install.ps1`; compiled tests, source TypeScript, local graph memory, SQLite databases, graph packages, fixtures, private validation output, and local workstation paths are excluded.
-- Package contents gate passed: 84 files inspected.
+- Package contents gate passed: 85 files inspected.
+- Installer audit passed for `install.sh` dry-run setup under a temporary home and target directory. `install.ps1` dry-run audit is enforced when `pwsh` is available and in CI.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`.
 - PowerShell installer parser check is enforced in CI for `install.ps1`; it mirrors the Unix installer's Node 24 check, npm/build flow, doctor command, Codex install/uninstall, agent install/uninstall, `-DryRun`, `-Force`, `-Db`, `-Agents`, `-Target`, and `-SkipNpm` options. Local macOS validation could not execute `pwsh` because it is not installed in this environment.
@@ -69,7 +71,7 @@ Result:
 - Release workflow runs `npm run release:security-gate` with `security-events: read` before packaging/publishing; the gate uses the GitHub security summary to fail on actionable CodeQL, Dependabot, or secret-scanning alerts.
 - OpenSSF Scorecard workflow added with SARIF upload to GitHub code scanning.
 - Live GitHub security check reported 0 open Dependabot alerts, 0 open secret-scanning alerts, and 0 open CodeQL alerts. The remaining 3 open code-scanning alerts are OpenSSF Scorecard process signals: `MaintainedID`, `CodeReviewID`, and `CIIBestPracticesID`.
-- CI now also checks `npm pack --dry-run --json`, `npm run package:check`, generates a CycloneDX SBOM, and self-indexes into `.repolens/ci.db`.
+- CI now also checks `npm pack --dry-run --json`, `npm run package:check`, `npm run installer:audit`, generates a CycloneDX SBOM, and self-indexes into `.repolens/ci.db`.
 
 ## Self Index
 
