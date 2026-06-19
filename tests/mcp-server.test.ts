@@ -226,12 +226,13 @@ test("MCP stdio JSON-RPC initializes and lists registered tools", async () => {
     const tools = await client.request("tools/list", {});
     assert.equal(tools.error, undefined, stderrFor(child));
     const list = (tools.result as { tools?: Array<{ name: string }> }).tools ?? [];
-    assert.equal(list.length, 38);
+    assert.equal(list.length, 39);
     assert.ok(list.some((tool) => tool.name === "index_repository"));
     assert.ok(list.some((tool) => tool.name === "benchmark_repository"));
     assert.ok(list.some((tool) => tool.name === "version_status"));
     assert.ok(list.some((tool) => tool.name === "trace_path"));
     assert.ok(list.some((tool) => tool.name === "scan_secrets"));
+    assert.ok(list.some((tool) => tool.name === "change_review_report"));
   } finally {
     await close();
   }
@@ -286,6 +287,12 @@ test("MCP stdio JSON-RPC rejects fuzzed invalid tool calls without exiting", asy
           arguments: fc.record({
             agents: fc.array(fc.constant("unknown-agent"), { minLength: 1, maxLength: 2 })
           })
+        }),
+        fc.record({
+          name: fc.constant("change_review_report"),
+          arguments: fc.record({
+            format: fc.string({ maxLength: 12 }).filter((value) => value !== "markdown" && value !== "json")
+          })
         })
       ),
       { numRuns: 24, seed: 20260618 }
@@ -297,7 +304,7 @@ test("MCP stdio JSON-RPC rejects fuzzed invalid tool calls without exiting", asy
 
     const stillAlive = await client.request("tools/list", {});
     assert.equal(stillAlive.error, undefined, stderrFor(child));
-    assert.equal(((stillAlive.result as { tools?: unknown[] }).tools ?? []).length, 38);
+    assert.equal(((stillAlive.result as { tools?: unknown[] }).tools ?? []).length, 39);
   } finally {
     await close();
   }

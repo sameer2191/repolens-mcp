@@ -17,7 +17,7 @@ const allowedSkips = [
     file: "tests/indexer.test.ts",
     reason: "git is not available",
     guard: "git.status !== 0",
-    expectedCount: 3
+    expectedCount: 4
   }
 ];
 

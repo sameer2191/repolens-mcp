@@ -6,6 +6,7 @@ RepoLens MCP is a local-first repository intelligence server for AI coding agent
 
 - You need architecture context before changing a codebase.
 - You need symbol, reference, route, dependency, or impact lookup without manually reading every file.
+- You need a PR-ready change review report from git impact, graph risk, security notes, and checklist items.
 - You want a repeatable full/incremental benchmark for a repository graph.
 - You need a portable `.rlgz` graph package for local sharing or bootstrap.
 - You want redacted secret-scan results, package/dependency graph data, runtime trace edges, or architecture reports.
@@ -29,7 +30,7 @@ Run the MCP server with:
 node --experimental-sqlite dist/src/cli.js mcp
 ```
 
-The server exposes tools for indexing, benchmarking, config management, project cataloging, fleet summaries, cross-repo graphing, code search, secret scanning, symbol/reference lookup, graph schema with relationship patterns and label properties, graph search, semantic/vector search, context packs, read-only graph queries, trace ingestion, impact analysis, architecture reports, ADR memory, and graph package import/export.
+The server exposes tools for indexing, benchmarking, config management, project cataloging, fleet summaries, cross-repo graphing, code search, secret scanning, symbol/reference lookup, graph schema with relationship patterns and label properties, graph search, semantic/vector search, context packs, read-only graph queries, trace ingestion, impact analysis, PR-ready change review reports, architecture reports, ADR memory, and graph package import/export.
 
 ## Local Data Rules
 

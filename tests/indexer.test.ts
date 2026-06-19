@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
+import { architectureReport, benchmarkRepository, changeReviewReport, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
 import { addCallEdges, addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
 import { MemoryStore } from "../src/core/store.js";
@@ -1242,6 +1242,44 @@ test("detects git change blast radius with per-file details", async (t) => {
   } finally {
     store.close();
   }
+});
+
+test("renders a PR-ready change review report", async (t) => {
+  const git = spawnSync("git", ["--version"], { encoding: "utf8" });
+  if (git.status !== 0) {
+    t.skip("git is not available");
+    return;
+  }
+
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-change-review-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.cp(fixture, repo, { recursive: true });
+  const runGit = (...args: string[]) => {
+    const result = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  };
+
+  spawnSync("git", ["init", repo], { encoding: "utf8" });
+  runGit("config", "user.email", "repolens@example.test");
+  runGit("config", "user.name", "RepoLens Test");
+  runGit("add", ".");
+  runGit("commit", "-m", "initial graph");
+  await indexRepository({ root: repo, dbPath });
+
+  await fs.appendFile(path.join(repo, "src", "orders.ts"), "\nexport function cancelOrder() { return orders.pop(); }\n");
+  await fs.mkdir(path.join(repo, ".github", "workflows"), { recursive: true });
+  await fs.writeFile(path.join(repo, ".github", "workflows", "release.yml"), "name: release\n");
+
+  const report = changeReviewReport(repo, 20, dbPath);
+
+  assert.equal(report.summary.changedFileCount, 2);
+  assert.match(report.markdown, /^# RepoLens Change Review/);
+  assert.match(report.markdown, /## Security Review Notes/);
+  assert.match(report.markdown, /\.github\/workflows\/release\.yml/);
+  assert.ok(report.securityNotes.some((note) => note.includes("security-sensitive paths")));
+  assert.ok(report.checklist.some((item) => item.includes("security")));
+  assert.ok(report.markdown.includes("Suggested PR Checklist"));
 });
 
 test("incremental indexing skips unchanged files and prunes removed files", async () => {

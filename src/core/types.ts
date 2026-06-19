@@ -376,6 +376,19 @@ export interface ChangeImpactResult {
   signals: string[];
 }
 
+export interface ChangeReviewReport {
+  generatedAt: string;
+  root: string;
+  risk: "none" | "low" | "medium" | "high";
+  summary: ChangeImpactResult["summary"];
+  changedFiles: ChangeImpactResult["changedFileDetails"];
+  impacted: ChangeImpactResult["impacted"];
+  signals: string[];
+  securityNotes: string[];
+  checklist: string[];
+  markdown: string;
+}
+
 export interface DecisionRecord {
   id?: number;
   title: string;

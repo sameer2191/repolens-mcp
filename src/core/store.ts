@@ -2317,7 +2317,7 @@ function getCount(db: DatabaseSync, sql: string): number {
 }
 
 function gitChangedFiles(root: string, signals: string[]): GitChangedFile[] {
-  const result = spawnSync("git", ["-C", root, "status", "--porcelain=v1", "-z"], { encoding: "utf8" });
+  const result = spawnSync("git", ["-C", root, "status", "--porcelain=v1", "-z", "--untracked-files=all"], { encoding: "utf8" });
   if (result.status !== 0) {
     const message = String(result.stderr || result.stdout || "git status failed").trim();
     signals.push(`git status --porcelain failed: ${message}`);

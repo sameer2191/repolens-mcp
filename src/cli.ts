@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   architectureReport,
   benchmarkRepository,
+  changeReviewReport,
   configGet,
   configList,
   configReset,
@@ -246,6 +247,22 @@ async function main(): Promise<void> {
     case "changes":
       print(detectChanges(args.positional[0] ? path.resolve(args.positional[0]) : undefined, numberFlag(args, "limit"), stringFlag(args, "db")));
       break;
+    case "review-report":
+    case "pr-report": {
+      const out = stringFlag(args, "out");
+      const format = reviewReportFormatFlag(args, out);
+      const report = changeReviewReport(args.positional[0] ? path.resolve(args.positional[0]) : undefined, numberFlag(args, "limit"), stringFlag(args, "db"));
+      const body = format === "json" ? `${jsonBlock(report)}\n` : report.markdown;
+      if (out) {
+        const outPath = path.resolve(out);
+        await fs.mkdir(path.dirname(outPath), { recursive: true });
+        await fs.writeFile(outPath, body);
+        print({ out: outPath, format, risk: report.risk, changedFiles: report.summary.changedFileCount, impactedItems: report.summary.impactedItemCount });
+      } else {
+        process.stdout.write(body);
+      }
+      break;
+    }
     case "decision": {
       const title = required(stringFlag(args, "title") ?? args.positional[0], "title");
       const body = required(stringFlag(args, "body") ?? args.positional.slice(1).join(" "), "body");
@@ -491,6 +508,14 @@ function traceModeFlag(args: ParsedArgs): TraceMode | undefined {
   throw new Error("Invalid --mode. Use one of: all, calls, data_flow, cross_service.");
 }
 
+function reviewReportFormatFlag(args: ParsedArgs, out?: string): "markdown" | "json" {
+  const value = stringFlag(args, "format") ?? (out?.endsWith(".json") ? "json" : "markdown");
+  if (value === "markdown" || value === "json") {
+    return value;
+  }
+  throw new Error("Invalid --format. Use one of: markdown, json.");
+}
+
 function decisionStatusFlag(args: ParsedArgs): "proposed" | "accepted" | "superseded" | undefined {
   const value = stringFlag(args, "status");
   if (!value) {
@@ -651,6 +676,7 @@ Usage:
   repolens-mcp cycles [--db path] [--limit n]
   repolens-mcp ingest-traces traces.json [--db path]
   repolens-mcp changes [repo] [--db path] [--limit n]
+  repolens-mcp review-report [repo] [--db path] [--limit n] [--format markdown|json] [--out report.md]
   repolens-mcp decision --title "ADR title" --body "Decision body" [--tags a,b]
   repolens-mcp decision-update <id> [--title "New title"] [--status proposed|accepted|superseded] [--body "Updated body"] [--tags a,b] [--db path]
   repolens-mcp decision-delete <id> [--db path]

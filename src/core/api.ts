@@ -11,6 +11,7 @@ import { getRepoLensConfigValue, readRepoLensConfig, resetRepoLensConfigValue, s
 import { buildFleetGraph, type FleetGraphOptions } from "./fleet-graph.js";
 import { indexRepository } from "./indexer.js";
 import { buildArchitectureReport } from "./report.js";
+import { buildChangeReviewReport } from "./review.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
 import { getVersionStatus as readVersionStatus, type VersionStatusOptions } from "./version.js";
 import { watchRepository } from "./watcher.js";
@@ -230,6 +231,10 @@ export function contextPack(query: string, limit?: number, context?: number, dbP
 
 export function detectChanges(root?: string, limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.detectChanges(root, limit));
+}
+
+export function changeReviewReport(root?: string, limit?: number, dbPath?: string) {
+  return buildChangeReviewReport(detectChanges(root, limit, dbPath));
 }
 
 export function rememberDecision(decision: DecisionRecord, dbPath?: string) {

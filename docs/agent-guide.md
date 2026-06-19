@@ -37,6 +37,7 @@ On Windows PowerShell, the local installer mirrors the shell installer:
 2. Use `architecture`, `schema`, `communities`, or `fleet-summary` to understand the project shape. `schema` includes relationship patterns and label property hints for safer graph queries.
 3. Use `search`, `symbols`, `references`, `trace`, `cycles`, and `context-pack` for focused code context.
 4. Use `changes` after edits to map uncommitted files back to graph impact, including per-file blast radius, relationship counts, and risk reasons.
+5. Use `review-report --out change-review.md` when you need a PR-ready summary of changed-file risk, impacted graph items, security review notes, and checklist items.
 
 ## Useful MCP Tools
 
@@ -50,6 +51,7 @@ On Windows PowerShell, the local installer mirrors the shell installer:
 - `get_graph_schema`: inspect labels, edge types, relationship patterns, and label properties before writing graph queries.
 - `scan_secrets`: return redacted high-signal secret findings from indexed lines.
 - `architecture_report`: generate Markdown or HTML reports.
+- `change_review_report`: generate PR-ready Markdown or JSON from git change impact and graph context.
 - `export_graph_package` / `import_graph_package`: share or bootstrap local graph snapshots.
 
 ## Big-Repo Validation Pattern
@@ -87,3 +89,4 @@ For behavior changes, include:
 - Documentation updates for CLI, MCP, graph schema, dashboard, or security behavior.
 - Package boundary validation when package contents changed.
 - Report or graph artifact paths when output behavior changed.
+- `review-report` output for changes where graph impact, release risk, or security-sensitive paths need review evidence.

@@ -12,7 +12,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 38 tools for indexing, version/update status, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing and git-aware auto-sync, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema with relationship patterns and label properties, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, receiver-aware method call edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 39 tools for indexing, version/update status, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing and git-aware auto-sync, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema with relationship patterns and label properties, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, receiver-aware method call edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, PR-ready change review reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance plus opt-in hook/reminder files for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
@@ -116,6 +116,7 @@ repolens-mcp dead-code [--db path]
 repolens-mcp cycles [--db path] [--limit n]
 repolens-mcp ingest-traces traces.json [--db path]
 repolens-mcp changes [repo] [--db path]
+repolens-mcp review-report [repo] [--db path] [--limit n] [--format markdown|json] [--out report.md]
 repolens-mcp report [--db path] [--format markdown|html] [--graph-limit n] [--out report.html]
 repolens-mcp export-graph --out graph.html [--db path]
 repolens-mcp pack-graph --out graph.rlgz [--db path] [--label name]
@@ -168,6 +169,7 @@ repolens-mcp mcp
 | `find_dependency_cycles` | Find import-resolved dependency cycles between architecture clusters. |
 | `ingest_traces` | Add observed runtime HTTP, event, or symbol edges as `OBSERVED_*` relationships. |
 | `detect_changes` | Map uncommitted git changes to indexed graph impact with per-file blast radius, relationship counts, and risk reasons. |
+| `change_review_report` | Generate a PR-ready Markdown or JSON report with change risk, impacted graph items, security notes, and review checklist items. |
 | `architecture_report` | Generate a markdown or HTML architecture report with graph, hotspot, history, risk, and recommendation sections. |
 | `remember_decision` | Persist an ADR-style architecture decision. |
 | `list_decisions` | Retrieve saved decisions. |
@@ -246,6 +248,7 @@ node --experimental-sqlite dist/src/cli.js context-pack "order checkout flow" --
 node --experimental-sqlite dist/src/cli.js cycles --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js query-graph "MATCH (f:Function) RETURN f.name,f.filePath LIMIT 5" --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js ingest-traces traces.json --db /tmp/memory.db
+node --experimental-sqlite dist/src/cli.js review-report /path/to/big/repo --db /tmp/memory.db --out change-review.md
 node --experimental-sqlite dist/src/cli.js report --db /tmp/memory.db --format html --out report.html
 node --experimental-sqlite dist/src/cli.js export-graph --db /tmp/memory.db --out graph.html --limit 1000
 node --experimental-sqlite dist/src/cli.js pack-graph --db /tmp/memory.db --out graph.rlgz --label validation

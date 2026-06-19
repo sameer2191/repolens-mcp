@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   architectureReport,
   benchmarkRepository,
+  changeReviewReport,
   configGet,
   configList,
   configReset,
@@ -547,6 +548,23 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.registerTool(
+    "change_review_report",
+    {
+      description: "Generate a PR-ready Markdown or JSON change-impact report from uncommitted git changes and the indexed graph.",
+      inputSchema: {
+        root: z.string().optional(),
+        limit: z.number().int().positive().max(500).optional(),
+        format: z.enum(["markdown", "json"]).default("markdown"),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ root, limit, format, dbPath }) => {
+      const report = changeReviewReport(root, limit, dbPath);
+      return format === "json" ? text(report) : plainText(report.markdown);
+    }
+  );
+
+  server.registerTool(
     "remember_decision",
     {
       description: "Persist an architecture decision record in the local memory database.",
@@ -763,6 +781,17 @@ function text(value: unknown) {
       {
         type: "text" as const,
         text: jsonBlock(value)
+      }
+    ]
+  };
+}
+
+function plainText(value: string) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: value
       }
     ]
   };
