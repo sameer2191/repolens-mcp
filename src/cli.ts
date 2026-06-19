@@ -661,9 +661,9 @@ Usage:
   repolens-mcp doctor [--config ~/.codex/config.toml] [--name repolens]
   repolens-mcp install-codex [--db .repolens/memory.db] [--dry-run] [--force] [--config ~/.codex/config.toml]
   repolens-mcp uninstall-codex [--dry-run] [--config ~/.codex/config.toml]
-  repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini] [--db .repolens/memory.db]
-  repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
-  repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
+  repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--db .repolens/memory.db]
+  repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run]
+  repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run]
   repolens-mcp mcp
   repolens-mcp demo
 `;

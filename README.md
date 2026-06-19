@@ -122,9 +122,9 @@ repolens-mcp unpack-graph graph.rlgz [--db path] [--overwrite]
 repolens-mcp doctor [--config ~/.codex/config.toml] [--name repolens]
 repolens-mcp install-codex [--db .repolens/memory.db] [--dry-run] [--force]
 repolens-mcp uninstall-codex [--dry-run]
-repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini] [--db .repolens/memory.db]
-repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
-repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini] [--dry-run]
+repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--db .repolens/memory.db]
+repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run]
+repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run]
 repolens-mcp decision --title "Use SQLite" --body "Keep memory local."
 repolens-mcp decision-update 1 --status accepted --tags sqlite,privacy
 repolens-mcp decision-delete 1
@@ -321,7 +321,7 @@ repolens-mcp install-agents --target . --agents codex,claude,gemini
 repolens-mcp uninstall-agents --target . --agents codex,claude,gemini --dry-run
 ```
 
-`install-agents` writes managed markdown blocks into project-local instruction files and a `docs/repolens-agent-setup.md` guide. `uninstall-agents` removes those managed markdown blocks while preserving hand-written content. The guide includes MCP config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
+`install-agents` writes managed markdown blocks into project-local instruction files and a `docs/repolens-agent-setup.md` guide. For VS Code it also writes a project-local `.vscode/mcp.json` `servers.repolens` entry while preserving unrelated servers. `uninstall-agents` removes managed RepoLens markdown blocks and managed VS Code config entries while preserving hand-written content. The guide includes MCP config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 
 ```json
 {

@@ -98,3 +98,98 @@ test("agent setup uninstall removes managed blocks only", async () => {
   assert.match(guide, /Keep this section/);
   assert.ok(!guide.includes("repolens-mcp managed"));
 });
+
+test("agent setup installs and uninstalls project-local VS Code MCP config", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-vscode-agent-"));
+  const configPath = path.join(tmp, ".vscode", "mcp.json");
+  await fs.mkdir(path.dirname(configPath), { recursive: true });
+  await fs.writeFile(
+    configPath,
+    JSON.stringify(
+      {
+        servers: {
+          existing: {
+            command: "other-tool",
+            args: ["mcp"]
+          }
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  const dryRun = await installAgentSetup({
+    targetDir: tmp,
+    agents: ["vscode"],
+    command: "node",
+    cliPath: "/repo/one.js",
+    dbPath: "one.db",
+    dryRun: true
+  });
+  assert.ok(dryRun.files.some((file) => file.path.endsWith(".vscode/mcp.json") && file.changed));
+  assert.equal((JSON.parse(await fs.readFile(configPath, "utf8")) as { servers: Record<string, unknown> }).servers.repolens, undefined);
+
+  await installAgentSetup({
+    targetDir: tmp,
+    agents: ["vscode"],
+    command: "node",
+    cliPath: "/repo/one.js",
+    dbPath: "one.db"
+  });
+  await installAgentSetup({
+    targetDir: tmp,
+    agents: ["vscode"],
+    command: "node",
+    cliPath: "/repo/two.js",
+    dbPath: "two.db"
+  });
+
+  const installed = JSON.parse(await fs.readFile(configPath, "utf8")) as {
+    servers: Record<string, { command: string; args: string[]; env?: Record<string, string> }>;
+  };
+  assert.equal(installed.servers.existing.command, "other-tool");
+  assert.equal(installed.servers.repolens.command, "node");
+  assert.deepEqual(installed.servers.repolens.args, ["--experimental-sqlite", "/repo/two.js", "mcp"]);
+  assert.equal(installed.servers.repolens.env?.REPOLENS_DB, "two.db");
+  assert.equal(installed.servers.repolens.env?.REPOLENS_MANAGED, "1");
+
+  const result = await uninstallAgentSetup({
+    targetDir: tmp,
+    agents: ["vscode"]
+  });
+  const uninstalled = JSON.parse(await fs.readFile(configPath, "utf8")) as { servers: Record<string, unknown> };
+  assert.ok(result.files.some((file) => file.path.endsWith(".vscode/mcp.json") && file.changed && !file.removed));
+  assert.ok("existing" in uninstalled.servers);
+  assert.equal(uninstalled.servers.repolens, undefined);
+});
+
+test("agent setup leaves unmanaged VS Code MCP entries untouched on uninstall", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-vscode-unmanaged-"));
+  const configPath = path.join(tmp, ".vscode", "mcp.json");
+  await fs.mkdir(path.dirname(configPath), { recursive: true });
+  await fs.writeFile(
+    configPath,
+    JSON.stringify(
+      {
+        servers: {
+          repolens: {
+            command: "custom-node",
+            args: ["custom.js", "mcp"]
+          }
+        }
+      },
+      null,
+      2
+    ) + "\n"
+  );
+
+  const result = await uninstallAgentSetup({
+    targetDir: tmp,
+    agents: ["vscode"]
+  });
+  const current = JSON.parse(await fs.readFile(configPath, "utf8")) as { servers: Record<string, { command: string }> };
+
+  assert.ok(result.files.some((file) => file.path.endsWith(".vscode/mcp.json") && !file.changed));
+  assert.equal(current.servers.repolens.command, "custom-node");
+});
