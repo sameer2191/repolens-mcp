@@ -43,7 +43,8 @@ The server exposes tools for indexing, benchmarking, config management, project 
 ```bash
 npm run verify
 npm run package:check
-npm audit --omit=dev
+npm run audit:prod
+GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN=<token> npm run security:github
 GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN=<token> npm run release:codeql-gate
 ```
 

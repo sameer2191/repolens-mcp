@@ -24,6 +24,13 @@ node --experimental-sqlite dist/src/cli.js doctor
 node --experimental-sqlite dist/src/cli.js install-codex --dry-run
 ```
 
+On Windows PowerShell, the local installer mirrors the shell installer:
+
+```powershell
+.\install.ps1 -InstallCodex -DryRun
+.\install.ps1 -InstallAgents -DryRun
+```
+
 ## Before Editing
 
 1. Run `index` or `benchmark` for the target repository.
@@ -66,6 +73,8 @@ RepoLens is local-first, but generated outputs are still derived code metadata.
 - Do not paste raw private source snippets into public issues or pull requests.
 - Run `scan-secrets` before sharing reports or graph exports from private repositories.
 - Run `npm run package:check` before publishing package changes.
+- Run `npm run audit:prod` before release-sensitive dependency or package changes.
+- Maintainers can run `npm run security:github` with `GITHUB_REPOSITORY` and `GH_TOKEN` to summarize live GitHub security alerts.
 
 ## PR Evidence
 

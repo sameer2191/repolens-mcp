@@ -16,7 +16,8 @@
     "scripts",
     "LICENSE",
     "server.json",
-    "install.sh"
+    "install.sh",
+    "install.ps1"
   ],
   "scripts": {
     "build": "tsc && chmod 755 dist/src/cli.js",
@@ -25,7 +26,9 @@
     "test:src": "npm run build && npm test",
     "lint": "tsc --noEmit",
     "verify": "npm run build && npm test",
+    "audit:prod": "npm audit --omit=dev",
     "package:check": "node scripts/package-contents-gate.mjs",
+    "security:github": "node scripts/github-security-summary.mjs",
     "release:codeql-gate": "node scripts/codeql-alert-gate.mjs",
     "demo": "npm run build && node --experimental-sqlite dist/src/cli.js demo"
   },

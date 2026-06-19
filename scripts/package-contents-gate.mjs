@@ -10,10 +10,12 @@ const requiredFiles = [
   "llms.txt",
   "server.json",
   "install.sh",
+  "install.ps1",
   "docs/agent-guide.md",
   "docs/research-notes.md",
   "docs/validation-report.md",
   "scripts/codeql-alert-gate.mjs",
+  "scripts/github-security-summary.mjs",
   "scripts/package-contents-gate.mjs",
   "dist/src/cli.js",
   "dist/src/mcp/server.js"
@@ -27,8 +29,10 @@ const allowedExactFiles = new Set([
   "llms.txt",
   "server.json",
   "install.sh",
+  "install.ps1",
   "package.json",
   "scripts/codeql-alert-gate.mjs",
+  "scripts/github-security-summary.mjs",
   "scripts/package-contents-gate.mjs"
 ]);
 
