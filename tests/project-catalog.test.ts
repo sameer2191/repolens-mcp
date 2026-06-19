@@ -88,3 +88,90 @@ test("summarizes a fleet of indexed projects", async () => {
     }
   }
 });
+
+test("scores fleet service links with host-aware confidence", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-fleet-host-"));
+  const previousCatalog = process.env.REPOLENS_CATALOG;
+  process.env.REPOLENS_CATALOG = path.join(tmp, "projects.json");
+
+  try {
+    const billingRoot = path.join(tmp, "billing-api");
+    const inventoryRoot = path.join(tmp, "inventory-api");
+    const webRoot = path.join(tmp, "web");
+    await writeServiceFixture(
+      billingRoot,
+      "billing-api",
+      `
+import express from "express";
+const app = express();
+app.get("/orders", (_request, response) => response.json([]));
+`
+    );
+    await writeServiceFixture(
+      inventoryRoot,
+      "inventory-api",
+      `
+import express from "express";
+const app = express();
+app.get("/orders", (_request, response) => response.json([]));
+`
+    );
+    await writeServiceFixture(
+      webRoot,
+      "web",
+      `
+export async function loadBillingOrders() {
+  return fetch("https://billing.internal/orders?limit=10");
+}
+
+export async function loadAnyOrders() {
+  return fetch("/orders");
+}
+`
+    );
+
+    await Promise.all([
+      runIndex({ root: billingRoot, dbPath: path.join(tmp, "billing", ".repolens", "memory.db"), runLabel: "billing-api" }),
+      runIndex({ root: inventoryRoot, dbPath: path.join(tmp, "inventory", ".repolens", "memory.db"), runLabel: "inventory-api" }),
+      runIndex({ root: webRoot, dbPath: path.join(tmp, "web-db", ".repolens", "memory.db"), runLabel: "web" })
+    ]);
+
+    const fleet = await fleetSummary();
+    const web = fleet.projects.find((project) => project.label === "web");
+    assert.ok(web?.httpCalls.some((call) => call.path === "/orders" && call.host === "billing.internal" && call.urlKind === "absolute"));
+
+    const billingLink = fleet.serviceLinks.find((link) => link.consumer === "web" && link.provider === "billing-api" && link.route === "GET /orders");
+    assert.ok(billingLink);
+    assert.equal(billingLink.host, "billing.internal");
+    assert.equal(billingLink.confidence, 0.95);
+    assert.equal(billingLink.matchReason, "method_path_host");
+
+    assert.equal(
+      fleet.serviceLinks.find((link) => link.consumer === "web" && link.provider === "inventory-api" && link.host === "billing.internal"),
+      undefined
+    );
+    const inventoryLink = fleet.serviceLinks.find((link) => link.consumer === "web" && link.provider === "inventory-api" && link.route === "GET /orders");
+    assert.ok(inventoryLink);
+    assert.equal(inventoryLink.confidence, 0.45);
+    assert.equal(inventoryLink.matchReason, "method_path_ambiguous");
+
+    const graph = await fleetGraph({ maxNodes: 200, maxEdges: 500 });
+    const billingEdge = graph.edges.find((edge) => edge.source === "project:web" && edge.target === "project:billing-api" && edge.type === "CROSS_REPO_HTTP_CALLS");
+    assert.ok(billingEdge);
+    assert.equal(billingEdge.metadata?.host, "billing.internal");
+    assert.equal(billingEdge.metadata?.confidence, 0.95);
+    assert.equal(billingEdge.metadata?.matchReason, "method_path_host");
+  } finally {
+    if (previousCatalog === undefined) {
+      delete process.env.REPOLENS_CATALOG;
+    } else {
+      process.env.REPOLENS_CATALOG = previousCatalog;
+    }
+  }
+});
+
+async function writeServiceFixture(root: string, packageName: string, source: string): Promise<void> {
+  await fs.mkdir(path.join(root, "src"), { recursive: true });
+  await fs.writeFile(path.join(root, "package.json"), JSON.stringify({ name: packageName, version: "1.0.0", dependencies: { express: "^4.18.0" } }, null, 2));
+  await fs.writeFile(path.join(root, "src", "index.ts"), source);
+}

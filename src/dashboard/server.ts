@@ -332,7 +332,7 @@ function dashboardHtml(): string {
       indexed.textContent = 'Indexed ' + new Date(arch.indexedAt).toLocaleString();
       metrics.innerHTML = metric('files', arch.totals.files) + metric('symbols', arch.totals.symbols) + metric('edges', arch.totals.edges) + metric('lines', arch.totals.lines);
       fleetLinks.innerHTML = fleet.serviceLinks.length
-        ? fleet.serviceLinks.slice(0, 8).map(link => item('<b>' + escapeHtml(link.consumer) + ' -> ' + escapeHtml(link.provider) + '</b><div class="sub">' + escapeHtml(link.route) + ' - ' + fmt.format(link.calls) + ' call' + (link.calls === 1 ? '' : 's') + '</div><div class="path">' + escapeHtml(link.callFiles.join(' | ')) + '</div>')).join('')
+        ? fleet.serviceLinks.slice(0, 8).map(link => item('<b>' + escapeHtml(link.consumer) + ' -> ' + escapeHtml(link.provider) + '</b><div class="sub">' + escapeHtml(link.route) + (link.host ? ' via ' + escapeHtml(link.host) : '') + ' - ' + fmt.format(link.calls) + ' call' + (link.calls === 1 ? '' : 's') + (Number.isFinite(link.confidence) ? ' - confidence ' + Math.round(link.confidence * 100) + '%' : '') + (link.matchReason ? ' - ' + escapeHtml(link.matchReason) : '') + '</div><div class="path">' + escapeHtml(link.callFiles.join(' | ')) + '</div>')).join('')
         : item(fleet.totals.projects ? 'No cross-project service links found.' : 'No catalog projects indexed yet.');
       languages.innerHTML = table(['Language', 'Files', 'Lines', 'Symbols'], arch.languages.map(l => [l.language, fmt.format(l.files), fmt.format(l.lines), fmt.format(l.symbols)]));
       nodeLabels.innerHTML = table(['Label', 'Count'], schema.nodeLabels.slice(0, 12).map(n => [n.kind, fmt.format(n.count)]));

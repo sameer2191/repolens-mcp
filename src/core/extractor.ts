@@ -25,6 +25,18 @@ interface HttpCallOccurrence {
   method: string;
   path: string;
   line: number;
+  host?: string;
+  scheme?: string;
+  url?: string;
+  urlKind: "absolute" | "relative";
+}
+
+interface HttpUrlInfo {
+  path: string;
+  host?: string;
+  scheme?: string;
+  url?: string;
+  urlKind: "absolute" | "relative";
 }
 
 const ignoredCallableNames = new Set([
@@ -403,16 +415,22 @@ export function addHttpEdges(symbols: SymbolNode[], fileContents: Map<string, st
     const exact = routeLookup.get(`${method}:${pathValue}`) ?? [];
     const fallback = method === "ANY" ? routeLookup.get(`ANY:${pathValue}`) ?? [] : [];
     const source = sourceSymbolForLine(symbols, call.startLine, call.filePath)?.qualifiedName ?? fileQualifiedName(call.filePath);
+    const host = typeof call.metadata?.host === "string" && call.metadata.host.trim() ? call.metadata.host : undefined;
+    const confidence = method === "ANY" ? 0.65 : host ? 0.8 : 0.9;
+    const matchReason = method === "ANY" ? "any_path" : host ? "method_path_absolute_host_unresolved" : "method_path";
     for (const route of exact.length ? exact : fallback) {
       if (source === route.qualifiedName) continue;
       edges.push({
         source,
         target: route.qualifiedName,
         type: "HTTP_CALLS",
-        weight: method === "ANY" ? 0.65 : 0.9,
+        weight: confidence,
         metadata: {
           method,
           path: pathValue,
+          ...(host ? { host } : {}),
+          confidence,
+          matchReason,
           line: call.startLine,
           call: call.qualifiedName
         }
@@ -736,17 +754,22 @@ function extractHttpCallLinks(filePath: string, language: Language, content: str
   const seen = new Set<string>();
   const fileNode = fileQualifiedName(filePath);
   for (const call of calls) {
-    const key = `${call.method}:${call.path}:${call.line}`;
+    const key = `${call.method}:${call.host ?? ""}:${call.path}:${call.line}`;
     if (seen.has(key)) {
       continue;
     }
     seen.add(key);
     const name = `${call.method} ${call.path}`;
-    const callSymbol = makeSymbol(filePath, language, "http_call", name, call.line, call.line, undefined, false, {
+    const metadata: Record<string, unknown> = {
       method: call.method,
       path: call.path,
-      line: call.line
-    });
+      line: call.line,
+      urlKind: call.urlKind
+    };
+    if (call.host) metadata.host = call.host;
+    if (call.scheme) metadata.scheme = call.scheme;
+    if (call.url) metadata.url = call.url;
+    const callSymbol = makeSymbol(filePath, language, "http_call", name, call.line, call.line, undefined, false, metadata);
     const source = sourceSymbolForLine(symbols, call.line)?.qualifiedName ?? fileNode;
     callSymbols.push(callSymbol);
     edges.push({ source: fileNode, target: callSymbol.qualifiedName, type: "DEFINES", weight: 0.8 });
@@ -755,7 +778,7 @@ function extractHttpCallLinks(filePath: string, language: Language, content: str
       target: callSymbol.qualifiedName,
       type: "CALLS_HTTP_ENDPOINT",
       weight: call.method === "ANY" ? 0.6 : 0.8,
-      metadata: { method: call.method, path: call.path, line: call.line }
+      metadata
     });
   }
 
@@ -958,14 +981,14 @@ function extractHttpCalls(content: string, startLine: number): HttpCallOccurrenc
   const calls: HttpCallOccurrence[] = [];
   const fetchRegex = /\bfetch\(\s*["'`]([^"'`]+)["'`]/gi;
   for (const match of content.matchAll(fetchRegex)) {
-    const pathValue = normalizeHttpPath(match[1]);
-    if (!pathValue) continue;
+    const urlInfo = parseHttpUrl(match[1]);
+    if (!urlInfo) continue;
     const windowEnd = nextHttpCallBoundary(content, (match.index ?? 0) + match[0].length);
     const callWindow = content.slice(match.index ?? 0, windowEnd);
     const methodMatch = /\bmethod\s*:\s*["'`](GET|POST|PUT|PATCH|DELETE)["'`]/i.exec(callWindow);
     calls.push({
       method: (methodMatch?.[1] ?? "GET").toUpperCase(),
-      path: pathValue,
+      ...urlInfo,
       line: startLine + offsetToLine(content, match.index ?? 0) - 1
     });
   }
@@ -976,11 +999,11 @@ function extractHttpCalls(content: string, startLine: number): HttpCallOccurrenc
   ];
   for (const { regex, method, urlGroup } of regexes) {
     for (const match of content.matchAll(regex)) {
-      const pathValue = normalizeHttpPath(match[urlGroup]);
-      if (!pathValue) continue;
+      const urlInfo = parseHttpUrl(match[urlGroup]);
+      if (!urlInfo) continue;
       calls.push({
         method: method?.(match).toUpperCase() ?? "ANY",
-        path: pathValue,
+        ...urlInfo,
         line: startLine + offsetToLine(content, match.index ?? 0) - 1
       });
     }
@@ -999,8 +1022,48 @@ function normalizeHttpPath(value: string | undefined): string | null {
     return null;
   }
   const trimmed = value.trim();
-  const pathOnly = /^[a-z]+:\/\//i.test(trimmed) ? new URL(trimmed).pathname : trimmed.split(/[?#]/, 1)[0];
+  const pathOnly = /^[a-z]+:\/\//i.test(trimmed) ? safeUrlPathname(trimmed) : trimmed.split(/[?#]/, 1)[0];
   return pathOnly.startsWith("/") ? pathOnly.replace(/\/+$/, "") || "/" : null;
+}
+
+function parseHttpUrl(value: string | undefined): HttpUrlInfo | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return null;
+      }
+      const pathValue = normalizeHttpPath(parsed.pathname);
+      if (!pathValue) {
+        return null;
+      }
+      const host = parsed.host.toLowerCase();
+      const scheme = parsed.protocol.replace(/:$/, "").toLowerCase();
+      return {
+        path: pathValue,
+        host,
+        scheme,
+        url: `${scheme}://${host}${pathValue}`,
+        urlKind: "absolute"
+      };
+    } catch {
+      return null;
+    }
+  }
+  const pathValue = normalizeHttpPath(trimmed);
+  return pathValue ? { path: pathValue, urlKind: "relative" } : null;
+}
+
+function safeUrlPathname(value: string): string {
+  try {
+    return new URL(value).pathname;
+  } catch {
+    return value;
+  }
 }
 
 function extractMarkdown(filePath: string, lines: string[]): SymbolNode[] {

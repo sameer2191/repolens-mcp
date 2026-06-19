@@ -92,6 +92,29 @@ paths:
   assert.ok(openapi.symbols.some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/:id" && symbol.metadata?.protocol === "openapi"));
 });
 
+test("captures host metadata for absolute HTTP call literals", () => {
+  const extracted = extractFromFile(
+    "src/client.ts",
+    "typescript",
+    `
+export async function loadBillingOrders() {
+  return fetch("https://billing.internal/orders?limit=10", { method: "POST" });
+}
+`
+  );
+  const call = extracted.symbols.find((symbol) => symbol.kind === "http_call" && symbol.metadata?.path === "/orders");
+  assert.ok(call);
+  assert.equal(call.metadata?.host, "billing.internal");
+  assert.equal(call.metadata?.scheme, "https");
+  assert.equal(call.metadata?.url, "https://billing.internal/orders");
+  assert.equal(call.metadata?.urlKind, "absolute");
+
+  const edge = extracted.edges.find((candidate) => candidate.type === "CALLS_HTTP_ENDPOINT" && candidate.target === call.qualifiedName);
+  assert.ok(edge);
+  assert.equal(edge.metadata?.host, "billing.internal");
+  assert.equal(edge.metadata?.path, "/orders");
+});
+
 test("extracts typed inheritance, implementation, and usage edges", () => {
   const content = `
 export interface Order {
