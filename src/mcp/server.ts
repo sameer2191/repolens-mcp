@@ -17,6 +17,7 @@ import {
   fleetSummary,
   findDeadCode,
   findCommunities,
+  findClones,
   findDependencyCycles,
   findReferences,
   getArchitecture,
@@ -491,6 +492,19 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ limit, dbPath }) => text(findDeadCode(limit, dbPath))
+  );
+
+  server.registerTool(
+    "find_clones",
+    {
+      description: "Return near-duplicate symbol candidates from indexed SIMILAR_TO graph edges with source and target snippets.",
+      inputSchema: {
+        limit: z.number().int().positive().max(200).optional(),
+        minScore: z.number().min(0).max(1).optional().describe("Minimum clone similarity score. Defaults to 0.45."),
+        dbPath: z.string().optional()
+      }
+    },
+    async ({ limit, minScore, dbPath }) => text(findClones(limit, minScore, dbPath))
   );
 
   server.registerTool(

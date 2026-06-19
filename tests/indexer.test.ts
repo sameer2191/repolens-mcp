@@ -569,6 +569,56 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
   }
 });
 
+test("reports near-duplicate clone candidates from SIMILAR_TO edges", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-clones-"));
+  const repo = path.join(tmp, "repo");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.writeFile(
+    path.join(repo, "src", "orders-a.ts"),
+    `
+export function normalizeOrder(input: Order) {
+  const total = Number(input.total ?? 0);
+  const status = String(input.status ?? "draft");
+  const customer = String(input.customerId ?? "anonymous");
+  const lineItems = Array.isArray(input.lineItems) ? input.lineItems : [];
+  return { id: input.id, total, status, customer, lineItems };
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "orders-b.ts"),
+    `
+export function normalizeOrder(input: Order) {
+  const total = Number(input.total ?? 0);
+  const status = String(input.status ?? "draft");
+  const customer = String(input.customerId ?? "anonymous");
+  const lineItems = Array.isArray(input.lineItems) ? input.lineItems : [];
+  return { id: input.id, total, status, customer, lineItems };
+}
+`
+  );
+  const dbPath = path.join(tmp, "memory.db");
+  await indexRepository({ root: repo, dbPath });
+  const store = new MemoryStore(dbPath);
+  try {
+    const clones = store.findClones(10, 0.1);
+    assert.ok(clones.summary.candidates >= 1);
+    assert.ok(clones.summary.files >= 1);
+    assert.ok(
+      clones.candidates.some(
+        (candidate) =>
+          candidate.source.name === "normalizeOrder" &&
+          candidate.target.name === "normalizeOrder" &&
+          candidate.source.filePath !== candidate.target.filePath &&
+          candidate.snippets.source &&
+          candidate.snippets.target
+      )
+    );
+  } finally {
+    store.close();
+  }
+});
+
 test("benchmarks full and incremental indexing with graph evidence", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-benchmark-"));
   const dbPath = path.join(tmp, "memory.db");

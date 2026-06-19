@@ -298,6 +298,30 @@ export interface VectorSearchMatch {
   reasons: string[];
 }
 
+export interface CloneCandidate {
+  source: SymbolNode;
+  target: SymbolNode;
+  score: number;
+  weight: number;
+  matchedTokens: string[];
+  reasons: string[];
+  snippets: {
+    source: CodeSnippet | null;
+    target: CodeSnippet | null;
+  };
+}
+
+export interface CloneReport {
+  generatedAt: string;
+  candidates: CloneCandidate[];
+  summary: {
+    candidates: number;
+    files: number;
+    strongestScore: number;
+    minScore: number;
+  };
+}
+
 export interface VectorIndexStats {
   dimensions: number;
   symbols: number;

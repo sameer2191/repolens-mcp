@@ -7,6 +7,7 @@ import type {
   ArchitectureSummary,
   ArchitectureRecommendation,
   ChangeImpactResult,
+  CloneReport,
   CodeMatch,
   CodeSnippet,
   DeadCodeCandidate,
@@ -1051,6 +1052,139 @@ export class MemoryStore {
       .filter((match) => match.score > 0.04 && (match.matchedTokens.length > 0 || match.score > 0.2))
       .sort((a, b) => b.score - a.score || a.symbol.qualifiedName.localeCompare(b.symbol.qualifiedName))
       .slice(0, clampPositive(limit, 1, 100));
+  }
+
+  findClones(limit = 20, minScore = 0.45): CloneReport {
+    const safeLimit = clampPositive(limit, 1, 200);
+    const safeMinScore = Math.max(0, Math.min(1, minScore));
+    const rows = this.db
+      .prepare(
+        `SELECT
+           edges.weight AS edge_weight,
+           edges.metadata AS edge_metadata,
+           source_symbol.id AS source_id,
+           source_symbol.file_path AS source_file_path,
+           source_symbol.language AS source_language,
+           source_symbol.kind AS source_kind,
+           source_symbol.name AS source_name,
+           source_symbol.qualified_name AS source_qualified_name,
+           source_symbol.start_line AS source_start_line,
+           source_symbol.end_line AS source_end_line,
+           source_symbol.signature AS source_signature,
+           source_symbol.doc AS source_doc,
+           source_symbol.exported AS source_exported,
+           source_symbol.metadata AS source_metadata,
+           target_symbol.id AS target_id,
+           target_symbol.file_path AS target_file_path,
+           target_symbol.language AS target_language,
+           target_symbol.kind AS target_kind,
+           target_symbol.name AS target_name,
+           target_symbol.qualified_name AS target_qualified_name,
+           target_symbol.start_line AS target_start_line,
+           target_symbol.end_line AS target_end_line,
+           target_symbol.signature AS target_signature,
+           target_symbol.doc AS target_doc,
+           target_symbol.exported AS target_exported,
+           target_symbol.metadata AS target_metadata
+         FROM edges
+         JOIN symbols source_symbol ON source_symbol.qualified_name = edges.source
+         JOIN symbols target_symbol ON target_symbol.qualified_name = edges.target
+         WHERE edges.type = 'SIMILAR_TO'
+           AND edges.weight >= ?
+         ORDER BY edges.weight DESC, source_symbol.file_path ASC, source_symbol.start_line ASC
+         LIMIT ?`
+      )
+      .all(safeMinScore, safeLimit) as unknown as Array<SymbolRow & {
+        edge_weight: number;
+        edge_metadata: string;
+        source_id: number;
+        source_file_path: string;
+        source_language: Language;
+        source_kind: string;
+        source_name: string;
+        source_qualified_name: string;
+        source_start_line: number;
+        source_end_line: number;
+        source_signature: string | null;
+        source_doc: string | null;
+        source_exported: number;
+        source_metadata: string;
+        target_id: number;
+        target_file_path: string;
+        target_language: Language;
+        target_kind: string;
+        target_name: string;
+        target_qualified_name: string;
+        target_start_line: number;
+        target_end_line: number;
+        target_signature: string | null;
+        target_doc: string | null;
+        target_exported: number;
+        target_metadata: string;
+      }>;
+
+    const candidates = rows.map((row) => {
+      const source = rowToSymbol({
+        id: row.source_id,
+        file_path: row.source_file_path,
+        language: row.source_language,
+        kind: row.source_kind,
+        name: row.source_name,
+        qualified_name: row.source_qualified_name,
+        start_line: row.source_start_line,
+        end_line: row.source_end_line,
+        signature: row.source_signature,
+        doc: row.source_doc,
+        exported: row.source_exported,
+        metadata: row.source_metadata
+      });
+      const target = rowToSymbol({
+        id: row.target_id,
+        file_path: row.target_file_path,
+        language: row.target_language,
+        kind: row.target_kind,
+        name: row.target_name,
+        qualified_name: row.target_qualified_name,
+        start_line: row.target_start_line,
+        end_line: row.target_end_line,
+        signature: row.target_signature,
+        doc: row.target_doc,
+        exported: row.target_exported,
+        metadata: row.target_metadata
+      });
+      const metadata = parseMetadata(row.edge_metadata);
+      const score = typeof metadata.score === "number" ? metadata.score : row.edge_weight;
+      const matchedTokens = Array.isArray(metadata.matchedTokens)
+        ? metadata.matchedTokens.filter((token): token is string => typeof token === "string").slice(0, 20)
+        : [];
+      return {
+        source,
+        target,
+        score: Number(score.toFixed(4)),
+        weight: Number(row.edge_weight.toFixed(4)),
+        matchedTokens,
+        reasons: [
+          typeof metadata.reason === "string" ? metadata.reason : "similar symbol bodies",
+          `${source.kind} to ${target.kind}`,
+          source.filePath === target.filePath ? "same file" : "cross-file"
+        ],
+        snippets: {
+          source: this.getCodeSnippet(source.qualifiedName, 2),
+          target: this.getCodeSnippet(target.qualifiedName, 2)
+        }
+      };
+    });
+    const files = new Set(candidates.flatMap((candidate) => [candidate.source.filePath, candidate.target.filePath]));
+    return {
+      generatedAt: new Date().toISOString(),
+      candidates,
+      summary: {
+        candidates: candidates.length,
+        files: files.size,
+        strongestScore: candidates[0]?.score ?? 0,
+        minScore: safeMinScore
+      }
+    };
   }
 
   queryGraph(query: string, limit = 100): GraphQueryResult {

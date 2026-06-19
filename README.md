@@ -12,7 +12,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 38 tools for indexing, version/update status, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing and git-aware auto-sync, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema with relationship patterns and label properties, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, receiver-aware method call edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
+- **MCP-native**: exposes 39 tools for indexing, version/update status, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing and git-aware auto-sync, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema with relationship patterns and label properties, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, receiver-aware method call edges, conservative data-flow edges, near-clone reports, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance plus opt-in hook/reminder files for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
@@ -26,7 +26,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Reference lookup**: finds exact indexed identifier references and labels definition lines for language-server-style navigation without requiring an external LSP process.
 - **Type relationship graph**: adds `INHERITS`, `IMPLEMENTS`, and `USES_TYPE` edges from class/interface/protocol declarations and typed signatures for safer impact analysis.
 - **Receiver-aware call graph**: resolves TypeScript/JavaScript calls such as `repo.save()` to the method on the inferred constructed class, avoiding ambiguous same-name method edges.
-- **Local semantic and vector search**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges, concept search, and persisted local vector embeddings over names, paths, signatures, metadata, and symbol bodies.
+- **Local semantic and vector search**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges, concept search, near-clone reports with snippets, and persisted local vector embeddings over names, paths, signatures, metadata, and symbol bodies.
 - **Context packs for agents**: one query can return semantic matches, vector matches, graph matches, BM25 code hits, snippets, and nearby edges for focused development context.
 - **Redacted secret scan**: review high-confidence token shapes, sensitive assignments, and environment references from indexed source/config lines without returning raw secret values.
 - **Resolved import graph**: creates `IMPORTS_FILE` edges for relative imports, workspace package names, source-root imports, and `tsconfig`/`jsconfig` path aliases.
@@ -113,6 +113,7 @@ repolens-mcp vector "live session repository" [--limit n]
 repolens-mcp context-pack "create order" [--limit n] [--context n]
 repolens-mcp query-graph "MATCH (a)-[:CALLS]->(b) RETURN a.name,b.name LIMIT 5"
 repolens-mcp dead-code [--db path]
+repolens-mcp clones [--db path] [--limit n] [--min-score n]
 repolens-mcp cycles [--db path] [--limit n]
 repolens-mcp ingest-traces traces.json [--db path]
 repolens-mcp changes [repo] [--db path]
@@ -165,6 +166,7 @@ repolens-mcp mcp
 | `context_pack` | Return semantic matches, vector matches, graph matches, code hits, snippets, and nearby edges for one query. |
 | `query_graph` | Run a read-only Cypher-like query over symbols and one-hop edges. |
 | `find_dead_code` | Find non-exported functions and methods with no inbound call edges. |
+| `find_clones` | Return near-duplicate symbol candidates from `SIMILAR_TO` edges with source and target snippets. |
 | `find_dependency_cycles` | Find import-resolved dependency cycles between architecture clusters. |
 | `ingest_traces` | Add observed runtime HTTP, event, or symbol edges as `OBSERVED_*` relationships. |
 | `detect_changes` | Map uncommitted git changes to indexed graph impact with per-file blast radius, relationship counts, and risk reasons. |

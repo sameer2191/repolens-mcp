@@ -48,6 +48,7 @@ On Windows PowerShell, the local installer mirrors the shell installer:
 - `context_pack`: combine semantic, vector, graph, search, snippets, and nearby edges.
 - `get_architecture`: summarize languages, hotspots, packages, entrypoints, risks, and recommendations.
 - `get_graph_schema`: inspect labels, edge types, relationship patterns, and label properties before writing graph queries.
+- `find_clones`: review snippet-backed near-duplicate symbols from `SIMILAR_TO` graph edges.
 - `scan_secrets`: return redacted high-signal secret findings from indexed lines.
 - `architecture_report`: generate Markdown or HTML reports.
 - `export_graph_package` / `import_graph_package`: share or bootstrap local graph snapshots.

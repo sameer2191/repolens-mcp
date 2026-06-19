@@ -194,6 +194,10 @@ export function findDeadCode(limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.findDeadCode(limit));
 }
 
+export function findClones(limit?: number, minScore?: number, dbPath?: string) {
+  return withStore(dbPath, (store) => store.findClones(limit, minScore));
+}
+
 export function findDependencyCycles(limit?: number, dbPath?: string) {
   return withStore(dbPath, (store) => store.dependencyCycles(limit));
 }

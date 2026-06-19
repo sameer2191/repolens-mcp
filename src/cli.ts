@@ -17,6 +17,7 @@ import {
   fleetSummary,
   findDeadCode,
   findCommunities,
+  findClones,
   findDependencyCycles,
   findReferences,
   getArchitecture,
@@ -236,6 +237,10 @@ async function main(): Promise<void> {
       break;
     case "dead-code":
       print(findDeadCode(numberFlag(args, "limit"), stringFlag(args, "db")));
+      break;
+    case "clones":
+    case "find-clones":
+      print(findClones(numberFlag(args, "limit"), numberFlag(args, "min-score"), stringFlag(args, "db")));
       break;
     case "cycles":
       print(findDependencyCycles(numberFlag(args, "limit"), stringFlag(args, "db")));
@@ -648,6 +653,7 @@ Usage:
   repolens-mcp context-pack "meaningful concept query" [--db path] [--limit n] [--context n]
   repolens-mcp query-graph "MATCH (a)-[:CALLS]->(b) RETURN a.name,b.name LIMIT 5" [--db path]
   repolens-mcp dead-code [--db path] [--limit n]
+  repolens-mcp clones [--db path] [--limit n] [--min-score n]
   repolens-mcp cycles [--db path] [--limit n]
   repolens-mcp ingest-traces traces.json [--db path]
   repolens-mcp changes [repo] [--db path] [--limit n]
