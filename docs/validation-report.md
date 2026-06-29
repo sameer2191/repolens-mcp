@@ -61,7 +61,7 @@ Result:
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`, including `--with-hooks`.
 - PowerShell installer parser check is enforced in CI for `install.ps1`; it mirrors the Unix installer's Node 24 check, npm/build flow, doctor command, Codex install/uninstall, agent install/uninstall, `-DryRun`, `-Force`, `-WithHooks`, `-Db`, `-Agents`, `-Target`, and `-SkipNpm` options. Local macOS validation could not execute `pwsh` because it is not installed in this environment.
-- GitHub security summary script reported 0 actionable open alerts, 0 CodeQL alerts, 0 Dependabot alerts, 0 secret-scanning alerts, 3 OpenSSF Scorecard process signals, and 0 other code-scanning alerts.
+- GitHub security summary script reported 0 actionable open alerts, 0 CodeQL alerts, 0 Dependabot alerts, 0 secret-scanning alerts, 4 OpenSSF Scorecard process signals, and 0 other code-scanning alerts.
 - `agent-setup` dry-run rendered the expected guide and instruction targets for Codex, Claude, and Gemini without writing files.
 - `hook-augment --claude` smoke test emitted Claude-compatible `hookSpecificOutput.additionalContext` for a fake Grep PreToolUse payload without querying the local graph by default; the opt-in `--with-query` smoke on the fixture graph appended local symbol metadata matches, a fake Read payload exited 0 with no blocking output, and Claude hook setup tests verified managed `.claude/settings.local.json` install/update/uninstall behavior while preserving unrelated hooks.
 - `config set/get/reset` persisted startup defaults in an isolated temp config file and removed the managed key cleanly.
@@ -74,7 +74,7 @@ Result:
 - Tag release publishing now fails when `NPM_TOKEN` is missing instead of silently skipping npm publication.
 - Release workflow runs `npm run release:security-gate` with `security-events: read` before packaging/publishing; the gate uses the GitHub security summary to fail on actionable CodeQL, Dependabot, or secret-scanning alerts and fails closed when alert endpoints are unavailable unless `--allow-unavailable` is explicitly provided.
 - OpenSSF Scorecard workflow added with SARIF upload to GitHub code scanning.
-- Live GitHub security check reported 0 open Dependabot alerts, 0 open secret-scanning alerts, and 0 open CodeQL alerts. The remaining 3 open code-scanning alerts are OpenSSF Scorecard process signals: `MaintainedID`, `CodeReviewID`, and `CIIBestPracticesID`.
+- Live GitHub security check reported 0 open Dependabot alerts, 0 open secret-scanning alerts, and 0 open CodeQL alerts. The remaining 4 open code-scanning alerts are OpenSSF Scorecard process signals: `MaintainedID`, `CodeReviewID`, `CIIBestPracticesID`, and `SASTID`.
 - CI now also checks `npm run test:skip-gate`, `npm pack --dry-run --json`, `npm run package:check`, `npm run installer:audit`, generates a CycloneDX SBOM, and self-indexes into `.repolens/ci.db`.
 
 ## Self Index
