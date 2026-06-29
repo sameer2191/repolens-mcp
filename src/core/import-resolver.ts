@@ -2,12 +2,12 @@ import path from "node:path";
 import { extractImports } from "./extractor.js";
 import type { Edge, SymbolNode } from "./types.js";
 
-interface PackageRoot {
+export interface PackageRoot {
   name: string;
   root: string;
 }
 
-interface AliasMapping {
+export interface AliasMapping {
   pattern: string;
   targets: string[];
   configFile: string;

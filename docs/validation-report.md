@@ -99,36 +99,36 @@ Result:
 - Files discovered: 92
 - Files indexed: 89
 - Files skipped: 3
-- Symbols: 1,180
-- Edges: 5,232
-- Lines indexed: 19,441 source rows; architecture totals report 21,434 physical lines.
-- Full index elapsed: 2,653 ms
+- Symbols: 1,177
+- Edges: 5,196
+- Lines indexed: 19,392 source rows; architecture totals report 21,377 physical lines.
+- Full index elapsed: 2,638 ms
 - No-op incremental elapsed: 15 ms
 - No-op incremental unchanged files: 92
-- Benchmark command: full index 89/92 files in 2,634 ms, no-op incremental in 15 ms, 33.79 files/s full throughput, 6,133.33 discovered files/s incremental throughput, and 0 medium/high secret findings across 16,329 scanned lines.
-- Full-text code-search rows: 19,441 `code_lines` rows and 19,441 `code_fts` rows
-- Local vector rows: 956 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
+- Benchmark command: full index 89/92 files in 2,612 ms, no-op incremental in 15 ms, 34.07 files/s full throughput, 6,133.33 discovered files/s incremental throughput, and 0 medium/high secret findings across 16,280 scanned lines.
+- Full-text code-search rows: 19,392 `code_lines` rows and 19,392 `code_fts` rows
+- Local vector rows: 953 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
 - Reference lookup: `references vectorSearch` returned the API definition plus exact identifier references in `src/core/api.ts`, `src/cli.ts`, and docs.
 - MCP server tools registered: 38
 - Persistent config smoke test: `config set auto-index full`, `config get autoIndex`, and `config reset auto-index` worked against an isolated temp config file.
-- Redacted secret scan: 0 high/medium-confidence findings across 16,329 indexed non-test lines.
+- Redacted secret scan: 0 high/medium-confidence findings across 16,280 indexed non-test lines.
 - Channel graph rows: 12 `channel` nodes, 2 `EMITS` edges, and 18 `LISTENS_ON` edges
 - HTTP call graph rows: 17 `http_call` nodes, 17 `CALLS_HTTP_ENDPOINT` edges, and 16 generated `HTTP_CALLS` route edges
 - Type relationship rows: 553 `USES_TYPE` edges, 5 `INHERITS` edges, and 1 `IMPLEMENTS` edge.
-- Data-flow graph rows: 884 conservative `DATA_FLOWS` edges from unambiguous call arguments to callee parameters.
-- Import graph rows: 81 `IMPORTS_FILE` edges resolving local relative imports and package-local imports to file nodes.
+- Data-flow graph rows: 881 conservative `DATA_FLOWS` edges from unambiguous call arguments to callee parameters.
+- Import graph rows: 82 `IMPORTS_FILE` edges resolving local relative imports and package-local imports to file nodes.
 - Protocol graph rows: 2 `graphql_operation` nodes, 1 `graphql_type` node, 1 `grpc_service` node, 2 `trpc_procedure` nodes, 1 `trpc_call` node, and 13 `route` nodes across fixture and app routes
 - Manifest graph rows: 11 `package` nodes and 27 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
 - Lockfile graph rows: 1 `lockfile` node, 96 `locked_dependency` nodes, and 96 `LOCKS` edges from `package-lock.json`.
 - Git history hotspots: architecture summaries and reports rank high-churn files, including `src/core/store.ts` at 32 commits and 4,366 changed lines, and include a history-aware recommendation before risky edits.
 - MCP startup auto-index: `REPOLENS_AUTO_INDEX=1` performed an incremental startup refresh on the fixture repo, and `REPOLENS_AUTO_INDEX=full` performed a full startup rebuild through the same `runIndex` path.
 - Graph package bootstrap: a missing database imported `.repolens/graph.rlgz`, reported the `bootstrapPackage` metadata, then ran an incremental refresh with unchanged files instead of rebuilding from scratch; `bootstrapPackage: false` kept the full rebuild path.
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 89 files, 1,180 symbols, and 5,232 edges; the latest run discovered 92 files with 3 skipped by policy.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 89 files, 1,177 symbols, and 5,196 edges; the latest run discovered 92 files with 3 skipped by policy.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, agent setup helpers, and fixture route/client communities.
 - Graph package import: `.repolens/self.rlgz` restored the self graph snapshot successfully with checksum verification.
-- Graph package: `.repolens/self.rlgz` is 2,915,082 bytes from an 11,419,648-byte SQLite snapshot, SHA-256 `be2775762c03a062cbf4c98cd1bafa258e177c5053d77f367882fa1837699d05`.
-- Imported package totals: 89 files, 1,180 symbols, 5,232 edges, plus 956 persisted vector rows at 384 dimensions.
+- Graph package: `.repolens/self.rlgz` is 2,824,760 bytes from an 11,255,808-byte SQLite snapshot, SHA-256 `4363ef3e970b20e15aecdcddadaf86fbd1473fe8baee1c9ab0402136629bad54`.
+- Imported package totals: 89 files, 1,177 symbols, 5,196 edges, plus 953 persisted vector rows at 384 dimensions.
 - Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files. A separate temp-repo indexing test covers C/C++, C#, Kotlin, PHP, Dart, Terraform/HCL, QML, and Apex detection, symbols, routes, imports, namespace/file-like import edges, and infrastructure nodes.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, `tests/mcp-server.test.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0

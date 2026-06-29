@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { resolveImportFile as resolveGraphImportFile } from "./import-resolver.js";
 import { cosineSimilarity, semanticScore, semanticTokens, semanticVector, type LocalVector } from "./semantic.js";
 import type {
   ArchitectureSummary,
@@ -1367,7 +1368,7 @@ export class MemoryStore {
     const filePaths = new Set(fileRows.map((row) => row.path));
     const packageRoots = (this.db
       .prepare("SELECT name, file_path FROM symbols WHERE kind = 'package' ORDER BY length(name) DESC")
-      .all() as Array<{ name: string; file_path: string }>).map((row) => [row.name, path.posix.dirname(row.file_path)] as [string, string]);
+      .all() as Array<{ name: string; file_path: string }>).map((row) => ({ name: row.name, root: path.posix.dirname(row.file_path) }));
     const rows = this.db
       .prepare(
         `SELECT source_symbol.file_path AS source_file,
@@ -1387,7 +1388,8 @@ export class MemoryStore {
       if (typeof imported !== "string") {
         continue;
       }
-      const targetFile = resolveImportFile(row.source_file, imported, filePaths, packageRoots);
+      const resolved = resolveGraphImportFile(row.source_file, imported, filePaths, packageRoots);
+      const targetFile = resolved?.targetFile;
       if (!targetFile || targetFile === row.source_file) {
         continue;
       }
@@ -3751,65 +3753,6 @@ function gitHistoryHotspots(root: string, limit: number): GitHistoryFile[] {
     .map(({ authorSet: _authorSet, seenCommits: _seenCommits, ...item }) => item)
     .sort((a, b) => b.churn - a.churn || b.commits - a.commits || a.path.localeCompare(b.path))
     .slice(0, clampPositive(limit, 1, 100));
-}
-
-function resolveImportFile(sourceFile: string, specifier: string, filePaths: Set<string>, packageRoots: Array<[string, string]> = []): string | null {
-  if (specifier.startsWith(".")) {
-    return resolveCandidate(path.posix.normalize(path.posix.join(path.posix.dirname(sourceFile), specifier)), filePaths);
-  }
-
-  for (const [packageName, packageRoot] of packageRoots) {
-    if (specifier !== packageName && !specifier.startsWith(`${packageName}/`)) {
-      continue;
-    }
-    const subpath = specifier.slice(packageName.length).replace(/^\//, "");
-    const base = subpath ? path.posix.join(packageRoot, subpath) : path.posix.join(packageRoot, "src", "index");
-    const resolved = resolveCandidate(base, filePaths);
-    if (resolved) {
-      return resolved;
-    }
-  }
-
-  if (specifier.startsWith("src/") || specifier.startsWith("apps/") || specifier.startsWith("packages/")) {
-    return resolveCandidate(path.posix.normalize(specifier), filePaths);
-  }
-
-  return null;
-}
-
-function resolveCandidate(base: string, filePaths: Set<string>): string | null {
-  const withoutExtension = stripKnownExtension(base);
-  const candidates = [
-    base,
-    withoutExtension,
-    `${withoutExtension}.ts`,
-    `${withoutExtension}.tsx`,
-    `${withoutExtension}.js`,
-    `${withoutExtension}.jsx`,
-    `${withoutExtension}.mjs`,
-    `${withoutExtension}.cjs`,
-    `${withoutExtension}.swift`,
-    `${withoutExtension}.py`,
-    `${withoutExtension}.go`,
-    `${withoutExtension}.java`,
-    `${withoutExtension}.rs`,
-    `${withoutExtension}/index.ts`,
-    `${withoutExtension}/index.tsx`,
-    `${withoutExtension}/index.js`,
-    `${withoutExtension}/index.jsx`
-  ];
-
-  for (const candidate of candidates) {
-    if (filePaths.has(candidate)) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-function stripKnownExtension(value: string): string {
-  return value.replace(/\.(tsx?|jsx?|mjs|cjs|swift|py|go|java|rs|sql|json|ya?ml|md|sh)$/i, "");
 }
 
 function parseFileLine(identifier: string): { filePath: string; line: number } | null {
