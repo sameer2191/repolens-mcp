@@ -98,5 +98,5 @@ async function closeServer(server: http.Server): Promise<void> {
 }
 
 function isListenPermissionError(error: unknown): boolean {
-  return Boolean(error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "EPERM");
+  return Boolean(error && typeof error === "object" && "code" in error && ["EPERM", "ELISTEN_TIMEOUT"].includes((error as { code?: string }).code ?? ""));
 }

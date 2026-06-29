@@ -14,9 +14,9 @@ npm run test:skip-gate
 Latest result:
 
 - TypeScript build passed.
-- Node test suite passed: 79 tests, 78 passing, 0 failures, 1 sandbox-only dashboard socket skip.
+- Node test suite passed: 80 tests, 79 passing, 0 failures, 1 sandbox-only dashboard socket skip.
 - Test skip gate passed with explicit policies for the dashboard sandbox socket skip and git-unavailable skips.
-- Coverage includes indexing with byte and file-count budgets, broad practical language extraction, namespace/file-like import edge resolution, incremental refresh, bounded git-history hotspot collection, git-aware watch refresh, MCP startup auto-index and auto-sync wiring, MCP agent setup write guardrails, project catalog and fleet summaries, graph package import/export, interactive graph report/export controls, code search, symbol/reference lookup, semantic and vector search, context packs, graph queries, dependency cycles, git-history hotspots, change impact, secret scanning, agent setup, Codex config safeguards, package bootstrap, installer metadata, and MCP JSON-RPC robustness.
+- Coverage includes indexing with byte and file-count budgets, project-specific `.repolens.json` language overrides, broad practical language extraction, namespace/file-like import edge resolution, incremental refresh, bounded git-history hotspot collection, git-aware watch refresh, MCP startup auto-index and auto-sync wiring, MCP agent setup write guardrails, project catalog and fleet summaries, graph package import/export, interactive graph report/export controls, code search, symbol/reference lookup, semantic and vector search, context packs, graph queries, dependency cycles, git-history hotspots, change impact, secret scanning, agent setup, Codex config safeguards, package bootstrap, installer metadata, and MCP JSON-RPC robustness.
 
 ## Package And Release Checks
 

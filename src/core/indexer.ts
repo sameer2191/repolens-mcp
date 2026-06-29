@@ -6,7 +6,7 @@ import { addCallEdges, addDataFlowEdges, addHttpEdges, addTypeRelationEdges, ext
 import { sha256 } from "./hash.js";
 import { buildResolvedImportEdges } from "./import-resolver.js";
 import { loadRepoIgnoreMatcher, shouldIgnoreDirectory, shouldIgnoreFile, type RepoIgnoreMatcher } from "./ignore.js";
-import { detectLanguage, isTextCandidate, normalizeSlashes } from "./language.js";
+import { detectLanguage, isTextCandidate, loadLanguageOverrides, normalizeSlashes } from "./language.js";
 import { buildSemanticEdges } from "./semantic.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
 import type { GraphPackageImportResult, IndexedFile, IndexOptions, IndexResult, SymbolNode } from "./types.js";
@@ -37,6 +37,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
     store.acquireLock("index");
     lockAcquired = true;
     const repoIgnore = await loadRepoIgnoreMatcher(root);
+    const languageOverrides = await loadLanguageOverrides(root);
     const walked = await walk(root, root, options.includeHidden ?? false, repoIgnore);
     if (options.maxFiles !== undefined && walked.length > options.maxFiles) {
       throw new Error(`Index discovered ${walked.length} files, which exceeds maxFiles ${options.maxFiles}. Increase the limit or narrow the repository root.`);
@@ -68,7 +69,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
     let filesUnchanged = 0;
 
     for (const file of walked) {
-      const language = detectLanguage(file.relativePath);
+      const language = detectLanguage(file.relativePath, languageOverrides);
       const baseRecord: IndexedFile = {
         path: file.relativePath,
         language,
@@ -79,7 +80,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
       };
       const previous = previousFiles.get(file.relativePath);
 
-      if (!isTextCandidate(file.relativePath)) {
+      if (!isTextCandidate(file.relativePath, languageOverrides)) {
         filesSkipped += 1;
         const skipped = { ...baseRecord, skipped: true, skipReason: "unsupported or binary extension" };
         if (isSameSkippedFile(previous, skipped)) {

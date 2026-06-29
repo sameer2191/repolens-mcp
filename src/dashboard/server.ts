@@ -5,6 +5,7 @@ export interface DashboardOptions {
   dbPath?: string;
   port: number;
   host?: string;
+  listenTimeoutMs?: number;
 }
 
 export async function serveDashboard(options: DashboardOptions): Promise<http.Server> {
@@ -77,11 +78,25 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
   });
 
   await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      server.off("error", onError);
+      server.off("listening", onListening);
+      try {
+        server.close();
+      } catch {
+        // The sandbox may prevent the server from ever reaching a listening state.
+      }
+      const error = new Error(`Dashboard server did not start listening within ${options.listenTimeoutMs ?? 5000} ms`) as NodeJS.ErrnoException;
+      error.code = "ELISTEN_TIMEOUT";
+      reject(error);
+    }, options.listenTimeoutMs ?? 5000);
     const onError = (error: Error) => {
+      clearTimeout(timeout);
       server.off("listening", onListening);
       reject(error);
     };
     const onListening = () => {
+      clearTimeout(timeout);
       server.off("error", onError);
       resolve();
     };

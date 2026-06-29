@@ -38,6 +38,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
 - **Architecture recommendations**: turns structural hotspots, git-history churn, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
 - **Wide practical coverage**: TypeScript, JavaScript, Python, Go, Java, Rust, Swift, C/C++, C#, Kotlin, PHP, Ruby, Elixir, Dart, Terraform/HCL, QML, Apex, SQL, YAML, Markdown, JSON, and shell-oriented project files.
+- **Project-specific language overrides**: map framework or template extensions in `.repolens.json`, such as treating `.astro` or `.view` files as TypeScript for indexing.
 - **Validation evidence**: tests, CI, CodeQL, OpenSSF Scorecard, CycloneDX SBOM generation, GitHub build-provenance attestations, docs, local dashboard smoke checks, and a documented local big-repo validation run.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
 - **No frontend build required**: the dashboard is served by the CLI.
@@ -82,6 +83,18 @@ Windows PowerShell uses the same installer flow:
 .\install.ps1 -InstallAgents -DryRun
 .\install.ps1 -InstallAgents -WithHooks -DryRun
 .\install.ps1 -UninstallAgents -DryRun
+```
+
+Project-specific language suffixes can be mapped in `.repolens.json` without changing RepoLens source:
+
+```json
+{
+  "languages": {
+    ".astro": "typescript",
+    ".view": "typescript",
+    "*.blade.php": "php"
+  }
+}
 ```
 
 ## CLI

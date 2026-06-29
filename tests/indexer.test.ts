@@ -8,7 +8,7 @@ import test from "node:test";
 import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
 import { addCallEdges, addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
-import { detectLanguage } from "../src/core/language.js";
+import { detectLanguage, parseLanguageOverrides } from "../src/core/language.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
 
@@ -353,6 +353,37 @@ public with sharing class OrderController {
         `missing import edge ${source} -> ${target}`
       );
     }
+  } finally {
+    store.close();
+  }
+});
+
+test("indexes project-specific language extension overrides", async () => {
+  const overrides = parseLanguageOverrides({ languages: { ".view": "typescript", "*.blade.php": "php" } });
+  assert.equal(detectLanguage("src/components/Profile.view", overrides), "typescript");
+  assert.equal(detectLanguage("resources/views/order.blade.php", overrides), "php");
+  assert.throws(() => parseLanguageOverrides({ languages: { "../escape": "typescript" } }), /language override pattern/);
+
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-language-overrides-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.writeFile(path.join(repo, ".repolens.json"), JSON.stringify({ languages: { ".view": "typescript" } }, null, 2));
+  await fs.writeFile(
+    path.join(repo, "src", "Profile.view"),
+    `
+export function renderProfile(name: string) {
+  return name.toUpperCase();
+}
+`
+  );
+
+  await indexRepository({ root: repo, dbPath });
+  const store = new MemoryStore(dbPath);
+  try {
+    const file = store.listFiles().find((candidate) => candidate.path === "src/Profile.view");
+    assert.equal(file?.language, "typescript");
+    assert.ok(store.searchSymbols("renderProfile").some((symbol) => symbol.filePath === "src/Profile.view"));
   } finally {
     store.close();
   }
