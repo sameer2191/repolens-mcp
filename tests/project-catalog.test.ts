@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -80,6 +81,18 @@ test("summarizes a fleet of indexed projects", async () => {
     assert.ok(graph.edges.some((edge) => edge.source === "project:service-a" && edge.target === "dependency:express" && edge.type === "DEPENDS_ON"));
     assert.ok(graph.edges.some((edge) => edge.source === "project:service-a" && edge.target === "project:service-b" && edge.type === "CROSS_REPO_HTTP_CALLS"));
     assert.ok(graph.edges.some((edge) => edge.source === "project:service-a" && edge.target === "route:GET /orders" && edge.type === "ROUTE_OVERLAP"));
+
+    const cliPath = path.resolve("dist/src/cli.js");
+    const htmlOut = path.join(tmp, "fleet.html");
+    const jsonOut = path.join(tmp, "fleet.json");
+    runCliFleetGraph(cliPath, htmlOut);
+    runCliFleetGraph(cliPath, jsonOut);
+    const html = await fs.readFile(htmlOut, "utf8");
+    assert.ok(html.includes("RepoLens Fleet Graph"));
+    const exportedGraph = JSON.parse(await fs.readFile(jsonOut, "utf8")) as { nodes: unknown[]; edges: unknown[]; totals: { crossRepoEdges: number } };
+    assert.equal(exportedGraph.nodes.length, graph.nodes.length);
+    assert.equal(exportedGraph.edges.length, graph.edges.length);
+    assert.ok(exportedGraph.totals.crossRepoEdges >= 1);
   } finally {
     if (previousCatalog === undefined) {
       delete process.env.REPOLENS_CATALOG;
@@ -88,6 +101,18 @@ test("summarizes a fleet of indexed projects", async () => {
     }
   }
 });
+
+function runCliFleetGraph(cliPath: string, outPath: string): void {
+  const result = spawnSync(
+    process.execPath,
+    ["--experimental-sqlite", cliPath, "fleet-graph", "--limit", "5", "--max-nodes", "200", "--max-edges", "500", "--out", outPath],
+    {
+      encoding: "utf8",
+      env: process.env
+    }
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+}
 
 test("scores fleet service links with host-aware confidence", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-fleet-host-"));

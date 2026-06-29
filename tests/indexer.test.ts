@@ -8,6 +8,7 @@ import test from "node:test";
 import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
 import { addCallEdges, addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
+import { detectLanguage, parseLanguageOverrides } from "../src/core/language.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
 
@@ -113,6 +114,352 @@ export async function loadBillingOrders() {
   assert.ok(edge);
   assert.equal(edge.metadata?.host, "billing.internal");
   assert.equal(edge.metadata?.path, "/orders");
+});
+
+test("indexes broad language adapters with symbols, imports, routes, and infrastructure nodes", async () => {
+  assert.equal(detectLanguage("src/BillingController.cs"), "csharp");
+  assert.equal(detectLanguage("src/CheckoutService.kt"), "kotlin");
+  assert.equal(detectLanguage("src/OrderController.php"), "php");
+  assert.equal(detectLanguage("lib/sync_job.rb"), "ruby");
+  assert.equal(detectLanguage("lib/checkout_worker.ex"), "elixir");
+  assert.equal(detectLanguage("native/orders.cpp"), "cpp");
+  assert.equal(detectLanguage("infra/main.tf"), "terraform");
+  assert.equal(detectLanguage("ui/Checkout.qml"), "qml");
+  assert.equal(detectLanguage("force-app/classes/OrderController.cls"), "apex");
+
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-broad-languages-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.mkdir(path.join(repo, "src", "CSharpDemo"), { recursive: true });
+  await fs.mkdir(path.join(repo, "src", "demo", "billing"), { recursive: true });
+  await fs.mkdir(path.join(repo, "src", "App", "Services"), { recursive: true });
+  await fs.mkdir(path.join(repo, "lib"), { recursive: true });
+  await fs.mkdir(path.join(repo, "lib", "support"), { recursive: true });
+  await fs.mkdir(path.join(repo, "lib", "checkout"), { recursive: true });
+  await fs.mkdir(path.join(repo, "native"), { recursive: true });
+  await fs.mkdir(path.join(repo, "infra"), { recursive: true });
+  await fs.mkdir(path.join(repo, "ui"), { recursive: true });
+  await fs.mkdir(path.join(repo, "force-app", "classes"), { recursive: true });
+
+  await fs.writeFile(
+    path.join(repo, "src", "BillingController.cs"),
+    `
+using System.Threading.Tasks;
+using CSharpDemo.Shared;
+
+public interface BillingPort {}
+public record Invoice(string Id);
+
+[Route("/api/billing")]
+public class BillingController : BaseController, BillingPort {
+  [HttpGet("/api/billing/{id}")]
+  public async Task<Invoice> GetInvoice(string id) {
+    return await LoadInvoice(id);
+  }
+
+  private Task<Invoice> LoadInvoice(string id) {
+    return Task.FromResult(new Invoice(id));
+  }
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "CSharpDemo", "Shared.cs"),
+    `
+namespace CSharpDemo;
+public class Shared {}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "CheckoutService.kt"),
+    `
+import demo.billing.BillingClient
+
+interface CheckoutPort
+open class BaseCheckout
+class CheckoutService : BaseCheckout(), CheckoutPort {
+  fun checkout(order: Order) {
+    confirm(order)
+  }
+
+  fun confirm(order: Order) {}
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "demo", "billing", "BillingClient.kt"),
+    `
+package demo.billing
+class BillingClient
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "OrderController.php"),
+    `
+<?php
+namespace App;
+use App\\Services\\OrderService;
+
+Route::get("/orders/{id}", [OrderController::class, "show"]);
+
+class OrderController extends BaseController implements Responsable {
+  public function show($id) {
+    return OrderService::load($id);
+  }
+}
+
+function helper_call() {}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "App", "Services", "OrderService.php"),
+    `
+<?php
+namespace App\\Services;
+class OrderService {}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "lib", "sync_job.rb"),
+    `
+require_relative "support/worker_base"
+
+module Billing
+  class SyncJob < ApplicationJob
+    def perform(order_id)
+      order_id
+    end
+  end
+end
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "lib", "support", "worker_base.rb"),
+    `
+class WorkerBase
+end
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "lib", "checkout_worker.ex"),
+    `
+defmodule Checkout.Worker do
+  alias Checkout.Events
+
+  def perform(order) do
+    audit(order)
+  end
+
+  defp audit(order), do: Events.record(order)
+end
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "lib", "checkout", "events.ex"),
+    `
+defmodule Checkout.Events do
+  def record(order), do: order
+end
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "native", "orders.cpp"),
+    `
+#include "orders.hpp"
+
+class OrderIndex : public BaseIndex {};
+
+int build_index(int count) {
+  return count;
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "native", "orders.hpp"),
+    `
+class OrdersHeader {};
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "infra", "main.tf"),
+    `
+module "billing" {
+  source = "github.com/example/billing"
+}
+
+resource "aws_s3_bucket" "orders" {}
+variable "region" {}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "ui", "Checkout.qml"),
+    `
+import QtQuick
+
+component CheckoutPanel : Item {
+  property string orderId
+  signal submitted(string orderId)
+  function submitOrder() {
+    submitted(orderId)
+  }
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "force-app", "classes", "OrderController.cls"),
+    `
+public with sharing class OrderController {
+  public static Order__c loadOrder(Id orderId) {
+    return [SELECT Id FROM Order__c WHERE Id = :orderId];
+  }
+}
+`
+  );
+
+  const result = await indexRepository({ root: repo, dbPath });
+  assert.equal(result.filesIndexed, 15);
+
+  const store = new MemoryStore(dbPath);
+  try {
+    const arch = store.architecture(repo);
+    for (const language of ["csharp", "kotlin", "php", "ruby", "elixir", "cpp", "terraform", "qml", "apex"]) {
+      assert.ok(arch.languages.some((item) => item.language === language), `missing language ${language}`);
+    }
+
+    for (const name of ["BillingController", "CheckoutService", "OrderController", "SyncJob", "Checkout.Worker", "build_index", "billing", "aws_s3_bucket.orders", "CheckoutPanel", "loadOrder"]) {
+      assert.ok(store.searchSymbols(name).some((symbol) => symbol.name === name), `missing symbol ${name}`);
+    }
+
+    assert.ok(store.searchSymbols("/orders/{id}").some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/{id}"));
+    assert.ok(store.searchSymbols("/api/billing/{id}").some((symbol) => symbol.kind === "route" && symbol.name === "GET /api/billing/{id}"));
+    assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "IMPORTS"));
+    assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "IMPORTS_FILE"));
+    assert.ok(arch.nodeLabels.some((label) => label.kind === "resource"));
+
+    for (const [source, target] of [
+      ["src/BillingController.cs", "src/CSharpDemo/Shared.cs"],
+      ["src/CheckoutService.kt", "src/demo/billing/BillingClient.kt"],
+      ["src/OrderController.php", "src/App/Services/OrderService.php"],
+      ["lib/sync_job.rb", "lib/support/worker_base.rb"],
+      ["lib/checkout_worker.ex", "lib/checkout/events.ex"],
+      ["native/orders.cpp", "native/orders.hpp"]
+    ]) {
+      const imports = store.queryGraph(
+        `MATCH (a)-[r:IMPORTS_FILE]->(b) WHERE a.filePath = '${source}' AND b.filePath = '${target}' RETURN a.filePath,b.filePath,r.type LIMIT 1`
+      ).rows;
+      assert.ok(
+        imports.some((row) => row["a.filePath"] === source && row["b.filePath"] === target && row["r.type"] === "IMPORTS_FILE"),
+        `missing import edge ${source} -> ${target}`
+      );
+    }
+  } finally {
+    store.close();
+  }
+});
+
+test("indexes project-specific language extension overrides", async () => {
+  const overrides = parseLanguageOverrides({ languages: { ".view": "typescript", "*.blade.php": "php" } });
+  assert.equal(detectLanguage("src/components/Profile.view", overrides), "typescript");
+  assert.equal(detectLanguage("resources/views/order.blade.php", overrides), "php");
+  assert.throws(() => parseLanguageOverrides({ languages: { "../escape": "typescript" } }), /language override pattern/);
+
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-language-overrides-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.writeFile(path.join(repo, ".repolens.json"), JSON.stringify({ languages: { ".view": "typescript" } }, null, 2));
+  await fs.writeFile(
+    path.join(repo, "src", "Profile.view"),
+    `
+export function renderProfile(name: string) {
+  return name.toUpperCase();
+}
+`
+  );
+
+  await indexRepository({ root: repo, dbPath });
+  const store = new MemoryStore(dbPath);
+  try {
+    const file = store.listFiles().find((candidate) => candidate.path === "src/Profile.view");
+    assert.equal(file?.language, "typescript");
+    assert.ok(store.searchSymbols("renderProfile").some((symbol) => symbol.filePath === "src/Profile.view"));
+  } finally {
+    store.close();
+  }
+});
+
+test("links configuration keys, dependency imports, and config file references", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-config-links-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.mkdir(path.join(repo, "packages", "api", "src"), { recursive: true });
+  await fs.writeFile(
+    path.join(repo, "config.toml"),
+    `
+[service]
+max_connections = 25
+request_timeout = 5000
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "package.json"),
+    JSON.stringify({ name: "config-link-fixture", dependencies: { express: "^4.18.0" } }, null, 2)
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "server.ts"),
+    `
+import express from "express";
+import lodash from "lodash";
+
+export function getMaxConnections() {
+  return Number(process.env.MAX_CONNECTIONS ?? "25");
+}
+
+export function loadConfigFile() {
+  return "config.toml";
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "packages", "api", "package.json"),
+    JSON.stringify({ name: "nested-api", dependencies: { lodash: "^4.17.21" } }, null, 2)
+  );
+  await fs.writeFile(
+    path.join(repo, "packages", "api", "src", "api.ts"),
+    `
+import lodash from "lodash";
+
+export function compactValues(values: string[]) {
+  return lodash.compact(values);
+}
+`
+  );
+
+  await indexRepository({ root: repo, dbPath });
+  const store = new MemoryStore(dbPath);
+  try {
+    assert.ok(store.searchGraph({ kind: "config_key", query: "max_connections" }).some((match) => match.symbol.name === "service.max_connections"));
+    const schema = store.graphSchema();
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "config_key"));
+    assert.ok(schema.relationshipPatterns.some((pattern) => pattern.sourceKind === "config_key" && pattern.type === "CONFIGURES" && pattern.targetKind === "function"));
+
+    const keyQuery = store.queryGraph("MATCH (a)-[r:CONFIGURES]->(b) WHERE a.name = 'service.max_connections' RETURN a.name,b.name,r.type LIMIT 10");
+    assert.ok(keyQuery.rows.some((row) => row["b.name"] === "getMaxConnections" && row["r.type"] === "CONFIGURES"));
+
+    const dependencyQuery = store.queryGraph("MATCH (a)-[r:CONFIGURES]->(b) WHERE a.name = 'express' RETURN a.name,b.name,r.type LIMIT 10");
+    assert.ok(dependencyQuery.rows.some((row) => row["b.name"] === "server.ts" && row["r.type"] === "CONFIGURES"));
+
+    const fileQuery = store.queryGraph("MATCH (a)-[r:CONFIGURES]->(b) WHERE a.name = 'config.toml' RETURN a.name,b.name,r.type LIMIT 10");
+    assert.ok(fileQuery.rows.some((row) => row["b.name"] === "loadConfigFile" && row["r.type"] === "CONFIGURES"));
+
+    const nestedDependencyQuery = store.queryGraph("MATCH (a)-[r:CONFIGURES]->(b) WHERE a.name = 'lodash' RETURN a.name,b.filePath,r.type LIMIT 10");
+    assert.ok(nestedDependencyQuery.rows.some((row) => row["b.filePath"] === "packages/api/src/api.ts" && row["r.type"] === "CONFIGURES"));
+    assert.ok(!nestedDependencyQuery.rows.some((row) => row["b.filePath"] === "src/server.ts"));
+  } finally {
+    store.close();
+  }
 });
 
 test("extracts typed inheritance, implementation, and usage edges", () => {
@@ -563,10 +910,23 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     const htmlReport = architectureReport({ format: "html", graphLimit: 50 }, dbPath);
     assert.match(htmlReport, /<!doctype html>/);
     assert.match(htmlReport, /RepoLens Architecture Report/);
+    assert.match(htmlReport, /Graph Explorer/);
+    assert.match(htmlReport, /id="graph-filter"/);
     assert.match(htmlReport, /CheckoutViewModel/);
   } finally {
     store.close();
   }
+});
+
+test("refuses to index repositories above the configured file-count limit", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-max-files-"));
+  await fs.writeFile(path.join(tmp, "a.ts"), "export const a = 1;\n");
+  await fs.writeFile(path.join(tmp, "b.ts"), "export const b = 2;\n");
+
+  await assert.rejects(
+    () => indexRepository({ root: tmp, dbPath: path.join(tmp, ".repolens", "memory.db"), maxFiles: 1 }),
+    /exceeds maxFiles 1/
+  );
 });
 
 test("benchmarks full and incremental indexing with graph evidence", async () => {

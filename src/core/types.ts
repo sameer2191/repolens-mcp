@@ -6,6 +6,15 @@ export type Language =
   | "java"
   | "rust"
   | "swift"
+  | "c"
+  | "cpp"
+  | "csharp"
+  | "kotlin"
+  | "php"
+  | "dart"
+  | "terraform"
+  | "qml"
+  | "apex"
   | "sql"
   | "yaml"
   | "markdown"
@@ -26,9 +35,11 @@ export interface IndexOptions {
   includeHidden?: boolean;
   incremental?: boolean;
   maxFileBytes?: number;
+  maxFiles?: number;
   runLabel?: string;
   bootstrapPackage?: string | false;
   writePackage?: string | false;
+  diagnosticsPath?: string | false;
 }
 
 export interface IndexedFile {

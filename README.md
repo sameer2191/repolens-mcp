@@ -12,24 +12,26 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 
 ## Why It Stands Out
 
-- **MCP-native**: exposes 38 tools for indexing, version/update status, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing and git-aware auto-sync, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema with relationship patterns and label properties, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, receiver-aware method call edges, conservative data-flow edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
-- **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, and `agent-setup`/`install-agents` generate reviewable guidance plus opt-in hook/reminder files for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
+- **MCP-native**: exposes 38 tools for indexing, version/update status, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing and git-aware auto-sync, JSONL operational diagnostics, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema with relationship patterns and label properties, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, receiver-aware method call edges, conservative data-flow edges, config-key/dependency `CONFIGURES` edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
+- **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, `agent-hook` provides executable non-blocking broad-search reminders, and `agent-setup`/`install-agents` generate reviewable guidance plus opt-in hook/reminder files for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro, including a managed local Claude PreToolUse hook config.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
-- **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
+- **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, inferred consumer/provider service links, and shareable HTML/JSON artifacts through `fleet-graph --out`.
 - **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`, and keep long-running MCP sessions fresh with git-aware `REPOLENS_AUTO_SYNC`.
-- **Persistent local config**: `config set auto-index incremental` and `config set auto-sync true` store defaults for MCP startup indexing, live-session syncing, root, database path, max file size, labels, and graph-package bootstrap without requiring shell env vars.
+- **Persistent local config**: `config set auto-index incremental` and `config set auto-sync true` store defaults for MCP startup indexing, live-session syncing, root, database path, max file size, max file count, labels, graph-package bootstrap, and diagnostics output without requiring shell env vars.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes, optionally skipping unchanged git polls with `--git-aware`.
-- **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI; first index can bootstrap a missing database from `.repolens/graph.rlgz`.
-- **Operational dashboard**: browse graph previews, structural filters, references, semantic/vector search, schema counts, relationship patterns, label property hints, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
+- **Operational diagnostics**: opt into JSONL lifecycle events for index, benchmark, watch, MCP startup auto-index, and auto-sync runs with `--diagnostics`, `REPOLENS_DIAGNOSTICS`, or persistent `diagnostics-path`.
+- **Portable graph and report artifacts**: export self-contained interactive HTML graph explorers, architecture reports, and compressed `.rlgz` graph packages from the CLI; first index can bootstrap a missing database from `.repolens/graph.rlgz`.
+- **Operational dashboard**: browse an interactive graph explorer with filtering, hover/click node inspection, legend, pause, and fit controls, plus structural filters, references, semantic/vector search, schema counts, relationship patterns, label property hints, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
 - **Graph communities**: detects functional modules from weighted relationships, not just folder names.
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
 - **Reference lookup**: finds exact indexed identifier references and labels definition lines for language-server-style navigation without requiring an external LSP process.
 - **Type relationship graph**: adds `INHERITS`, `IMPLEMENTS`, and `USES_TYPE` edges from class/interface/protocol declarations and typed signatures for safer impact analysis.
+- **Configuration links**: extracts config keys from repo-local config files and links config keys, dependency declarations, and referenced config files back to code with `CONFIGURES` edges.
 - **Receiver-aware call graph**: resolves TypeScript/JavaScript calls such as `repo.save()` to the method on the inferred constructed class, avoiding ambiguous same-name method edges.
 - **Local semantic and vector search**: adds dependency-free `SIMILAR_TO` and `SEMANTICALLY_RELATED` edges, concept search, and persisted local vector embeddings over names, paths, signatures, metadata, and symbol bodies.
 - **Context packs for agents**: one query can return semantic matches, vector matches, graph matches, BM25 code hits, snippets, and nearby edges for focused development context.
 - **Redacted secret scan**: review high-confidence token shapes, sensitive assignments, and environment references from indexed source/config lines without returning raw secret values.
-- **Resolved import graph**: creates `IMPORTS_FILE` edges for relative imports, workspace package names, source-root imports, and `tsconfig`/`jsconfig` path aliases.
+- **Resolved import graph**: creates `IMPORTS_FILE` edges for relative imports, file-like includes/requires, dotted or backslash namespaces, workspace package names, source-root imports, and `tsconfig`/`jsconfig` path aliases.
 - **Route-call edges**: stores literal HTTP requests as `http_call` nodes, connects callers with `CALLS_HTTP_ENDPOINT`, and links matching in-repo routes with `HTTP_CALLS`.
 - **Runtime trace ingestion**: imports observed HTTP, event, or symbol traces as `OBSERVED_*` graph edges with counts and timestamps.
 - **Channel/event edges**: detects EventEmitter, Socket.IO-style, DOM custom event, Python decorator/call, and Swift `NotificationCenter` channels with `EMITS` and `LISTENS_ON` edges.
@@ -37,7 +39,8 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Manifest and lockfile dependency graph**: extracts declared package/dependency nodes from npm, Composer, Python, Go, Cargo, Maven, Gradle, Dart, Elixir, Ruby, and `requirements.txt` manifests, plus pinned `lockfile` and `locked_dependency` nodes from common package-manager locks.
 - **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
 - **Architecture recommendations**: turns structural hotspots, git-history churn, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
-- **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
+- **Wide practical coverage**: TypeScript, JavaScript, Python, Go, Java, Rust, Swift, C/C++, C#, Kotlin, PHP, Ruby, Elixir, Dart, Terraform/HCL, QML, Apex, SQL, YAML, Markdown, JSON, and shell-oriented project files.
+- **Project-specific language overrides**: map framework or template extensions in `.repolens.json`, such as treating `.astro` or `.view` files as TypeScript for indexing.
 - **Validation evidence**: tests, CI, CodeQL, OpenSSF Scorecard, CycloneDX SBOM generation, GitHub build-provenance attestations, docs, local dashboard smoke checks, and a documented local big-repo validation run.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
 - **No frontend build required**: the dashboard is served by the CLI.
@@ -45,9 +48,9 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 ## Security And Quality
 
 - **Protected mainline**: `main` requires PR review, CODEOWNERS review, fresh branch checks, resolved conversations, linear history, `verify`, and CodeQL `Analyze`; force pushes and branch deletion are blocked.
-- **GitHub security coverage**: CodeQL, OpenSSF Scorecard, Dependabot security updates, secret scanning with push protection, private vulnerability reporting, pinned workflow actions, least-privilege workflow tokens, and a release gate that blocks publishing when CodeQL has open alerts.
+- **GitHub security coverage**: CodeQL, OpenSSF Scorecard, Dependabot security updates, secret scanning with push protection, private vulnerability reporting, pinned workflow actions, least-privilege workflow tokens, and a release gate that blocks publishing when actionable CodeQL, Dependabot, or secret-scanning alerts are open or alert APIs are unavailable.
 - **Property-based fuzzing**: `fast-check` fuzzes import resolver traversal boundaries, safe alias/source-root/workspace-package resolution, and MCP JSON-RPC tool-call validation in `tests/security-fixes.test.ts` and `tests/mcp-server.test.ts`.
-- **Release integrity**: npm provenance, GitHub build-provenance attestations, CycloneDX SBOM generation, lockfile dependency graphing, dry-run package validation, and a package contents gate that blocks local graph artifacts from being published.
+- **Release integrity**: npm provenance, GitHub build-provenance attestations, CycloneDX SBOM generation, lockfile dependency graphing, clean builds, dry-run package validation, and a package contents gate that blocks local graph artifacts and stale compiled output from being published.
 - **Agent-readable docs**: `llms.txt` and `docs/agent-guide.md` give coding agents a concise operating guide, data-boundary rules, and validation commands.
 
 ## Quick Start
@@ -62,7 +65,7 @@ node --experimental-sqlite dist/src/cli.js serve
 
 Then open `http://127.0.0.1:9749`.
 
-The dashboard includes code search, reference lookup, semantic/vector search, graph search, graph schema tables with relationship patterns and label property hints, fleet service links, hotspot and boundary summaries, git-history signals, dead-code candidates, and one-click Markdown/HTML architecture reports.
+The dashboard includes an interactive graph explorer, code search, reference lookup, semantic/vector search, graph search, graph schema tables with relationship patterns and label property hints, fleet service links, hotspot and boundary summaries, git-history signals, dead-code candidates, and one-click Markdown/HTML architecture reports.
 
 From a local clone, the installer runs the same build and Codex checks:
 
@@ -70,6 +73,7 @@ From a local clone, the installer runs the same build and Codex checks:
 ./install.sh --install-codex --dry-run
 ./install.sh --install-codex
 ./install.sh --install-agents --dry-run
+./install.sh --install-agents --with-hooks --dry-run
 ./install.sh --uninstall-agents --dry-run
 ```
 
@@ -79,22 +83,35 @@ Windows PowerShell uses the same installer flow:
 .\install.ps1 -InstallCodex -DryRun
 .\install.ps1 -InstallCodex
 .\install.ps1 -InstallAgents -DryRun
+.\install.ps1 -InstallAgents -WithHooks -DryRun
 .\install.ps1 -UninstallAgents -DryRun
+```
+
+Project-specific language suffixes can be mapped in `.repolens.json` without changing RepoLens source:
+
+```json
+{
+  "languages": {
+    ".astro": "typescript",
+    ".view": "typescript",
+    "*.blade.php": "php"
+  }
+}
 ```
 
 ## CLI
 
 ```bash
-repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name] [--write-package [graph.rlgz]]
+repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--max-files n] [--incremental] [--label name] [--write-package [graph.rlgz]] [--diagnostics [path|true|off]]
 repolens-mcp index [repo] [--bootstrap-package .repolens/graph.rlgz] [--no-bootstrap]
 repolens-mcp version [--check] [--registry url]
 repolens-mcp update-check [--registry url]
-repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--no-secret-scan]
+repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--max-files n] [--no-secret-scan] [--diagnostics [path|true|off]]
 repolens-mcp list-projects [--limit n]
 repolens-mcp project-status [root-or-db-or-label]
 repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
 repolens-mcp fleet-summary [--limit n]
-repolens-mcp fleet-graph [--limit n] [--max-nodes n] [--max-edges n]
+repolens-mcp fleet-graph [--limit n] [--max-nodes n] [--max-edges n] [--out fleet.html|fleet.json]
 repolens-mcp config list|get|set|reset|path [key] [value]
 repolens-mcp architecture [--db path]
 repolens-mcp search <query> [--db path]
@@ -106,7 +123,7 @@ repolens-mcp trace <symbol> [--direction inbound|outbound|both] [--mode all|call
 repolens-mcp impact <path-or-symbol...>
 repolens-mcp schema [--db path]
 repolens-mcp communities [--db path] [--limit n] [--min-size n]
-repolens-mcp watch [repo] [--db path] [--interval-ms n] [--git-aware]
+repolens-mcp watch [repo] [--db path] [--interval-ms n] [--git-aware] [--diagnostics [path|true|off]]
 repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--min-degree n]
 repolens-mcp semantic "live session repository" [--limit n]
 repolens-mcp vector "live session repository" [--limit n]
@@ -126,6 +143,7 @@ repolens-mcp uninstall-codex [--dry-run]
 repolens-mcp agent-setup [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--db .repolens/memory.db] [--with-hooks]
 repolens-mcp install-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run] [--with-hooks]
 repolens-mcp uninstall-agents [--target .] [--agents all|codex,claude,gemini,zed,opencode,antigravity,aider,kilocode,vscode,openclaw,kiro] [--dry-run] [--with-hooks]
+repolens-mcp agent-hook|hook-augment [--db .repolens/memory.db] [--name repolens] [--json|--claude] [--with-query]
 repolens-mcp decision --title "Use SQLite" --body "Keep memory local."
 repolens-mcp decision-update 1 --status accepted --tags sqlite,privacy
 repolens-mcp decision-delete 1
@@ -189,8 +207,10 @@ The extractor is intentionally compact and extensible:
 - Channel/event linking: EventEmitter/Socket.IO-style `emit`, `on`, `once`, `addListener`, `subscribe`, DOM `CustomEvent`, Python `@*.on`, and Swift `NotificationCenter` patterns become `channel` nodes with `EMITS` and `LISTENS_ON` edges.
 - Swift: classes, structs, enums, protocols, actors, functions, and imports.
 - Python: classes, functions, imports, route decorators.
-- Go, Java, Rust: common functions, types, classes, traits, structs, imports.
+- Go, Java, Rust: common functions, methods, types, classes, traits, structs, imports, and route decorators where applicable.
+- C/C++, C#, Kotlin, PHP, Dart, Ruby, Elixir, QML, and Apex: practical symbol extraction for classes/interfaces/records/modules/functions/methods, imports/includes/uses/requires, plus C#/PHP/Kotlin/Apex route annotations and route helpers.
 - SQL: created tables, views, indexes, functions, procedures.
+- Terraform/HCL: `resource`, `data`, `module`, `variable`, `output`, and `provider` blocks, including module `source` import edges.
 - YAML: multi-document Kubernetes resources from `kind` and `metadata.name`, container image links, and Kustomize `resources`, `bases`, and `components`.
 - Dockerfile: build stages, base images, and `COPY --from` stage dependencies.
 - Markdown: headings as knowledge nodes.
@@ -228,12 +248,13 @@ npm run package:check
 npm run installer:audit
 npm run audit:prod
 GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run security:github
+GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run release:security-gate
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js benchmark /path/to/big/repo --db /tmp/benchmark.db
 node --experimental-sqlite dist/src/cli.js list-projects
 node --experimental-sqlite dist/src/cli.js project-status /path/to/big/repo
 node --experimental-sqlite dist/src/cli.js fleet-summary
-node --experimental-sqlite dist/src/cli.js fleet-graph --limit 20 --max-nodes 500 --max-edges 1000
+node --experimental-sqlite dist/src/cli.js fleet-graph --limit 20 --max-nodes 500 --max-edges 1000 --out /tmp/repolens-fleet.html
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db --incremental
 node --experimental-sqlite dist/src/cli.js architecture --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js schema --db /tmp/memory.db
@@ -256,6 +277,8 @@ node --experimental-sqlite dist/src/cli.js config set root /path/to/big/repo
 node --experimental-sqlite dist/src/cli.js serve --db /tmp/memory.db --port 9749
 node --experimental-sqlite dist/src/cli.js agent-setup --target /tmp/project --agents all
 ```
+
+Security-summary commands need a token that can read GitHub security-alert endpoints; see `SECURITY.md` for local token requirements.
 
 The repo includes `docs/research-notes.md` with source-research notes and design decisions, plus `docs/BENCHMARK.md` with sanitized validation evidence for the npm package.
 
@@ -300,6 +323,8 @@ REPOLENS_AUTO_SYNC = "1"           # keep a long-running MCP session fresh after
 REPOLENS_AUTO_SYNC_INTERVAL_MS = "2500"
 REPOLENS_ROOT = "."                # optional, defaults to process cwd
 REPOLENS_MAX_FILE_BYTES = "750000" # optional
+REPOLENS_MAX_FILES = "5000"        # optional, fail closed on unexpected huge repos
+REPOLENS_DIAGNOSTICS = "true"      # optional, writes .repolens/diagnostics.jsonl
 ```
 
 Set `REPOLENS_AUTO_INDEX=full` to force a full rebuild on startup. Leave it unset for the default manual-index behavior.
@@ -313,6 +338,8 @@ node --experimental-sqlite dist/src/cli.js config set auto-sync true
 node --experimental-sqlite dist/src/cli.js config set auto-sync-interval-ms 2500
 node --experimental-sqlite dist/src/cli.js config set root /path/to/repo
 node --experimental-sqlite dist/src/cli.js config set db-path /path/to/repo/.repolens/memory.db
+node --experimental-sqlite dist/src/cli.js config set max-files 5000
+node --experimental-sqlite dist/src/cli.js config set diagnostics-path .repolens/diagnostics.jsonl
 ```
 
 Project teams can generate agent guidance and config snippets for the broader agent set:
@@ -325,7 +352,7 @@ repolens-mcp install-agents --target . --agents codex,claude,gemini
 repolens-mcp uninstall-agents --target . --agents codex,claude,gemini --with-hooks --dry-run
 ```
 
-`install-agents` writes managed markdown blocks into project-local instruction files and a `docs/repolens-agent-setup.md` guide. For VS Code it also writes a project-local `.vscode/mcp.json` `servers.repolens` entry while preserving unrelated servers. Add `--with-hooks` to generate opt-in, non-blocking hook/reminder files plus `docs/repolens-agent-hooks.md`; these files tell agents when to call RepoLens before broad searches or risky edits, but they do not execute code by themselves. `uninstall-agents --with-hooks` removes those managed reminder files alongside managed RepoLens markdown blocks and managed VS Code config entries while preserving hand-written content. The guide includes MCP config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
+`install-agents` writes managed markdown blocks into project-local instruction files and a `docs/repolens-agent-setup.md` guide. For VS Code it also writes a project-local `.vscode/mcp.json` `servers.repolens` entry while preserving unrelated servers. Add `--with-hooks` to generate opt-in, non-blocking hook/reminder files plus `docs/repolens-agent-hooks.md`; for Claude Code it also merges a managed `.claude/settings.local.json` PreToolUse hook entry while preserving unrelated hooks and settings. These files tell agents when to call RepoLens before broad searches or risky edits and include an executable `hook-augment --claude` command for agents that pass hook payload JSON through stdin. `agent-hook`/`hook-augment` recognizes PreToolUse-style Grep, Glob, and broad shell search payloads, emits either text, JSON, or Claude-compatible `hookSpecificOutput.additionalContext`, exits successfully, and does not intercept Read/Edit/Write tools. The hook does not query or mutate the local graph by default; add `--with-query` only when you want it to open the RepoLens database and append symbol metadata matches. `uninstall-agents --with-hooks` removes those managed reminder files and the managed Claude hook entry alongside managed RepoLens markdown blocks and managed VS Code config entries while preserving hand-written content. The MCP `agent_setup` tool is dry-run by default; write mode is limited to the server working directory, and executable hook writes require `REPOLENS_ALLOW_MCP_HOOK_WRITES=1`, so interactive CLI installers are the recommended hook setup path. The guide includes MCP config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 
 ```json
 {
@@ -356,5 +383,5 @@ flowchart LR
 
 ## Roadmap
 
-- Deeper tree-sitter adapters for language-specific call/use precision.
+- Optional parser-backed adapters for deeper language-specific call/use precision where regex extractors are not enough.
 - Host-aware service-link inference from config, environment variables, and trace data.

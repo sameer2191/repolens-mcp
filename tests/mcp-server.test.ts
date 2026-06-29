@@ -7,7 +7,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import fc from "fast-check";
-import { maybeAutoIndexOnStartup, maybeStartAutoSyncOnStartup } from "../src/mcp/server.js";
+import { maybeAutoIndexOnStartup, maybeStartAutoSyncOnStartup, validateMcpAgentSetupWriteRequest } from "../src/mcp/server.js";
 
 const fixture = path.join(process.cwd(), "tests", "fixtures", "sample-repo");
 const cliPath = path.join(process.cwd(), "dist", "src", "cli.js");
@@ -103,17 +103,24 @@ async function startMcpClient(): Promise<{ child: ChildProcessWithoutNullStreams
     client,
     close: async () => {
       child.stdin.end();
-      const exited = await Promise.race([once(child, "exit").then(() => true), delay(1000).then(() => false)]);
+      const exited = await waitForExit(child, 1000);
       if (!exited) {
         child.kill("SIGTERM");
-        const terminated = await Promise.race([once(child, "exit").then(() => true), delay(1000).then(() => false)]);
+        const terminated = await waitForExit(child, 1000);
         if (!terminated) {
           child.kill("SIGKILL");
-          await once(child, "exit");
+          await waitForExit(child, 1000);
         }
       }
     }
   };
+}
+
+async function waitForExit(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return true;
+  }
+  return Promise.race([once(child, "exit").then(() => true), delay(timeoutMs).then(() => false)]);
 }
 
 function stderrFor(child: ChildProcessWithoutNullStreams): string {
@@ -144,6 +151,7 @@ test("MCP startup auto-index indexes the configured repository", async () => {
       REPOLENS_ROOT: fixture,
       REPOLENS_DB: dbPath,
       REPOLENS_MAX_FILE_BYTES: "750000",
+      REPOLENS_MAX_FILES: "1000",
       REPOLENS_CONFIG: path.join(tmp, "missing-config.json"),
       REPOLENS_AUTO_INDEX_LABEL: "startup-test"
     },
@@ -168,6 +176,24 @@ test("MCP startup auto-index indexes the configured repository", async () => {
   assert.equal(fullResult?.root, fixture);
 });
 
+test("MCP startup auto-index honors the configured file-count limit", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-mcp-auto-index-limit-"));
+  await assert.rejects(
+    () =>
+      maybeAutoIndexOnStartup(
+        {
+          REPOLENS_AUTO_INDEX: "1",
+          REPOLENS_ROOT: fixture,
+          REPOLENS_DB: path.join(tmp, "memory.db"),
+          REPOLENS_MAX_FILES: "1",
+          REPOLENS_CONFIG: path.join(tmp, "missing-config.json")
+        },
+        process.cwd()
+      ),
+    /exceeds maxFiles 1/
+  );
+});
+
 test("MCP startup auto-index reads persistent RepoLens config", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-mcp-config-auto-index-"));
   const dbPath = path.join(tmp, "memory.db");
@@ -180,6 +206,7 @@ test("MCP startup auto-index reads persistent RepoLens config", async () => {
         root: fixture,
         dbPath,
         maxFileBytes: 750000,
+        maxFiles: 1000,
         autoIndexLabel: "config-startup-test"
       },
       null,
@@ -214,6 +241,28 @@ test("MCP startup auto-sync is disabled by default and can start from env", asyn
   );
   assert.ok(enabled);
   enabled.abort();
+});
+
+test("MCP agent_setup write requests stay inside the server cwd", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-mcp-agent-write-"));
+  assert.equal(validateMcpAgentSetupWriteRequest({ targetDir: "docs", write: true }, tmp, {}), path.join(tmp, "docs"));
+  assert.equal(validateMcpAgentSetupWriteRequest({ targetDir: path.dirname(tmp), write: false, withHooks: true }, tmp, {}), path.dirname(tmp));
+  assert.throws(
+    () => validateMcpAgentSetupWriteRequest({ targetDir: path.dirname(tmp), write: true }, tmp, {}),
+    /inside the MCP server working directory/
+  );
+});
+
+test("MCP agent_setup executable hook writes require explicit opt-in", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-mcp-agent-hooks-"));
+  assert.throws(
+    () => validateMcpAgentSetupWriteRequest({ targetDir: ".", write: true, withHooks: true }, tmp, {}),
+    /REPOLENS_ALLOW_MCP_HOOK_WRITES=1/
+  );
+  assert.equal(
+    validateMcpAgentSetupWriteRequest({ targetDir: ".", write: true, withHooks: true }, tmp, { REPOLENS_ALLOW_MCP_HOOK_WRITES: "1" }),
+    tmp
+  );
 });
 
 test("MCP stdio JSON-RPC initializes and lists registered tools", async () => {

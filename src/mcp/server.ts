@@ -46,6 +46,7 @@ import {
 } from "../core/api.js";
 import { agentProfiles, installAgentSetup, type AgentId } from "../core/agents.js";
 import { configValueFromEnvOrConfig, loadRepoLensConfig } from "../core/config.js";
+import { diagnosticsSettingFromEnvOrConfig } from "../core/diagnostics.js";
 import { watchRepository } from "../core/watcher.js";
 import type { IndexResult } from "../core/types.js";
 
@@ -75,13 +76,26 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional().describe("Optional SQLite database path."),
         incremental: z.boolean().optional().describe("Skip unchanged files and prune removed files using existing SQLite metadata."),
         maxFileBytes: z.number().int().positive().optional().describe("Skip files larger than this size."),
+        maxFiles: z.number().int().positive().optional().describe("Refuse indexing when repository discovery exceeds this file count."),
         bootstrapPackage: z.string().optional().describe("Optional .rlgz graph package to import when the target database is missing."),
         noBootstrap: z.boolean().optional().describe("Disable default .repolens/graph.rlgz bootstrap when true."),
-        writePackage: z.string().optional().describe("Optional .rlgz graph package path to write after a successful index.")
+        writePackage: z.string().optional().describe("Optional .rlgz graph package path to write after a successful index."),
+        diagnosticsPath: z.string().optional().describe("Optional JSONL diagnostics path for index lifecycle events. Use 'true' for .repolens/diagnostics.jsonl.")
       }
     },
-    async ({ root, dbPath, incremental, maxFileBytes, bootstrapPackage, noBootstrap, writePackage }) =>
-      text(await runIndex({ root: root ?? process.cwd(), dbPath, incremental, maxFileBytes, bootstrapPackage: noBootstrap ? false : bootstrapPackage, writePackage }))
+    async ({ root, dbPath, incremental, maxFileBytes, maxFiles, bootstrapPackage, noBootstrap, writePackage, diagnosticsPath }) =>
+      text(
+        await runIndex({
+          root: root ?? process.cwd(),
+          dbPath,
+          incremental,
+          maxFileBytes,
+          maxFiles,
+          bootstrapPackage: noBootstrap ? false : bootstrapPackage,
+          writePackage,
+          diagnosticsPath
+        })
+      )
   );
 
   server.registerTool(
@@ -92,23 +106,27 @@ export async function startMcpServer(): Promise<void> {
         root: z.string().optional().describe("Repository root. Defaults to current working directory."),
         dbPath: z.string().optional().describe("Optional SQLite database path. Defaults to the repository .repolens path."),
         maxFileBytes: z.number().int().positive().optional().describe("Skip files larger than this size."),
+        maxFiles: z.number().int().positive().optional().describe("Refuse benchmarking when repository discovery exceeds this file count."),
         bootstrapPackage: z.string().optional().describe("Optional .rlgz graph package to import when the target database is missing."),
         noBootstrap: z.boolean().optional().describe("Disable default .repolens/graph.rlgz bootstrap when true."),
         label: z.string().optional().describe("Optional project catalog label for the benchmark run."),
         secretScan: z.boolean().optional().describe("Set false to skip the medium-confidence redacted secret scan."),
-        secretScanLimit: z.number().int().positive().max(500).optional().describe("Maximum redacted secret findings to include in the summary.")
+        secretScanLimit: z.number().int().positive().max(500).optional().describe("Maximum redacted secret findings to include in the summary."),
+        diagnosticsPath: z.string().optional().describe("Optional JSONL diagnostics path for benchmark and index lifecycle events. Use 'true' for .repolens/diagnostics.jsonl.")
       }
     },
-    async ({ root, dbPath, maxFileBytes, bootstrapPackage, noBootstrap, label, secretScan, secretScanLimit }) =>
+    async ({ root, dbPath, maxFileBytes, maxFiles, bootstrapPackage, noBootstrap, label, secretScan, secretScanLimit, diagnosticsPath }) =>
       text(
         await benchmarkRepository({
           root: root ?? process.cwd(),
           dbPath,
           maxFileBytes,
+          maxFiles,
           bootstrapPackage: noBootstrap ? false : bootstrapPackage,
           runLabel: label,
           secretScan,
-          secretScanLimit
+          secretScanLimit,
+          diagnosticsPath
         })
       )
   );
@@ -229,10 +247,11 @@ export async function startMcpServer(): Promise<void> {
         write: z.boolean().optional().describe("Actually write files when true. Defaults to false/dry-run.")
       }
     },
-    async ({ targetDir, agents, dbPath, serverName, withHooks, write }) =>
-      text(
+    async ({ targetDir, agents, dbPath, serverName, withHooks, write }) => {
+      const safeTargetDir = validateMcpAgentSetupWriteRequest({ targetDir, withHooks, write });
+      return text(
         await installAgentSetup({
-          targetDir: targetDir ?? process.cwd(),
+          targetDir: safeTargetDir,
           agents,
           command: process.execPath,
           cliPath: currentCliPath(),
@@ -241,7 +260,8 @@ export async function startMcpServer(): Promise<void> {
           withHooks,
           dryRun: !write
         })
-      )
+      );
+    }
   );
 
   server.registerTool(
@@ -649,8 +669,10 @@ export async function maybeAutoIndexOnStartup(env: NodeJS.ProcessEnv = process.e
     dbPath: env.REPOLENS_DB ?? config.dbPath,
     incremental: mode.incremental,
     maxFileBytes: parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_MAX_FILE_BYTES, config.maxFileBytes), "REPOLENS_MAX_FILE_BYTES"),
+    maxFiles: parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_MAX_FILES, config.maxFiles), "REPOLENS_MAX_FILES"),
     runLabel: env.REPOLENS_AUTO_INDEX_LABEL ?? config.autoIndexLabel ?? "mcp-startup",
-    bootstrapPackage: bootstrapPackageFromConfig(env.REPOLENS_BOOTSTRAP_PACKAGE, config.bootstrapPackage)
+    bootstrapPackage: bootstrapPackageFromConfig(env.REPOLENS_BOOTSTRAP_PACKAGE, config.bootstrapPackage),
+    diagnosticsPath: diagnosticsSettingFromEnvOrConfig(env.REPOLENS_DIAGNOSTICS, config.diagnosticsPath)
   });
   process.stderr.write(
     `RepoLens auto-index: ${result.mode} ${result.filesIndexed}/${result.filesDiscovered} files, ${result.symbols} symbols, ${result.edges} edges\n`
@@ -679,8 +701,10 @@ export function maybeStartAutoSyncOnStartup(env: NodeJS.ProcessEnv = process.env
     dbPath: env.REPOLENS_DB ?? config.dbPath,
     incremental: true,
     maxFileBytes: parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_MAX_FILE_BYTES, config.maxFileBytes), "REPOLENS_MAX_FILE_BYTES"),
+    maxFiles: parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_MAX_FILES, config.maxFiles), "REPOLENS_MAX_FILES"),
     runLabel: env.REPOLENS_AUTO_INDEX_LABEL ?? config.autoIndexLabel ?? "mcp-auto-sync",
     bootstrapPackage: bootstrapPackageFromConfig(env.REPOLENS_BOOTSTRAP_PACKAGE, config.bootstrapPackage),
+    diagnosticsPath: diagnosticsSettingFromEnvOrConfig(env.REPOLENS_DIAGNOSTICS, config.diagnosticsPath),
     intervalMs,
     maxRuns,
     maxPolls,
@@ -701,6 +725,27 @@ export function maybeStartAutoSyncOnStartup(env: NodeJS.ProcessEnv = process.env
   });
 
   return controller;
+}
+
+export function validateMcpAgentSetupWriteRequest(
+  options: { targetDir?: string; withHooks?: boolean; write?: boolean },
+  cwd = process.cwd(),
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const baseDir = path.resolve(cwd);
+  const targetDir = path.resolve(baseDir, options.targetDir ?? ".");
+  if (!options.write) {
+    return targetDir;
+  }
+
+  const relative = path.relative(baseDir, targetDir);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("MCP agent_setup writes must stay inside the MCP server working directory. Use the CLI installer for another target directory.");
+  }
+  if (options.withHooks && !isTruthy(env.REPOLENS_ALLOW_MCP_HOOK_WRITES)) {
+    throw new Error("MCP agent_setup writes with executable hooks require REPOLENS_ALLOW_MCP_HOOK_WRITES=1. Use install-agents --with-hooks for interactive setup.");
+  }
+  return targetDir;
 }
 
 function parseAutoIndexMode(value: string | undefined): { incremental: boolean } | undefined {
@@ -726,6 +771,11 @@ function parseBooleanEnv(value: string | undefined, name: string): boolean {
     return true;
   }
   throw new Error(`${name} must be on or off`);
+}
+
+function isTruthy(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes";
 }
 
 function parsePositiveIntEnv(value: string | undefined, name: string): number | undefined {

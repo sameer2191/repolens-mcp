@@ -21,6 +21,8 @@ export interface AgentProfile {
   instructionPath: string;
   configPath?: string;
   configKind?: "vscode-mcp";
+  hookConfigPath?: string;
+  hookConfigKind?: "claude-hooks";
   hookPath?: string;
 }
 
@@ -54,10 +56,20 @@ export interface AgentSetupResult {
 
 const MANAGED_START = "<!-- >>> repolens-mcp managed >>> -->";
 const MANAGED_END = "<!-- <<< repolens-mcp managed <<< -->";
+const CLAUDE_HOOK_STATUS = "RepoLens context reminder (managed by repolens-mcp)";
+const CLAUDE_HOOK_MATCHER = "Grep|Glob|Bash";
 
 export const agentProfiles: AgentProfile[] = [
   { id: "codex", label: "Codex CLI", configHint: ".codex/config.toml", instructionPath: ".codex/AGENTS.md", hookPath: ".codex/repolens-hooks.md" },
-  { id: "claude", label: "Claude Code", configHint: ".mcp.json or ~/.claude/.mcp.json", instructionPath: "CLAUDE.md", hookPath: ".claude/repolens-hooks.md" },
+  {
+    id: "claude",
+    label: "Claude Code",
+    configHint: ".mcp.json or ~/.claude/.mcp.json",
+    instructionPath: "CLAUDE.md",
+    hookPath: ".claude/repolens-hooks.md",
+    hookConfigPath: ".claude/settings.local.json",
+    hookConfigKind: "claude-hooks"
+  },
   { id: "gemini", label: "Gemini CLI", configHint: ".gemini/settings.json", instructionPath: ".gemini/GEMINI.md", hookPath: ".gemini/repolens-hooks.md" },
   { id: "zed", label: "Zed", configHint: "settings.json context server", instructionPath: ".zed/repolens.md", hookPath: ".zed/repolens-hooks.md" },
   { id: "opencode", label: "OpenCode", configHint: "opencode.json", instructionPath: ".opencode/AGENTS.md", hookPath: ".opencode/repolens-hooks.md" },
@@ -74,6 +86,7 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
   const serverName = options.serverName ?? "repolens";
   const selected = selectAgents(options.agents);
   const dbPath = options.dbPath ?? ".repolens/memory.db";
+  assertSafeAgentSetupValues({ serverName, command: options.command, cliPath: options.cliPath, dbPath });
   const renderOptions = {
     serverName,
     command: options.command,
@@ -138,6 +151,16 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
       await fs.writeFile(outPath, content);
     }
   }
+  for (const profile of selected.filter((item) => options.withHooks && item.hookConfigPath && item.hookConfigKind)) {
+    const outPath = path.join(targetDir, profile.hookConfigPath ?? "");
+    const existing = await fs.readFile(outPath, "utf8").catch(() => "");
+    const content = upsertAgentHookConfig(existing, profile, renderOptions);
+    written.push({ path: outPath, changed: content !== existing, content });
+    if (!options.dryRun && content !== existing) {
+      await fs.mkdir(path.dirname(outPath), { recursive: true });
+      await fs.writeFile(outPath, content);
+    }
+  }
 
   return {
     targetDir,
@@ -153,6 +176,7 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
 export async function uninstallAgentSetup(options: Omit<AgentSetupOptions, "command" | "cliPath" | "dbPath">): Promise<AgentSetupResult> {
   const targetDir = path.resolve(options.targetDir ?? process.cwd());
   const serverName = options.serverName ?? "repolens";
+  assertSafeServerName(serverName);
   const selected = selectAgents(options.agents);
   const hookPaths = options.withHooks ? ["docs/repolens-agent-hooks.md", ...selected.map((profile) => profile.hookPath ?? profile.instructionPath)] : [];
   const relativePaths = ["docs/repolens-agent-setup.md", ...selected.map((profile) => profile.instructionPath), ...hookPaths];
@@ -177,6 +201,21 @@ export async function uninstallAgentSetup(options: Omit<AgentSetupOptions, "comm
     const outPath = path.join(targetDir, profile.configPath ?? "");
     const existing = await fs.readFile(outPath, "utf8").catch(() => "");
     const content = removeAgentConfig(existing, profile, serverName);
+    const removed = content.length === 0;
+    const changed = content !== existing;
+    files.push({ path: outPath, changed, content, removed });
+    if (!options.dryRun && changed) {
+      if (removed) {
+        await fs.rm(outPath, { force: true });
+      } else {
+        await fs.writeFile(outPath, content);
+      }
+    }
+  }
+  for (const profile of selected.filter((item) => options.withHooks && item.hookConfigPath && item.hookConfigKind)) {
+    const outPath = path.join(targetDir, profile.hookConfigPath ?? "");
+    const existing = await fs.readFile(outPath, "utf8").catch(() => "");
+    const content = removeAgentHookConfig(existing, profile);
     const removed = content.length === 0;
     const changed = content !== existing;
     files.push({ path: outPath, changed, content, removed });
@@ -252,10 +291,15 @@ function agentHookGuide(options: {
   cliPath: string;
   dbPath: string;
 }): string {
-  const hookTargets = options.profiles.map((profile) => `- ${profile.label}: \`${profile.hookPath ?? profile.instructionPath}\``).join("\n");
+  const hookTargets = options.profiles
+    .map((profile) => {
+      const targets = [profile.hookPath ?? profile.instructionPath, profile.hookConfigPath].filter((target): target is string => Boolean(target));
+      return `- ${profile.label}: ${targets.map((target) => `\`${target}\``).join(", ")}`;
+    })
+    .join("\n");
   return `# RepoLens Agent Hook And Reminder Setup
 
-These files are opt-in, project-local reminders for coding agents that support session prompts, hook notes, or project rules. They are intentionally non-blocking and read-only: the agent should use RepoLens context tools before broad searches, but the files do not execute code by themselves.
+These files are opt-in, project-local reminders for coding agents that support session prompts, hook notes, or project rules. The reminder files do not execute code by themselves. The executable hook command below is designed to be non-blocking by default: it parses hook JSON from stdin and emits context guidance without querying or mutating the local graph unless you opt in with \`--with-query\`.
 
 Server name: \`${options.serverName}\`
 Database: \`${options.dbPath}\`
@@ -270,6 +314,16 @@ ${hookTargets}
 - Before risky edits, ask \`${options.serverName}.detect_changes\` after local changes and inspect impacted symbols.
 - Before graph queries, ask \`${options.serverName}.get_graph_schema\` first.
 - Keep hook behavior non-blocking: if RepoLens is unavailable, continue with normal local inspection and mention the miss.
+
+## Executable Hook Command
+
+For agents that can pass hook payload JSON to stdin, wire broad-search hooks to:
+
+\`\`\`bash
+${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "hook-augment", "--db", options.dbPath, "--name", options.serverName, "--claude"])}
+\`\`\`
+
+The hook runner recognizes PreToolUse-style Grep, Glob, and broad shell search payloads. It emits Claude-compatible \`hookSpecificOutput.additionalContext\`, exits successfully, and does not intercept Read/Edit/Write tools. Add \`--with-query\` only when you want the hook to open the local RepoLens database and append symbol metadata matches.
 
 ## Local Fallback Commands
 
@@ -296,6 +350,12 @@ Use this as a non-blocking project reminder:
 - For custom graph queries, call \`${options.serverName}.get_graph_schema\` before \`${options.serverName}.query_graph\`.
 - If the MCP server is unavailable, continue without blocking and say that RepoLens context was unavailable.
 
+Executable hook command for agents that pass hook payload JSON to stdin:
+
+\`\`\`bash
+${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "hook-augment", "--db", options.dbPath, "--name", options.serverName, "--claude"])}
+\`\`\`
+
 Local fallback:
 
 \`\`\`bash
@@ -305,6 +365,7 @@ ${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "context
 }
 
 export function agentConfigSnippet(agent: AgentId, options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
+  assertSafeAgentSetupValues(options);
   const args = ["--experimental-sqlite", options.cliPath, "mcp"];
   const jsonServer = mcpServerConfig({ ...options, managed: false });
 
@@ -362,6 +423,27 @@ function removeAgentConfig(existing: string, profile: AgentProfile, serverName: 
   }
 }
 
+function upsertAgentHookConfig(existing: string, profile: AgentProfile, options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
+  switch (profile.hookConfigKind) {
+    case "claude-hooks":
+      return upsertClaudeHookConfig(existing, options);
+    default:
+      throw new Error(`Unsupported agent hook config writer for ${profile.id}.`);
+  }
+}
+
+function removeAgentHookConfig(existing: string, profile: AgentProfile): string {
+  if (!existing.trim()) {
+    return "";
+  }
+  switch (profile.hookConfigKind) {
+    case "claude-hooks":
+      return removeClaudeHookConfig(existing);
+    default:
+      throw new Error(`Unsupported agent hook config remover for ${profile.id}.`);
+  }
+}
+
 function upsertVscodeMcpConfig(existing: string, options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
   assertSafeServerName(options.serverName);
   const config = parseJsonObject(existing, ".vscode/mcp.json");
@@ -385,6 +467,81 @@ function removeVscodeMcpConfig(existing: string, serverName: string): string {
     config.servers = servers;
   }
   return Object.keys(config).length === 0 ? "" : `${JSON.stringify(config, null, 2)}\n`;
+}
+
+function upsertClaudeHookConfig(existing: string, options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
+  const label = ".claude/settings.local.json";
+  const config = parseJsonObject(existing, label);
+  const hooks = jsonObjectProperty(config, "hooks", label) ?? {};
+  const preToolUse = jsonArrayProperty(hooks, "PreToolUse", label) ?? [];
+  hooks.PreToolUse = [
+    ...removeManagedClaudeHookEntries(preToolUse),
+    {
+      matcher: CLAUDE_HOOK_MATCHER,
+      hooks: [claudeHookCommand(options)]
+    }
+  ];
+  config.hooks = hooks;
+  return `${JSON.stringify(config, null, 2)}\n`;
+}
+
+function removeClaudeHookConfig(existing: string): string {
+  const label = ".claude/settings.local.json";
+  const config = parseJsonObject(existing, label);
+  const hooks = jsonObjectProperty(config, "hooks", label, false);
+  if (!hooks) {
+    return existing;
+  }
+  const preToolUse = jsonArrayProperty(hooks, "PreToolUse", label, false);
+  if (!preToolUse) {
+    return existing;
+  }
+  const cleaned = removeManagedClaudeHookEntries(preToolUse);
+  if (cleaned.length === preToolUse.length) {
+    return existing;
+  }
+  if (cleaned.length === 0) {
+    delete hooks.PreToolUse;
+  } else {
+    hooks.PreToolUse = cleaned;
+  }
+  if (Object.keys(hooks).length === 0) {
+    delete config.hooks;
+  } else {
+    config.hooks = hooks;
+  }
+  return Object.keys(config).length === 0 ? "" : `${JSON.stringify(config, null, 2)}\n`;
+}
+
+function claudeHookCommand(options: { serverName: string; command: string; cliPath: string; dbPath: string }) {
+  return {
+    type: "command",
+    command: options.command,
+    args: ["--experimental-sqlite", options.cliPath, "hook-augment", "--db", options.dbPath, "--name", options.serverName, "--claude"],
+    timeout: 5,
+    statusMessage: CLAUDE_HOOK_STATUS
+  };
+}
+
+function removeManagedClaudeHookEntries(entries: unknown[]): unknown[] {
+  const cleaned: unknown[] = [];
+  for (const entry of entries) {
+    if (!isJsonObject(entry) || !Array.isArray(entry.hooks)) {
+      cleaned.push(entry);
+      continue;
+    }
+    const hooks = entry.hooks.filter((hook) => !isManagedClaudeHook(hook));
+    if (hooks.length === entry.hooks.length) {
+      cleaned.push(entry);
+    } else if (hooks.length > 0) {
+      cleaned.push({ ...entry, hooks });
+    }
+  }
+  return cleaned;
+}
+
+function isManagedClaudeHook(value: unknown): boolean {
+  return isJsonObject(value) && value.type === "command" && value.statusMessage === CLAUDE_HOOK_STATUS;
 }
 
 function mcpServerConfig(options: { serverName: string; command: string; cliPath: string; dbPath: string; managed?: boolean }) {
@@ -426,6 +583,17 @@ function jsonObjectProperty(config: Record<string, unknown>, key: string, label:
   return { ...value };
 }
 
+function jsonArrayProperty(config: Record<string, unknown>, key: string, label: string, create = true): unknown[] | undefined {
+  const value = config[key];
+  if (value === undefined) {
+    return create ? [] : undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${label}.${key} must be an array.`);
+  }
+  return [...value];
+}
+
 function isManagedMcpServer(value: unknown): boolean {
   return isJsonObject(value) && isJsonObject(value.env) && value.env.REPOLENS_MANAGED === "1";
 }
@@ -437,6 +605,19 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 function assertSafeServerName(serverName: string): void {
   if (!/^[A-Za-z0-9_-]+$/.test(serverName)) {
     throw new Error("Server name for generated agent config must contain only letters, numbers, underscores, or hyphens.");
+  }
+}
+
+function assertSafeAgentSetupValues(options: { serverName: string; command: string; cliPath: string; dbPath: string }): void {
+  assertSafeServerName(options.serverName);
+  assertSafeGeneratedValue("command", options.command);
+  assertSafeGeneratedValue("cliPath", options.cliPath);
+  assertSafeGeneratedValue("dbPath", options.dbPath);
+}
+
+function assertSafeGeneratedValue(label: string, value: string): void {
+  if (/[`]|[\u0000-\u001f\u007f]/.test(value)) {
+    throw new Error(`${label} for generated agent config must not contain control characters or backticks.`);
   }
 }
 
@@ -496,7 +677,11 @@ function snippetLanguage(agent: AgentId): string {
 }
 
 function shellJoin(parts: string[]): string {
-  return parts.map((part) => (/^[A-Za-z0-9_./:=@-]+$/.test(part) ? part : JSON.stringify(part))).join(" ");
+  return parts.map(posixShellQuote).join(" ");
+}
+
+function posixShellQuote(part: string): string {
+  return /^[A-Za-z0-9_./:=@-]+$/.test(part) ? part : `'${part.replace(/'/g, "'\\''")}'`;
 }
 
 function escapeRegExp(value: string): string {

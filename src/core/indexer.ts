@@ -2,11 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { exportGraphPackage, importGraphPackage } from "./artifact.js";
-import { addCallEdges, addDataFlowEdges, addHttpEdges, addTypeRelationEdges, extractFromFile } from "./extractor.js";
+import { createDiagnosticsSink, diagnosticErrorPayload } from "./diagnostics.js";
+import { addCallEdges, addConfigurationEdges, addDataFlowEdges, addHttpEdges, addTypeRelationEdges, extractFromFile } from "./extractor.js";
 import { sha256 } from "./hash.js";
 import { buildResolvedImportEdges } from "./import-resolver.js";
 import { loadRepoIgnoreMatcher, shouldIgnoreDirectory, shouldIgnoreFile, type RepoIgnoreMatcher } from "./ignore.js";
-import { detectLanguage, isTextCandidate, normalizeSlashes } from "./language.js";
+import { detectLanguage, isTextCandidate, loadLanguageOverrides, normalizeSlashes } from "./language.js";
 import { buildSemanticEdges } from "./semantic.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
 import type { GraphPackageImportResult, IndexedFile, IndexOptions, IndexResult, SymbolNode } from "./types.js";
@@ -23,6 +24,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
   const started = performance.now();
   const root = path.resolve(options.root);
   const dbPath = path.resolve(options.dbPath ?? process.env.REPOLENS_DB ?? defaultDbPath(root));
+  const diagnostics = createDiagnosticsSink({ root, diagnosticsPath: options.diagnosticsPath });
   const bootstrapPackage = await bootstrapGraphPackage(root, dbPath, options.bootstrapPackage);
   const incremental = options.incremental ?? Boolean(bootstrapPackage);
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
@@ -33,11 +35,26 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
   let lockAcquired = false;
   let result: IndexResult | undefined;
 
+  diagnostics.emit("index.start", {
+    root,
+    dbPath,
+    mode: incremental ? "incremental" : "full",
+    maxFileBytes,
+    maxFiles: options.maxFiles,
+    bootstrapPackage: Boolean(bootstrapPackage),
+    writePackage: options.writePackage
+  });
+
   try {
     store.acquireLock("index");
     lockAcquired = true;
     const repoIgnore = await loadRepoIgnoreMatcher(root);
+    const languageOverrides = await loadLanguageOverrides(root);
     const walked = await walk(root, root, options.includeHidden ?? false, repoIgnore);
+    diagnostics.emit("index.walk", { root, dbPath, filesDiscovered: walked.length });
+    if (options.maxFiles !== undefined && walked.length > options.maxFiles) {
+      throw new Error(`Index discovered ${walked.length} files, which exceeds maxFiles ${options.maxFiles}. Increase the limit or narrow the repository root.`);
+    }
     const walkedPaths = new Set(walked.map((file) => file.relativePath));
     const previousFiles = incremental ? new Map(store.listFiles().map((file) => [file.path, file])) : new Map<string, IndexedFile>();
     let filesRemoved = 0;
@@ -65,7 +82,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
     let filesUnchanged = 0;
 
     for (const file of walked) {
-      const language = detectLanguage(file.relativePath);
+      const language = detectLanguage(file.relativePath, languageOverrides);
       const baseRecord: IndexedFile = {
         path: file.relativePath,
         language,
@@ -76,7 +93,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
       };
       const previous = previousFiles.get(file.relativePath);
 
-      if (!isTextCandidate(file.relativePath)) {
+      if (!isTextCandidate(file.relativePath, languageOverrides)) {
         filesSkipped += 1;
         const skipped = { ...baseRecord, skipped: true, skipReason: "unsupported or binary extension" };
         if (isSameSkippedFile(previous, skipped)) {
@@ -154,15 +171,30 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
       const dataFlowEdges = addDataFlowEdges(allSymbols, fileContents, callEdges);
       const httpEdges = addHttpEdges(allSymbols, fileContents);
       const typeRelationEdges = addTypeRelationEdges(allSymbols, fileContents);
+      const configurationEdges = addConfigurationEdges(allSymbols, fileContents);
       const resolvedImportEdges = buildResolvedImportEdges(allSymbols, fileContents);
       const semanticEdges = buildSemanticEdges(allSymbols, fileContents);
+      diagnostics.emit("index.rebuild", {
+        root,
+        dbPath,
+        symbols: allSymbols.length,
+        callEdges: callEdges.length,
+        dataFlowEdges: dataFlowEdges.length,
+        httpEdges: httpEdges.length,
+        typeRelationEdges: typeRelationEdges.length,
+        configurationEdges: configurationEdges.length,
+        resolvedImportEdges: resolvedImportEdges.length,
+        semanticEdges: semanticEdges.length
+      });
       store.transaction(() => {
         store.deleteDerivedEdges();
+        store.deleteConfigurationLinkEdges();
         for (const edge of resolvedImportEdges) store.insertEdge(edge);
         for (const edge of callEdges) store.insertEdge(edge);
         for (const edge of dataFlowEdges) store.insertEdge(edge);
         for (const edge of httpEdges) store.insertEdge(edge);
         for (const edge of typeRelationEdges) store.insertEdge(edge);
+        for (const edge of configurationEdges) store.insertEdge(edge);
         for (const edge of semanticEdges) store.insertEdge(edge);
       });
       store.rebuildSymbolVectors();
@@ -184,6 +216,10 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
       edges: counts.edges,
       elapsedMs: Math.round(performance.now() - started)
     };
+    diagnostics.emit("index.finish", { ...result });
+  } catch (error) {
+    diagnostics.emit("index.error", { root, dbPath, ...diagnosticErrorPayload(error) });
+    throw error;
   } finally {
     if (lockAcquired) {
       store.releaseLock("index");
@@ -198,7 +234,9 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
   if (!writePackagePath) {
     return result;
   }
+  diagnostics.emit("index.package.start", { root, dbPath, outPath: writePackagePath });
   const graphPackage = await exportGraphPackage({ dbPath, outPath: writePackagePath, label: options.runLabel });
+  diagnostics.emit("index.package.finish", { root, dbPath, outPath: writePackagePath, packageBytes: graphPackage.packageBytes, sqliteBytes: graphPackage.sqliteBytes });
   return { ...result, graphPackage };
 }
 

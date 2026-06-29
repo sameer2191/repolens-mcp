@@ -96,6 +96,69 @@ const patterns: Partial<Record<Language, Pattern[]>> = {
     { kind: "protocol", regex: /^\s*(?:public|internal|private|fileprivate|\s)*protocol\s+([A-Za-z_]\w*)/gm },
     { kind: "actor", regex: /^\s*(?:public|open|internal|private|fileprivate|final|\s)*actor\s+([A-Za-z_]\w*)/gm },
     { kind: "function", regex: /^\s*(?:public|open|internal|private|fileprivate|static|class|mutating|nonisolated|override|async|\s)*func\s+([A-Za-z_]\w*)/gm }
+  ],
+  c: [
+    { kind: "struct", regex: /^\s*(?:typedef\s+)?struct\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:typedef\s+)?enum\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:(?:static|inline|extern)\s+)*(?:[A-Za-z_]\w*[&*]?\s+){1,8}([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm }
+  ],
+  cpp: [
+    { kind: "namespace", regex: /^\s*namespace\s+([A-Za-z_]\w*)\s*\{/gm },
+    { kind: "class", regex: /^\s*(?:template\s*<[^>]+>\s*)?(?:class)\s+([A-Za-z_]\w*)/gm },
+    { kind: "struct", regex: /^\s*(?:template\s*<[^>]+>\s*)?(?:struct)\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:enum\s+(?:class\s+)?)\s*([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:template\s*<[^>\n]+>\s*)?(?:(?:static|inline|virtual|constexpr|extern|friend|const)\s+)*(?:[A-Za-z_~][\w:<>]*[&*]?\s+){1,8}(?:(?:[A-Za-z_]\w*)::)?(~?[A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?(?:final\s*)?\{/gm }
+  ],
+  csharp: [
+    { kind: "class", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal|abstract|sealed|static|partial)\s+)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal|partial)\s+)*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "struct", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal|readonly|partial)\s+)*struct\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal)\s+)*enum\s+([A-Za-z_]\w*)/gm },
+    { kind: "record", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal|sealed|abstract|partial)\s+)*record(?:\s+class|\s+struct)?\s+([A-Za-z_]\w*)/gm },
+    { kind: "method", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal|static|async|virtual|override|sealed|partial|extern|unsafe)\s+)+[\w<>\[\],?]+\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:where\s+[^{]+)?\{/gm }
+  ],
+  kotlin: [
+    { kind: "class", regex: /^\s*(?:(?:data|sealed|open|abstract|inner|value)\s+)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*(?:fun\s+)?interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "object", regex: /^\s*(?:data\s+)?object\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*enum\s+class\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:(?:public|private|protected|internal|suspend|inline|tailrec|operator|override|open)\s+)*fun(?:\s+<[^>]+>)?\s+([A-Za-z_]\w*)/gm }
+  ],
+  php: [
+    { kind: "class", regex: /^\s*(?:abstract\s+|final\s+)?class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "trait", regex: /^\s*trait\s+([A-Za-z_]\w*)/gm },
+    { kind: "method", regex: /^\s*(?:(?:public|private|protected|static|abstract|final)\s+)+function\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*function\s+([A-Za-z_]\w*)/gm }
+  ],
+  dart: [
+    { kind: "class", regex: /^\s*(?:abstract\s+|base\s+|final\s+|interface\s+|sealed\s+)?class\s+([A-Za-z_]\w*)/gm },
+    { kind: "mixin", regex: /^\s*mixin\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*enum\s+([A-Za-z_]\w*)/gm },
+    { kind: "extension", regex: /^\s*extension\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:[A-Za-z_][\w<>?,\s]*\s+)?([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:async\s*)?\{/gm }
+  ],
+  ruby: [
+    { kind: "class", regex: /^\s*class\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)/gm },
+    { kind: "module", regex: /^\s*module\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)/gm },
+    { kind: "function", regex: /^\s*def\s+(?:self\.)?([A-Za-z_]\w*[!?=]?)/gm }
+  ],
+  elixir: [
+    { kind: "module", regex: /^\s*defmodule\s+([A-Z][\w.]+)/gm },
+    { kind: "function", regex: /^\s*defp?\s+([A-Za-z_][\w?!]*)/gm },
+    { kind: "macro", regex: /^\s*defmacro\s+([A-Za-z_][\w?!]*)/gm }
+  ],
+  qml: [
+    { kind: "component", regex: /^\s*component\s+([A-Za-z_]\w*)\s*:/gm },
+    { kind: "property", regex: /^\s*property\s+[A-Za-z_][\w<>.]*\s+([A-Za-z_]\w*)/gm },
+    { kind: "signal", regex: /^\s*signal\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*function\s+([A-Za-z_]\w*)/gm }
+  ],
+  apex: [
+    { kind: "class", regex: /^\s*(?:(?:public|private|global|virtual|abstract|with\s+sharing|without\s+sharing|inherited\s+sharing)\s+)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*(?:(?:public|private|global)\s+)*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "trigger", regex: /^\s*trigger\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)/gm },
+    { kind: "method", regex: /^\s*(?:(?:public|private|protected|global|static|override|virtual|abstract|testMethod)\s+)+[\w<>\[\],]+\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm }
   ]
 };
 
@@ -137,6 +200,11 @@ export function extractFromFile(filePath: string, language: Language, content: s
     edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
   }
 
+  for (const symbol of extractConfigurationSymbols(filePath, language, content)) {
+    symbols.push(symbol);
+    edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 0.85 });
+  }
+
   const lockfile = extractLockfile(filePath, language, content);
   for (const symbol of lockfile.symbols) {
     symbols.push(symbol);
@@ -173,6 +241,21 @@ export function extractFromFile(filePath: string, language: Language, content: s
       symbols.push(symbol);
       edges.push({ source: fileNode, target: symbol.qualifiedName, type: symbol.kind === "route" ? "DEFINES" : "DECLARES", weight: 1 });
     }
+  } else if (language === "terraform") {
+    for (const symbol of extractTerraform(filePath, content)) {
+      symbols.push(symbol);
+      edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
+      const source = typeof symbol.metadata?.source === "string" ? symbol.metadata.source.trim() : "";
+      if (source) {
+        edges.push({
+          source: symbol.qualifiedName,
+          target: `external:${source}`,
+          type: "IMPORTS",
+          weight: 0.75,
+          metadata: { source }
+        });
+      }
+    }
   }
 
   if (isDockerfile(filePath)) {
@@ -189,10 +272,11 @@ export function extractFromFile(filePath: string, language: Language, content: s
   for (const pattern of languagePatterns) {
     for (const match of content.matchAll(pattern.regex)) {
       const rawName = match[pattern.nameGroup ?? 1];
-      if (!rawName) {
+      if (!rawName || isIgnoredDefinitionName(rawName)) {
         continue;
       }
-      const line = offsetToLine(content, match.index ?? 0);
+      const nameOffset = (match.index ?? 0) + Math.max(0, match[0].indexOf(rawName));
+      const line = offsetToLine(content, nameOffset);
       const signature = lines[line - 1]?.trim().slice(0, 220);
       const endLine = findBlockEndLine(language, lines, line);
       const symbol = makeSymbol(filePath, language, pattern.kind, rawName, line, endLine, signature, pattern.exported?.(match) ?? false);
@@ -579,6 +663,116 @@ export function addHttpEdges(symbols: SymbolNode[], fileContents: Map<string, st
   return edges;
 }
 
+export function addConfigurationEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
+  const edges: Edge[] = [];
+  const seen = new Set<string>();
+  const fileSymbols = symbols.filter((symbol) => symbol.kind === "file");
+  const codeSymbols = symbols.filter(isConfigurationTargetSymbol);
+  const configKeys = symbols.filter((symbol) => symbol.kind === "config_key");
+  const dependencies = symbols.filter((symbol) => symbol.kind === "dependency");
+  const configFiles = fileSymbols.filter((symbol) => isConfigurationFilePath(symbol.filePath, symbol.language));
+
+  const addEdge = (source: string, target: string, weight: number, metadata: Record<string, unknown>) => {
+    if (source === target) {
+      return;
+    }
+    const key = `${source}\0${target}\0CONFIGURES`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    edges.push({ source, target, type: "CONFIGURES", weight, metadata });
+  };
+
+  for (const configKey of configKeys) {
+    const tokenSets = configKeyTokenSets(String(configKey.metadata?.key ?? configKey.name));
+    for (const target of codeSymbols) {
+      if (target.filePath === configKey.filePath) {
+        continue;
+      }
+      const targetTokens = configTokens(target.name);
+      if (tokenSets.some((tokens) => configTokenSetMatches(tokens, targetTokens))) {
+        addEdge(configKey.qualifiedName, target.qualifiedName, 0.72, {
+          strategy: "config_key_symbol",
+          key: configKey.name,
+          target: target.name
+        });
+      }
+    }
+  }
+
+  for (const configKey of configKeys) {
+    const variants = configReferenceVariants(String(configKey.metadata?.key ?? configKey.name));
+    if (variants.length === 0) {
+      continue;
+    }
+    for (const [filePath, content] of fileContents) {
+      if (filePath === configKey.filePath) {
+        continue;
+      }
+      const line = firstNeedleLine(content, variants);
+      if (line === null) {
+        continue;
+      }
+      const target = sourceSymbolForLine(symbols, line, filePath)?.qualifiedName ?? fileQualifiedName(filePath);
+      addEdge(configKey.qualifiedName, target, 0.8, {
+        strategy: "config_key_reference",
+        key: configKey.name,
+        line
+      });
+    }
+  }
+
+  for (const dependency of dependencies) {
+    for (const file of fileSymbols) {
+      if (file.filePath === dependency.filePath) {
+        continue;
+      }
+      if (!dependencyAppliesToFile(dependency, file.filePath)) {
+        continue;
+      }
+      const content = fileContents.get(file.filePath);
+      if (!content) {
+        continue;
+      }
+      const imports = extractImports(file.language, content);
+      const matchedImport = imports.find((imported) => dependencyImportMatches(dependency, imported));
+      if (!matchedImport) {
+        continue;
+      }
+      addEdge(dependency.qualifiedName, file.qualifiedName, 0.68, {
+        strategy: "dependency_import",
+        dependency: dependency.name,
+        import: matchedImport
+      });
+    }
+  }
+
+  for (const configFile of configFiles) {
+    const references = configFileReferenceVariants(configFile.filePath);
+    if (references.length === 0) {
+      continue;
+    }
+    for (const [filePath, content] of fileContents) {
+      if (filePath === configFile.filePath) {
+        continue;
+      }
+      const line = firstNeedleLine(content, references);
+      if (line === null) {
+        continue;
+      }
+      const target = sourceSymbolForLine(symbols, line, filePath)?.qualifiedName ?? fileQualifiedName(filePath);
+      addEdge(configFile.qualifiedName, target, 0.7, {
+        strategy: "config_file_reference",
+        configFile: configFile.filePath,
+        line
+      });
+    }
+  }
+
+  return edges;
+}
+
 function makeSymbol(
   filePath: string,
   language: Language,
@@ -621,7 +815,17 @@ export function extractImports(language: Language, content: string): string[] {
     go: [/^\s*import\s+(?:"([^"]+)"|`([^`]+)`)/gm],
     java: [/^\s*import\s+([\w.*]+);/gm],
     rust: [/^\s*use\s+([^;]+);/gm],
-    swift: [/^\s*import\s+([A-Za-z_][\w.]*)/gm]
+    swift: [/^\s*import\s+([A-Za-z_][\w.]*)/gm],
+    c: [/^\s*#\s*include\s+[<"]([^>"]+)[>"]/gm],
+    cpp: [/^\s*#\s*include\s+[<"]([^>"]+)[>"]/gm, /^\s*import\s+([A-Za-z_][\w.:]*)\s*;/gm],
+    csharp: [/^\s*using\s+(?:static\s+)?([A-Za-z_][\w.]*);/gm],
+    kotlin: [/^\s*import\s+([A-Za-z_][\w.*]*)/gm],
+    php: [/^\s*use\s+([^;]+);/gm, /\b(?:require|require_once|include|include_once)\s*\(?\s*["']([^"']+)["']/g],
+    dart: [/^\s*(?:import|export|part)\s+["']([^"']+)["']/gm],
+    ruby: [/^\s*require(?:_relative)?\s+["']([^"']+)["']/gm],
+    elixir: [/^\s*(?:alias|import|require|use)\s+([A-Z][\w.]+)/gm],
+    qml: [/^\s*import\s+([A-Za-z_][\w.]*)/gm],
+    apex: [/^\s*import\s+([\w.*]+);/gm]
   };
   for (const regex of patternsByLanguage[language] ?? []) {
     for (const match of content.matchAll(regex)) {
@@ -633,12 +837,16 @@ export function extractImports(language: Language, content: string): string[] {
 }
 
 function extractRoutes(filePath: string, language: Language, content: string): SymbolNode[] {
-  if (!["typescript", "javascript", "python", "java", "go"].includes(language)) {
+  if (!["typescript", "javascript", "python", "java", "go", "php", "csharp", "kotlin", "apex"].includes(language)) {
     return [];
   }
   const routeRegexes = [
     /\b(?:app|router|server)\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/gi,
+    /\bRoute::(get|post|put|patch|delete|options|any)\(\s*["']([^"']+)["']/gi,
+    /\b(MapGet|MapPost|MapPut|MapPatch|MapDelete|MapMethods)\(\s*["']([^"']+)["']/g,
+    /@(Get|Post|Put|Patch|Delete|Request)Mapping\(\s*(?:value\s*=\s*)?["']?([^"')]+)?["']?\s*\)/g,
     /@(Get|Post|Put|Patch|Delete|RequestMapping)\(\s*["']?([^"')]+)?["']?\s*\)/g,
+    /\[(HttpGet|HttpPost|HttpPut|HttpPatch|HttpDelete|Route)\(\s*["']?([^"')\]]+)?["']?\s*\)\s*\]/g,
     /@(?:app|router)\.route\(\s*["']([^"']+)["']/g
   ];
   const routes: SymbolNode[] = [];
@@ -664,8 +872,11 @@ function extractRoutes(filePath: string, language: Language, content: string): S
   }
   for (const regex of routeRegexes) {
     for (const match of content.matchAll(regex)) {
-      const method = match[1]?.toUpperCase() ?? "ROUTE";
-      const routePath = match[2] ?? match[1];
+      const method = normalizeRouteMethod(match[1] ?? "ROUTE");
+      const routePath = routePathFromMatch(match);
+      if (!routePath) {
+        continue;
+      }
       const line = offsetToLine(content, match.index ?? 0);
       routes.push(
         makeSymbol(filePath, language, "route", `${method} ${routePath}`, line, line, undefined, true, {
@@ -707,6 +918,25 @@ function nextRouteSegment(segment: string): string {
     return `:${dynamic[1]}`;
   }
   return segment;
+}
+
+function normalizeRouteMethod(value: string): string {
+  const normalized = value.replace(/^Http/i, "").replace(/^Map/i, "").replace(/Mapping$/i, "").toUpperCase();
+  if (!normalized || normalized.startsWith("/") || normalized === "REQUEST" || normalized === "REQUESTMAPPING" || normalized === "ROUTE") {
+    return "ROUTE";
+  }
+  if (normalized === "METHODS" || normalized === "ANY") {
+    return "ANY";
+  }
+  return normalized;
+}
+
+function routePathFromMatch(match: RegExpExecArray): string | null {
+  const raw = match[2] ?? match[1];
+  if (!raw || !raw.startsWith("/")) {
+    return null;
+  }
+  return raw;
 }
 
 function extractOpenApiRoutes(filePath: string, language: Language, content: string): SymbolNode[] {
@@ -1427,6 +1657,253 @@ function manifestSymbol(filePath: string, language: Language, kind: "package" | 
   });
 }
 
+function extractConfigurationSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  if (!isConfigurationFilePath(filePath, language)) {
+    return [];
+  }
+  const base = path.posix.basename(filePath).toLowerCase();
+  if (base.startsWith(".env")) {
+    return extractEnvConfigSymbols(filePath, language, content);
+  }
+  if (language === "json") {
+    return extractJsonConfigSymbols(filePath, language, content);
+  }
+  if (language === "toml") {
+    return extractTomlConfigSymbols(filePath, language, content);
+  }
+  if (language === "yaml") {
+    return extractYamlConfigSymbols(filePath, language, content);
+  }
+  return [];
+}
+
+function extractEnvConfigSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const lines = content.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(lines[index]);
+    if (match) {
+      symbols.push(configKeySymbol(filePath, language, match[1], index + 1, "env"));
+    }
+  }
+  return symbols;
+}
+
+function extractJsonConfigSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    const symbols: SymbolNode[] = [];
+    const visit = (value: unknown, prefix: string[], depth: number) => {
+      if (depth > 4 || value === null || Array.isArray(value)) {
+        return;
+      }
+      if (typeof value !== "object") {
+        if (prefix.length > 0) {
+          const key = prefix.join(".");
+          symbols.push(configKeySymbol(filePath, language, key, jsonPropertyLine(content, prefix[prefix.length - 1]), "json-config"));
+        }
+        return;
+      }
+      for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+        if (isUsableConfigKey(key)) {
+          visit(child, [...prefix, key], depth + 1);
+        }
+      }
+    };
+    visit(parsed, [], 0);
+    return dedupeSymbols(symbols);
+  } catch {
+    return [];
+  }
+}
+
+function extractTomlConfigSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  let section: string[] = [];
+  for (const [index, line] of content.split(/\r?\n/).entries()) {
+    const header = /^\s*\[([^\]]+)\]\s*$/.exec(line);
+    if (header) {
+      section = header[1].split(".").map((part) => part.trim()).filter(isUsableConfigKey);
+      continue;
+    }
+    const match = /^\s*([A-Za-z0-9_.-]+)\s*=/.exec(line.replace(/#.*/, ""));
+    if (!match || !isUsableConfigKey(match[1])) {
+      continue;
+    }
+    symbols.push(configKeySymbol(filePath, language, [...section, match[1]].join("."), index + 1, "toml-config"));
+  }
+  return dedupeSymbols(symbols);
+}
+
+function extractYamlConfigSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const stack: Array<{ indent: number; key: string }> = [];
+  for (const [index, line] of content.split(/\r?\n/).entries()) {
+    const match = /^(\s*)([A-Za-z0-9_.-]+)\s*:\s*(.*?)\s*(?:#.*)?$/.exec(line);
+    if (!match || !isUsableConfigKey(match[2])) {
+      continue;
+    }
+    const indent = match[1].length;
+    const value = match[3].trim();
+    while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
+      stack.pop();
+    }
+    const keyPath = [...stack.map((item) => item.key), match[2]].join(".");
+    if (value && value !== "|" && value !== ">") {
+      symbols.push(configKeySymbol(filePath, language, keyPath, index + 1, "yaml-config"));
+    } else {
+      stack.push({ indent, key: match[2] });
+    }
+  }
+  return dedupeSymbols(symbols);
+}
+
+function configKeySymbol(filePath: string, language: Language, key: string, line: number, source: string): SymbolNode {
+  return makeSymbol(filePath, language, "config_key", key.slice(0, 180), line, line, undefined, false, {
+    key,
+    normalizedKey: configTokens(key).join("_"),
+    source
+  });
+}
+
+function isConfigurationTargetSymbol(symbol: SymbolNode): boolean {
+  return ["function", "method", "class", "route"].includes(symbol.kind);
+}
+
+function isConfigurationFilePath(filePath: string, language: Language): boolean {
+  const normalized = path.posix.normalize(filePath).toLowerCase();
+  const base = path.posix.basename(normalized);
+  const stem = base.replace(/\.[^.]+$/, "");
+  if (base.startsWith(".env")) {
+    return true;
+  }
+  if (/^appsettings(?:\.[^.]+)?\.json$/.test(base)) {
+    return true;
+  }
+  if (/^application(?:[-.][^.]+)?\.ya?ml$/.test(base)) {
+    return true;
+  }
+  if (/^(?:config|settings)\.(?:json|ya?ml|toml)$/.test(base)) {
+    return true;
+  }
+  if (/(^|[._-])(?:config|settings)(?:[._-]|$)/.test(stem) && ["json", "yaml", "toml"].includes(language)) {
+    return true;
+  }
+  return /\/configs?\//.test(normalized) && ["json", "yaml", "toml"].includes(language);
+}
+
+function isUsableConfigKey(key: string): boolean {
+  const trimmed = key.trim();
+  if (!trimmed || trimmed.length > 120 || trimmed.includes("\0")) {
+    return false;
+  }
+  return /[A-Za-z]/.test(trimmed);
+}
+
+function configKeyTokenSets(value: string): string[][] {
+  const parts = value.split(/[.:[\]]+/).filter(Boolean);
+  const full = configTokens(value);
+  const leaf = configTokens(parts[parts.length - 1] ?? value);
+  const parentLeaf = parts.length > 1 ? configTokens(parts.slice(-2).join(".")) : [];
+  const sets = [leaf, parentLeaf, full].filter((tokens) => tokens.length >= 2);
+  const seen = new Set<string>();
+  return sets.filter((tokens) => {
+    const key = tokens.join("\0");
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function configTokens(value: string): string[] {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((part) => part.length > 1 && !configTokenStopwords.has(part));
+}
+
+function configTokenSetMatches(configKeyTokens: string[], targetTokens: string[]): boolean {
+  if (configKeyTokens.length < 2 || targetTokens.length === 0) {
+    return false;
+  }
+  const target = new Set(targetTokens);
+  return configKeyTokens.every((token) => target.has(token));
+}
+
+function configReferenceVariants(value: string): string[] {
+  const parts = value.split(/[.:[\]]+/).filter(Boolean);
+  const leaf = parts[parts.length - 1] ?? value;
+  const tokens = configTokens(leaf);
+  const variants = new Set([value]);
+  if (tokens.length >= 2) {
+    variants.add(leaf);
+    variants.add(tokens.join("_"));
+    variants.add(tokens.join("_").toUpperCase());
+    variants.add(tokens.map((token, index) => (index === 0 ? token : `${token[0].toUpperCase()}${token.slice(1)}`)).join(""));
+  }
+  return [...variants].filter((variant) => variant.length >= 5 && variant.length <= 160);
+}
+
+function configFileReferenceVariants(filePath: string): string[] {
+  const normalized = path.posix.normalize(filePath);
+  const base = path.posix.basename(normalized);
+  return [...new Set([normalized, base])].filter((variant) => variant.length >= 5 && variant.length <= 200);
+}
+
+function firstNeedleLine(content: string, needles: string[]): number | null {
+  let bestIndex = Number.POSITIVE_INFINITY;
+  for (const needle of needles) {
+    const index = content.indexOf(needle);
+    if (index >= 0 && index < bestIndex) {
+      bestIndex = index;
+    }
+  }
+  return Number.isFinite(bestIndex) ? offsetToLine(content, bestIndex) : null;
+}
+
+function dependencyImportMatches(dependency: SymbolNode, imported: string): boolean {
+  const dependencyName = dependency.name.toLowerCase();
+  const importName = imported.toLowerCase();
+  if (importName === dependencyName || importName.startsWith(`${dependencyName}/`)) {
+    return true;
+  }
+  if (dependencyName.includes(":")) {
+    const [group, artifact] = dependencyName.split(":");
+    if (group && importName.startsWith(group.replace(/-/g, "."))) {
+      return true;
+    }
+    if (artifact && artifact.length >= 5 && importName.includes(artifact.replace(/-/g, ""))) {
+      return true;
+    }
+  }
+  const lastSegment = dependencyName.split(/[/:]/).filter(Boolean).at(-1) ?? "";
+  return lastSegment.length >= 5 && (importName === lastSegment || importName.startsWith(`${lastSegment}/`) || importName.endsWith(`.${lastSegment}`));
+}
+
+function dependencyAppliesToFile(dependency: SymbolNode, filePath: string): boolean {
+  const manifestDir = path.posix.dirname(dependency.filePath);
+  if (manifestDir === "." || manifestDir === "") {
+    return true;
+  }
+  return filePath === manifestDir || filePath.startsWith(`${manifestDir}/`);
+}
+
+const configTokenStopwords = new Set([
+  "app",
+  "application",
+  "config",
+  "configuration",
+  "setting",
+  "settings",
+  "value",
+  "values",
+  "default",
+  "defaults"
+]);
+
 interface LockedDependency {
   name: string;
   version?: string;
@@ -2057,11 +2534,49 @@ function extractSql(filePath: string, content: string): SymbolNode[] {
   return symbols;
 }
 
+function extractTerraform(filePath: string, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  for (const match of content.matchAll(/^\s*(resource|data)\s+"([^"]+)"\s+"([^"]+)"\s*\{/gm)) {
+    const kind = match[1].toLowerCase();
+    const providerType = match[2];
+    const name = match[3];
+    const line = offsetToLine(content, match.index ?? 0);
+    symbols.push(
+      makeSymbol(filePath, "terraform", kind, `${providerType}.${name}`, line, findBlockEndLine("terraform", content.split(/\r?\n/), line), undefined, false, {
+        providerType,
+        name
+      })
+    );
+  }
+  for (const match of content.matchAll(/^\s*(module|variable|output|provider)\s+"([^"]+)"\s*\{/gm)) {
+    const kind = match[1].toLowerCase();
+    const name = match[2];
+    const line = offsetToLine(content, match.index ?? 0);
+    const endLine = findBlockEndLine("terraform", content.split(/\r?\n/), line);
+    const block = content
+      .split(/\r?\n/)
+      .slice(line - 1, endLine)
+      .join("\n");
+    const source = kind === "module" ? /^\s*source\s*=\s*"([^"]+)"/m.exec(block)?.[1] : undefined;
+    symbols.push(
+      makeSymbol(filePath, "terraform", kind, name, line, endLine, undefined, false, {
+        name,
+        ...(source ? { source } : {})
+      })
+    );
+  }
+  return dedupeSymbols(symbols);
+}
+
 function offsetToLine(content: string, offset: number): number {
   return content.slice(0, offset).split(/\r?\n/).length;
 }
 
 function findBlockEndLine(language: Language, lines: string[], startLine: number): number {
+  if (language === "ruby" || language === "elixir") {
+    return findEndKeywordBlockLine(language, lines, startLine);
+  }
+
   if (language === "python") {
     const start = lines[startLine - 1] ?? "";
     const indent = start.match(/^\s*/)?.[0].length ?? 0;
@@ -2092,6 +2607,30 @@ function findBlockEndLine(language: Language, lines: string[], startLine: number
   return startLine;
 }
 
+function findEndKeywordBlockLine(language: "ruby" | "elixir", lines: string[], startLine: number): number {
+  let depth = 0;
+  const opener =
+    language === "ruby"
+      ? /^\s*(?:class|module|def|if|unless|case|begin|while|until|for)\b|\bdo\s*(?:\|[^|]*\|)?\s*(?:#.*)?$/
+      : /^\s*(?:defmodule|defp?|defmacro|if|unless|case|cond|try|receive|for|with|fn)\b/;
+  for (let i = startLine - 1; i < lines.length; i += 1) {
+    const trimmed = lines[i].replace(/#.*/, "").trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (opener.test(trimmed)) {
+      depth += 1;
+    }
+    if (/^end\b/.test(trimmed)) {
+      depth -= 1;
+      if (depth <= 0) {
+        return i + 1;
+      }
+    }
+  }
+  return startLine;
+}
+
 function dedupeSymbols(symbols: SymbolNode[]): SymbolNode[] {
   const seen = new Set<string>();
   return symbols.filter((symbol) => {
@@ -2111,12 +2650,16 @@ function isCallableName(name: string): boolean {
   return !ignoredCallableNames.has(lowered);
 }
 
+function isIgnoredDefinitionName(name: string): boolean {
+  return ["catch", "do", "else", "for", "foreach", "function", "if", "new", "return", "switch", "try", "using", "while"].includes(name.toLowerCase());
+}
+
 function isTypeSymbol(symbol: SymbolNode): boolean {
-  return ["class", "interface", "type", "struct", "enum", "protocol", "actor", "trait"].includes(symbol.kind);
+  return ["class", "interface", "type", "struct", "enum", "protocol", "actor", "trait", "record", "object", "module", "mixin", "extension"].includes(symbol.kind);
 }
 
 function shouldScanTypeUses(symbol: SymbolNode): boolean {
-  return ["function", "method", "class", "interface", "type", "struct", "enum", "protocol", "actor", "trait"].includes(symbol.kind);
+  return ["function", "method", "class", "interface", "type", "struct", "enum", "protocol", "actor", "trait", "record", "object", "module", "mixin", "extension"].includes(symbol.kind);
 }
 
 function declarationTextForSymbol(symbol: SymbolNode, fileContents: Map<string, string>): string {
@@ -2171,10 +2714,10 @@ function declarationTypeRelations(symbol: SymbolNode, declaration: string): Arra
   if (rustTraitBounds?.[1]) {
     relations.push({ type: "INHERITS", targets: typeNamesFromList(rustTraitBounds[1]), reason: "trait bound" });
   }
-  if (["swift", "kotlin"].includes(symbol.language) || ["struct", "enum", "protocol", "actor"].includes(symbol.kind)) {
-    const swiftConformance = /\b(?:class|struct|enum|actor|protocol)\s+[A-Za-z_]\w*(?:<[^>{}]+>)?\s*:\s*([^{}]+)/.exec(compact);
+  if (["swift", "kotlin", "csharp", "cpp"].includes(symbol.language) || ["struct", "enum", "protocol", "actor", "record"].includes(symbol.kind)) {
+    const swiftConformance = /\b(?:class|struct|enum|actor|protocol|interface|record)\s+[A-Za-z_]\w*(?:<[^>{}]+>)?\s*:\s*([^{}]+)/.exec(compact);
     if (swiftConformance?.[1]) {
-      relations.push({ targets: typeNamesFromList(swiftConformance[1]), reason: "swift inheritance or conformance" });
+      relations.push({ targets: typeNamesFromList(swiftConformance[1]), reason: "colon inheritance or conformance" });
     }
   }
 
@@ -2196,6 +2739,8 @@ function typeNamesFromList(value: string): string[] {
   for (const segment of value.split(/[,|+&]/)) {
     const cleaned = segment
       .replace(/<[^<>]*>/g, " ")
+      .replace(/\b(?:public|private|protected|virtual|override|final|open|abstract|sealed)\b/g, " ")
+      .replace(/\(\s*\)/g, " ")
       .replace(/\bwhere\b[\s\S]*$/i, " ")
       .trim();
     const match = /(?:[A-Za-z_$][\w$]*\.)*([A-Za-z_$][\w$]*)/.exec(cleaned);
@@ -2229,7 +2774,10 @@ const ignoredTypeNames = new Set([
   "Number",
   "Object",
   "Partial",
+  "Private",
   "Promise",
+  "Protected",
+  "Public",
   "Record",
   "Request",
   "Response",
