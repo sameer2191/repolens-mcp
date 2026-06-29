@@ -73,6 +73,7 @@ async function main(): Promise<void> {
         dbPath: stringFlag(args, "db"),
         incremental: args.flags.has("incremental") ? true : undefined,
         maxFileBytes: numberFlag(args, "max-file-bytes"),
+        maxFiles: numberFlag(args, "max-files"),
         runLabel: stringFlag(args, "label"),
         bootstrapPackage: booleanFlag(args, "no-bootstrap") ? false : stringFlag(args, "bootstrap-package"),
         writePackage: writePackageFlag(args)
@@ -100,6 +101,7 @@ async function main(): Promise<void> {
         maxPolls: numberFlag(args, "polls"),
         gitAware: booleanFlag(args, "git-aware"),
         maxFileBytes: numberFlag(args, "max-file-bytes"),
+        maxFiles: numberFlag(args, "max-files"),
         runLabel: stringFlag(args, "label"),
         signal: controller.signal,
         onResult: (result) => process.stderr.write(`${jsonBlock({ event: "indexed", ...result })}\n`),
@@ -115,6 +117,7 @@ async function main(): Promise<void> {
           root,
           dbPath: stringFlag(args, "db"),
           maxFileBytes: numberFlag(args, "max-file-bytes"),
+          maxFiles: numberFlag(args, "max-files"),
           runLabel: stringFlag(args, "label"),
           bootstrapPackage: booleanFlag(args, "no-bootstrap") ? false : stringFlag(args, "bootstrap-package"),
           secretScan: booleanFlag(args, "no-secret-scan") ? false : undefined,
@@ -717,10 +720,10 @@ function help(): string {
   return `repolens-mcp
 
 Usage:
-  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--write-package [graph.rlgz]]
+  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--max-files n] [--incremental] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--write-package [graph.rlgz]]
   repolens-mcp version [--check] [--registry url] [--timeout-ms n]
   repolens-mcp update-check [--registry url] [--timeout-ms n]
-  repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--no-secret-scan] [--secret-limit n]
+  repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--max-files n] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--no-secret-scan] [--secret-limit n]
   repolens-mcp list-projects [--limit n]
   repolens-mcp project-status [root-or-db-or-label]
   repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
@@ -737,7 +740,7 @@ Usage:
   repolens-mcp impact <path-or-symbol...> [--db path]
   repolens-mcp schema [--db path]
   repolens-mcp communities [--db path] [--limit n] [--min-size n]
-  repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--polls n] [--git-aware] [--max-file-bytes n] [--label name]
+  repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--polls n] [--git-aware] [--max-file-bytes n] [--max-files n] [--label name]
   repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern wildcard] [--file-pattern src/] [--min-degree n] [--db path]
   repolens-mcp semantic "meaningful concept query" [--db path] [--limit n]
   repolens-mcp vector "meaningful concept query" [--db path] [--limit n]

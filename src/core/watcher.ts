@@ -46,6 +46,7 @@ export async function watchRepository(options: WatchIndexOptions): Promise<Watch
       dbPath,
       incremental: shouldIncremental,
       maxFileBytes: options.maxFileBytes,
+      maxFiles: options.maxFiles,
       includeHidden: options.includeHidden,
       runLabel: options.runLabel
     });

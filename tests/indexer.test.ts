@@ -569,6 +569,17 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
   }
 });
 
+test("refuses to index repositories above the configured file-count limit", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-max-files-"));
+  await fs.writeFile(path.join(tmp, "a.ts"), "export const a = 1;\n");
+  await fs.writeFile(path.join(tmp, "b.ts"), "export const b = 2;\n");
+
+  await assert.rejects(
+    () => indexRepository({ root: tmp, dbPath: path.join(tmp, ".repolens", "memory.db"), maxFiles: 1 }),
+    /exceeds maxFiles 1/
+  );
+});
+
 test("benchmarks full and incremental indexing with graph evidence", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-benchmark-"));
   const dbPath = path.join(tmp, "memory.db");

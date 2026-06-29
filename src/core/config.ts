@@ -11,6 +11,7 @@ export interface RepoLensConfig {
   root?: string;
   dbPath?: string;
   maxFileBytes?: number;
+  maxFiles?: number;
   autoIndexLabel?: string;
   bootstrapPackage?: string | false;
 }
@@ -39,6 +40,9 @@ const keyAliases = new Map<string, keyof RepoLensConfig>([
   ["maxfilebytes", "maxFileBytes"],
   ["max-file-bytes", "maxFileBytes"],
   ["max_file_bytes", "maxFileBytes"],
+  ["maxfiles", "maxFiles"],
+  ["max-files", "maxFiles"],
+  ["max_files", "maxFiles"],
   ["autoindexlabel", "autoIndexLabel"],
   ["auto-index-label", "autoIndexLabel"],
   ["auto_index_label", "autoIndexLabel"],
@@ -134,8 +138,8 @@ function normalizeRawConfigValue(key: keyof RepoLensConfig, value: unknown): Rep
   if (key === "autoSyncIntervalMs" && typeof value === "number") {
     return parsePositiveInteger(value, "autoSyncIntervalMs");
   }
-  if (key === "maxFileBytes" && typeof value === "number") {
-    return parsePositiveInteger(value, "maxFileBytes");
+  if ((key === "maxFileBytes" || key === "maxFiles") && typeof value === "number") {
+    return parsePositiveInteger(value, key);
   }
   if (key === "bootstrapPackage" && value === false) {
     return false;
@@ -161,8 +165,8 @@ function parseConfigValue(key: keyof RepoLensConfig, value: string): RepoLensCon
   if (key === "autoSyncIntervalMs") {
     return parsePositiveInteger(Number(trimmed), "autoSyncIntervalMs");
   }
-  if (key === "maxFileBytes") {
-    return parsePositiveInteger(Number(trimmed), "maxFileBytes");
+  if (key === "maxFileBytes" || key === "maxFiles") {
+    return parsePositiveInteger(Number(trimmed), key);
   }
   if (key === "bootstrapPackage" && ["0", "false", "off", "no"].includes(trimmed.toLowerCase())) {
     return false;
@@ -191,7 +195,7 @@ function normalizeConfigKey(key: string): keyof RepoLensConfig {
 
 function sortConfig(config: RepoLensConfig): RepoLensConfig {
   const sorted: RepoLensConfig = {};
-  for (const key of ["autoIndex", "autoSync", "autoSyncIntervalMs", "root", "dbPath", "maxFileBytes", "autoIndexLabel", "bootstrapPackage"] as const) {
+  for (const key of ["autoIndex", "autoSync", "autoSyncIntervalMs", "root", "dbPath", "maxFileBytes", "maxFiles", "autoIndexLabel", "bootstrapPackage"] as const) {
     if (config[key] !== undefined) {
       sorted[key] = config[key] as never;
     }

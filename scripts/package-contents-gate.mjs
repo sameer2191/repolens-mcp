@@ -16,6 +16,7 @@ const requiredFiles = [
   "docs/BENCHMARK.md",
   "docs/research-notes.md",
   "scripts/codeql-alert-gate.mjs",
+  "scripts/clean-dist.mjs",
   "scripts/github-security-summary.mjs",
   "scripts/installer-audit.mjs",
   "scripts/package-contents-gate.mjs",
@@ -38,6 +39,7 @@ const allowedExactFiles = new Set([
   "docs/BENCHMARK.md",
   "docs/research-notes.md",
   "scripts/codeql-alert-gate.mjs",
+  "scripts/clean-dist.mjs",
   "scripts/github-security-summary.mjs",
   "scripts/installer-audit.mjs",
   "scripts/package-contents-gate.mjs",
@@ -90,6 +92,10 @@ if (!Array.isArray(files) || files.length === 0) {
 const fileSet = new Set(files);
 const missing = requiredFiles.filter((file) => !fileSet.has(file));
 const forbidden = files.filter((file) => forbiddenPatterns.some((pattern) => pattern.test(file)));
+const staleDistFiles = files.filter((file) => {
+  const source = sourceForDistFile(file);
+  return source !== undefined && !fs.existsSync(source);
+});
 const unexpected = files.filter((file) => {
   if (allowedExactFiles.has(file)) {
     return false;
@@ -98,7 +104,7 @@ const unexpected = files.filter((file) => {
 });
 const leakedLocalPaths = scanTextFiles(files);
 
-if (missing.length > 0 || forbidden.length > 0 || unexpected.length > 0 || leakedLocalPaths.length > 0) {
+if (missing.length > 0 || forbidden.length > 0 || staleDistFiles.length > 0 || unexpected.length > 0 || leakedLocalPaths.length > 0) {
   if (missing.length > 0) {
     console.error("Required package files are missing:");
     for (const file of missing) {
@@ -108,6 +114,12 @@ if (missing.length > 0 || forbidden.length > 0 || unexpected.length > 0 || leake
   if (forbidden.length > 0) {
     console.error("Forbidden local or sensitive artifacts would be published:");
     for (const file of forbidden) {
+      console.error(`- ${file}`);
+    }
+  }
+  if (staleDistFiles.length > 0) {
+    console.error("Compiled package files have no matching source file:");
+    for (const file of staleDistFiles) {
       console.error(`- ${file}`);
     }
   }
@@ -144,4 +156,21 @@ function scanTextFiles(files) {
     }
   }
   return findings;
+}
+
+function sourceForDistFile(file) {
+  if (!file.startsWith("dist/src/")) {
+    return undefined;
+  }
+  const sourcePath = file.slice("dist/".length);
+  if (sourcePath.endsWith(".js")) {
+    return sourcePath.replace(/\.js$/, ".ts");
+  }
+  if (sourcePath.endsWith(".js.map")) {
+    return sourcePath.replace(/\.js\.map$/, ".ts");
+  }
+  if (sourcePath.endsWith(".d.ts")) {
+    return sourcePath.replace(/\.d\.ts$/, ".ts");
+  }
+  return undefined;
 }

@@ -86,6 +86,7 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
   const serverName = options.serverName ?? "repolens";
   const selected = selectAgents(options.agents);
   const dbPath = options.dbPath ?? ".repolens/memory.db";
+  assertSafeAgentSetupValues({ serverName, command: options.command, cliPath: options.cliPath, dbPath });
   const renderOptions = {
     serverName,
     command: options.command,
@@ -175,6 +176,7 @@ export async function installAgentSetup(options: AgentSetupOptions): Promise<Age
 export async function uninstallAgentSetup(options: Omit<AgentSetupOptions, "command" | "cliPath" | "dbPath">): Promise<AgentSetupResult> {
   const targetDir = path.resolve(options.targetDir ?? process.cwd());
   const serverName = options.serverName ?? "repolens";
+  assertSafeServerName(serverName);
   const selected = selectAgents(options.agents);
   const hookPaths = options.withHooks ? ["docs/repolens-agent-hooks.md", ...selected.map((profile) => profile.hookPath ?? profile.instructionPath)] : [];
   const relativePaths = ["docs/repolens-agent-setup.md", ...selected.map((profile) => profile.instructionPath), ...hookPaths];
@@ -363,6 +365,7 @@ ${shellJoin([options.command, "--experimental-sqlite", options.cliPath, "context
 }
 
 export function agentConfigSnippet(agent: AgentId, options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
+  assertSafeAgentSetupValues(options);
   const args = ["--experimental-sqlite", options.cliPath, "mcp"];
   const jsonServer = mcpServerConfig({ ...options, managed: false });
 
@@ -602,6 +605,19 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 function assertSafeServerName(serverName: string): void {
   if (!/^[A-Za-z0-9_-]+$/.test(serverName)) {
     throw new Error("Server name for generated agent config must contain only letters, numbers, underscores, or hyphens.");
+  }
+}
+
+function assertSafeAgentSetupValues(options: { serverName: string; command: string; cliPath: string; dbPath: string }): void {
+  assertSafeServerName(options.serverName);
+  assertSafeGeneratedValue("command", options.command);
+  assertSafeGeneratedValue("cliPath", options.cliPath);
+  assertSafeGeneratedValue("dbPath", options.dbPath);
+}
+
+function assertSafeGeneratedValue(label: string, value: string): void {
+  if (/[`]|[\u0000-\u001f\u007f]/.test(value)) {
+    throw new Error(`${label} for generated agent config must not contain control characters or backticks.`);
   }
 }
 

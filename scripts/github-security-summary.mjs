@@ -5,6 +5,7 @@ const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
 const apiUrl = process.env.GITHUB_API_URL ?? "https://api.github.com";
 const format = getArgValue("--format") ?? "text";
 const failOnActionable = process.argv.includes("--fail-on-actionable");
+const allowUnavailable = process.argv.includes("--allow-unavailable");
 
 if (!repository) {
   fail("GITHUB_REPOSITORY is required, for example sameer2191/repolens-mcp.");
@@ -55,8 +56,14 @@ if (format === "json") {
   printTextSummary(summary);
 }
 
-if (failOnActionable && summary.actionableOpenAlerts > 0) {
-  process.exitCode = 1;
+if (failOnActionable) {
+  if (summary.actionableOpenAlerts > 0) {
+    process.exitCode = 1;
+  }
+  if (summary.unavailable.length > 0 && !allowUnavailable) {
+    console.error("Security alert endpoints were unavailable. Re-run with --allow-unavailable only for an explicit best-effort check.");
+    process.exitCode = 1;
+  }
 }
 
 function getArgValue(name) {

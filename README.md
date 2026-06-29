@@ -17,7 +17,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, and inferred consumer/provider service links.
 - **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`, and keep long-running MCP sessions fresh with git-aware `REPOLENS_AUTO_SYNC`.
-- **Persistent local config**: `config set auto-index incremental` and `config set auto-sync true` store defaults for MCP startup indexing, live-session syncing, root, database path, max file size, labels, and graph-package bootstrap without requiring shell env vars.
+- **Persistent local config**: `config set auto-index incremental` and `config set auto-sync true` store defaults for MCP startup indexing, live-session syncing, root, database path, max file size, max file count, labels, and graph-package bootstrap without requiring shell env vars.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes, optionally skipping unchanged git polls with `--git-aware`.
 - **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI; first index can bootstrap a missing database from `.repolens/graph.rlgz`.
 - **Operational dashboard**: browse graph previews, structural filters, references, semantic/vector search, schema counts, relationship patterns, label property hints, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
@@ -45,9 +45,9 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 ## Security And Quality
 
 - **Protected mainline**: `main` requires PR review, CODEOWNERS review, fresh branch checks, resolved conversations, linear history, `verify`, and CodeQL `Analyze`; force pushes and branch deletion are blocked.
-- **GitHub security coverage**: CodeQL, OpenSSF Scorecard, Dependabot security updates, secret scanning with push protection, private vulnerability reporting, pinned workflow actions, least-privilege workflow tokens, and a release gate that blocks publishing when CodeQL has open alerts.
+- **GitHub security coverage**: CodeQL, OpenSSF Scorecard, Dependabot security updates, secret scanning with push protection, private vulnerability reporting, pinned workflow actions, least-privilege workflow tokens, and a release gate that blocks publishing when actionable CodeQL, Dependabot, or secret-scanning alerts are open or alert APIs are unavailable.
 - **Property-based fuzzing**: `fast-check` fuzzes import resolver traversal boundaries, safe alias/source-root/workspace-package resolution, and MCP JSON-RPC tool-call validation in `tests/security-fixes.test.ts` and `tests/mcp-server.test.ts`.
-- **Release integrity**: npm provenance, GitHub build-provenance attestations, CycloneDX SBOM generation, lockfile dependency graphing, dry-run package validation, and a package contents gate that blocks local graph artifacts from being published.
+- **Release integrity**: npm provenance, GitHub build-provenance attestations, CycloneDX SBOM generation, lockfile dependency graphing, clean builds, dry-run package validation, and a package contents gate that blocks local graph artifacts and stale compiled output from being published.
 - **Agent-readable docs**: `llms.txt` and `docs/agent-guide.md` give coding agents a concise operating guide, data-boundary rules, and validation commands.
 
 ## Quick Start
@@ -70,6 +70,7 @@ From a local clone, the installer runs the same build and Codex checks:
 ./install.sh --install-codex --dry-run
 ./install.sh --install-codex
 ./install.sh --install-agents --dry-run
+./install.sh --install-agents --with-hooks --dry-run
 ./install.sh --uninstall-agents --dry-run
 ```
 
@@ -79,17 +80,18 @@ Windows PowerShell uses the same installer flow:
 .\install.ps1 -InstallCodex -DryRun
 .\install.ps1 -InstallCodex
 .\install.ps1 -InstallAgents -DryRun
+.\install.ps1 -InstallAgents -WithHooks -DryRun
 .\install.ps1 -UninstallAgents -DryRun
 ```
 
 ## CLI
 
 ```bash
-repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--incremental] [--label name] [--write-package [graph.rlgz]]
+repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--max-files n] [--incremental] [--label name] [--write-package [graph.rlgz]]
 repolens-mcp index [repo] [--bootstrap-package .repolens/graph.rlgz] [--no-bootstrap]
 repolens-mcp version [--check] [--registry url]
 repolens-mcp update-check [--registry url]
-repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--no-secret-scan]
+repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--max-files n] [--no-secret-scan]
 repolens-mcp list-projects [--limit n]
 repolens-mcp project-status [root-or-db-or-label]
 repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
@@ -229,6 +231,7 @@ npm run package:check
 npm run installer:audit
 npm run audit:prod
 GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run security:github
+GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run release:security-gate
 node --experimental-sqlite dist/src/cli.js index /path/to/big/repo --db /tmp/memory.db
 node --experimental-sqlite dist/src/cli.js benchmark /path/to/big/repo --db /tmp/benchmark.db
 node --experimental-sqlite dist/src/cli.js list-projects
@@ -301,6 +304,7 @@ REPOLENS_AUTO_SYNC = "1"           # keep a long-running MCP session fresh after
 REPOLENS_AUTO_SYNC_INTERVAL_MS = "2500"
 REPOLENS_ROOT = "."                # optional, defaults to process cwd
 REPOLENS_MAX_FILE_BYTES = "750000" # optional
+REPOLENS_MAX_FILES = "5000"        # optional, fail closed on unexpected huge repos
 ```
 
 Set `REPOLENS_AUTO_INDEX=full` to force a full rebuild on startup. Leave it unset for the default manual-index behavior.
@@ -314,6 +318,7 @@ node --experimental-sqlite dist/src/cli.js config set auto-sync true
 node --experimental-sqlite dist/src/cli.js config set auto-sync-interval-ms 2500
 node --experimental-sqlite dist/src/cli.js config set root /path/to/repo
 node --experimental-sqlite dist/src/cli.js config set db-path /path/to/repo/.repolens/memory.db
+node --experimental-sqlite dist/src/cli.js config set max-files 5000
 ```
 
 Project teams can generate agent guidance and config snippets for the broader agent set:
@@ -326,7 +331,7 @@ repolens-mcp install-agents --target . --agents codex,claude,gemini
 repolens-mcp uninstall-agents --target . --agents codex,claude,gemini --with-hooks --dry-run
 ```
 
-`install-agents` writes managed markdown blocks into project-local instruction files and a `docs/repolens-agent-setup.md` guide. For VS Code it also writes a project-local `.vscode/mcp.json` `servers.repolens` entry while preserving unrelated servers. Add `--with-hooks` to generate opt-in, non-blocking hook/reminder files plus `docs/repolens-agent-hooks.md`; for Claude Code it also merges a managed `.claude/settings.local.json` PreToolUse hook entry while preserving unrelated hooks and settings. These files tell agents when to call RepoLens before broad searches or risky edits and include an executable `hook-augment --claude` command for agents that pass hook payload JSON through stdin. `agent-hook`/`hook-augment` recognizes PreToolUse-style Grep, Glob, and broad shell search payloads, emits either text, JSON, or Claude-compatible `hookSpecificOutput.additionalContext`, exits successfully, and does not intercept Read/Edit/Write tools. The hook does not query or mutate the local graph by default; add `--with-query` only when you want it to open the RepoLens database and append symbol metadata matches. `uninstall-agents --with-hooks` removes those managed reminder files and the managed Claude hook entry alongside managed RepoLens markdown blocks and managed VS Code config entries while preserving hand-written content. The guide includes MCP config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
+`install-agents` writes managed markdown blocks into project-local instruction files and a `docs/repolens-agent-setup.md` guide. For VS Code it also writes a project-local `.vscode/mcp.json` `servers.repolens` entry while preserving unrelated servers. Add `--with-hooks` to generate opt-in, non-blocking hook/reminder files plus `docs/repolens-agent-hooks.md`; for Claude Code it also merges a managed `.claude/settings.local.json` PreToolUse hook entry while preserving unrelated hooks and settings. These files tell agents when to call RepoLens before broad searches or risky edits and include an executable `hook-augment --claude` command for agents that pass hook payload JSON through stdin. `agent-hook`/`hook-augment` recognizes PreToolUse-style Grep, Glob, and broad shell search payloads, emits either text, JSON, or Claude-compatible `hookSpecificOutput.additionalContext`, exits successfully, and does not intercept Read/Edit/Write tools. The hook does not query or mutate the local graph by default; add `--with-query` only when you want it to open the RepoLens database and append symbol metadata matches. `uninstall-agents --with-hooks` removes those managed reminder files and the managed Claude hook entry alongside managed RepoLens markdown blocks and managed VS Code config entries while preserving hand-written content. The MCP `agent_setup` tool is dry-run by default; write mode is limited to the server working directory, and executable hook writes require `REPOLENS_ALLOW_MCP_HOOK_WRITES=1`, so interactive CLI installers are the recommended hook setup path. The guide includes MCP config snippets for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro.
 
 ```json
 {

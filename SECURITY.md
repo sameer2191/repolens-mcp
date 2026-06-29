@@ -24,7 +24,7 @@ before committing any generated memory artifacts.
 
 ## Published Package Boundary
 
-The npm package is restricted to runtime JavaScript, public documentation, the server manifest, installer, license, contribution guide, and security policy. The CI package gate checks the dry-run tarball and blocks local graph artifacts such as `.repolens/`, SQLite database files, WAL/shm sidecars, graph packages, and legacy local memory folders.
+The npm package is restricted to runtime JavaScript, public documentation, the server manifest, installer, license, contribution guide, and security policy. The CI package gate checks the dry-run tarball and blocks local graph artifacts such as `.repolens/`, SQLite database files, WAL/shm sidecars, graph packages, legacy local memory folders, and stale compiled files without matching source.
 
 Run this before publishing or reviewing release-file changes:
 
@@ -44,7 +44,7 @@ Maintainers can summarize the live GitHub Security tab state with:
 GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run security:github
 ```
 
-Use `-- --format json` for automation or `-- --fail-on-actionable` to exit non-zero when CodeQL, Dependabot, or secret-scanning alerts are open. OpenSSF Scorecard alerts are reported separately as process signals so they are visible without being confused with code vulnerabilities.
+Use `-- --format json` for automation or `-- --fail-on-actionable` to exit non-zero when CodeQL, Dependabot, or secret-scanning alerts are open. With `--fail-on-actionable`, unavailable GitHub alert endpoints also fail the gate unless `-- --allow-unavailable` is explicitly provided for a best-effort check. OpenSSF Scorecard alerts are reported separately as process signals so they are visible without being confused with code vulnerabilities.
 
 ## Reporting A Vulnerability
 

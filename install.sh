@@ -9,6 +9,7 @@ UNINSTALL_CODEX=0
 UNINSTALL_AGENTS=0
 AGENTS="all"
 TARGET_DIR="$ROOT_DIR"
+WITH_HOOKS=0
 DRY_RUN=0
 FORCE=0
 SKIP_NPM=0
@@ -18,7 +19,7 @@ usage() {
 RepoLens MCP local installer
 
 Usage:
-  ./install.sh [--install-codex] [--install-agents] [--uninstall-codex] [--uninstall-agents] [--dry-run] [--force] [--db path] [--agents list] [--target dir] [--skip-npm]
+  ./install.sh [--install-codex] [--install-agents] [--uninstall-codex] [--uninstall-agents] [--with-hooks] [--dry-run] [--force] [--db path] [--agents list] [--target dir] [--skip-npm]
 
 Options:
   --install-codex  Add or update the managed Codex MCP config block after build.
@@ -32,6 +33,7 @@ Options:
   --db path        MCP database path to place in generated setup.
   --agents list    Comma-separated agents for --install-agents, or "all".
   --target dir     Project directory for --install-agents output. Defaults to this repo.
+  --with-hooks     Include opt-in hook/reminder files for agent install/uninstall.
   --skip-npm       Skip npm ci and only run the build/doctor steps.
   -h, --help       Show this help.
 USAGE
@@ -87,6 +89,10 @@ while [[ $# -gt 0 ]]; do
       fi
       shift 2
       ;;
+    --with-hooks)
+      WITH_HOOKS=1
+      shift
+      ;;
     --skip-npm)
       SKIP_NPM=1
       shift
@@ -140,6 +146,9 @@ fi
 
 if [[ "$INSTALL_AGENTS" -eq 1 ]]; then
   args=(--target "$TARGET_DIR" --agents "$AGENTS" --db "$DB_PATH")
+  if [[ "$WITH_HOOKS" -eq 1 ]]; then
+    args+=(--with-hooks)
+  fi
   if [[ "$DRY_RUN" -eq 1 ]]; then
     args+=(--dry-run)
   fi
@@ -156,6 +165,9 @@ fi
 
 if [[ "$UNINSTALL_AGENTS" -eq 1 ]]; then
   args=(--target "$TARGET_DIR" --agents "$AGENTS")
+  if [[ "$WITH_HOOKS" -eq 1 ]]; then
+    args+=(--with-hooks)
+  fi
   if [[ "$DRY_RUN" -eq 1 ]]; then
     args+=(--dry-run)
   fi
@@ -171,6 +183,7 @@ Next steps:
   ./install.sh --install-codex --dry-run
   ./install.sh --install-codex
   ./install.sh --install-agents --dry-run
+  ./install.sh --install-agents --with-hooks --dry-run
   ./install.sh --uninstall-agents --dry-run
   node --experimental-sqlite "$CLI_PATH" index .
   node --experimental-sqlite "$CLI_PATH" serve

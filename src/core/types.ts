@@ -26,6 +26,7 @@ export interface IndexOptions {
   includeHidden?: boolean;
   incremental?: boolean;
   maxFileBytes?: number;
+  maxFiles?: number;
   runLabel?: string;
   bootstrapPackage?: string | false;
   writePackage?: string | false;

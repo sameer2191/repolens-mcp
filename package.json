@@ -23,7 +23,8 @@
     "install.ps1"
   ],
   "scripts": {
-    "build": "tsc && chmod 755 dist/src/cli.js",
+    "clean": "node scripts/clean-dist.mjs",
+    "build": "npm run clean && tsc && chmod 755 dist/src/cli.js",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-sqlite dist/tests/*.test.js",
     "test:skip-gate": "node scripts/test-skip-gate.mjs",
@@ -36,6 +37,7 @@
     "security:github": "node scripts/github-security-summary.mjs",
     "release:security-gate": "node scripts/github-security-summary.mjs --fail-on-actionable",
     "release:codeql-gate": "node scripts/codeql-alert-gate.mjs",
+    "prepublishOnly": "npm run verify && npm run test:skip-gate && npm run installer:audit && npm run package:check",
     "demo": "npm run build && node --experimental-sqlite dist/src/cli.js demo"
   },
   "keywords": [

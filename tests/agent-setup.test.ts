@@ -70,6 +70,25 @@ test("agent setup can render opt-in hook reminder files", async () => {
   await assert.rejects(() => fs.readFile(path.join(tmp, "docs/repolens-agent-hooks.md"), "utf8"));
 });
 
+test("agent setup rejects unsafe generated config values", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agent-unsafe-"));
+  const base = {
+    targetDir: tmp,
+    agents: ["codex"] as Array<"codex">,
+    command: "node",
+    cliPath: "/repo/cli.js"
+  };
+
+  assert.throws(
+    () => agentConfigSnippet("codex", { serverName: "repo.lens", command: "node", cliPath: "/repo/cli.js", dbPath: ".repolens/memory.db" }),
+    /Server name/
+  );
+  await assert.rejects(() => installAgentSetup({ ...base, serverName: "repolens\nbad" }), /Server name/);
+  await assert.rejects(() => installAgentSetup({ ...base, command: "node\nbad" }), /command/);
+  await assert.rejects(() => installAgentSetup({ ...base, dbPath: ".repolens/`bad`.db" }), /dbPath/);
+  await assert.rejects(() => uninstallAgentSetup({ targetDir: tmp, agents: ["codex"], serverName: "bad.name" }), /Server name/);
+});
+
 test("agent setup uninstall removes managed hook reminders when requested", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-agent-hooks-"));
 

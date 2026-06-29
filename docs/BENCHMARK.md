@@ -14,9 +14,9 @@ npm run test:skip-gate
 Latest result:
 
 - TypeScript build passed.
-- Node test suite passed: 73 tests, 72 passing, 0 failures, 1 sandbox-only dashboard socket skip.
+- Node test suite passed: 78 tests, 77 passing, 0 failures, 1 sandbox-only dashboard socket skip.
 - Test skip gate passed with explicit policies for the dashboard sandbox socket skip and git-unavailable skips.
-- Coverage includes indexing, incremental refresh, git-aware watch refresh, MCP startup auto-index and auto-sync wiring, project catalog and fleet summaries, graph package import/export, code search, symbol/reference lookup, semantic and vector search, context packs, graph queries, dependency cycles, git-history hotspots, change impact, secret scanning, agent setup, Codex config safeguards, package bootstrap, installer metadata, and MCP JSON-RPC robustness.
+- Coverage includes indexing with byte and file-count budgets, incremental refresh, bounded git-history hotspot collection, git-aware watch refresh, MCP startup auto-index and auto-sync wiring, MCP agent setup write guardrails, project catalog and fleet summaries, graph package import/export, code search, symbol/reference lookup, semantic and vector search, context packs, graph queries, dependency cycles, git-history hotspots, change impact, secret scanning, agent setup, Codex config safeguards, package bootstrap, installer metadata, and MCP JSON-RPC robustness.
 
 ## Package And Release Checks
 
@@ -34,10 +34,10 @@ Current package hygiene:
 
 - Production dependency audit reports 0 vulnerabilities.
 - Package contents are limited to runtime `dist/src`, public docs, README, license/security/contributing files, `llms.txt`, scripts, server manifest, and installers.
-- Compiled tests, TypeScript source, fixture data, local graph memory, SQLite databases, graph packages, private validation output, and workstation paths are blocked from npm packages.
-- Installer audit checks shipped shell and PowerShell installers, exercises dry-run Codex/agent setup under temporary home and target directories, and fails if dry runs write unexpected files.
+- Compiled tests, TypeScript source, fixture data, stale compiled files without matching source, local graph memory, SQLite databases, graph packages, private validation output, and workstation paths are blocked from npm packages.
+- Installer audit checks shipped shell and PowerShell installers, exercises dry-run Codex/agent setup with hook files under temporary home and target directories, and fails if dry runs write unexpected files.
 - The release workflow verifies build/tests/audit/package gates, generates a CycloneDX SBOM and SHA-256 checksums, creates build provenance attestations, uploads GitHub release assets, and publishes to npm with provenance.
-- The release security gate checks actionable GitHub Security alerts across CodeQL, Dependabot, and secret scanning before publication.
+- The release security gate checks actionable GitHub Security alerts across CodeQL, Dependabot, and secret scanning before publication and fails closed when required alert endpoints are unavailable.
 
 ## Large Workspace Benchmark
 
@@ -65,14 +65,14 @@ Latest large-workspace result:
 - Files discovered: 853
 - Files indexed: 818
 - Files skipped: 35
-- Symbols: 5,812
-- Edges: 38,645
+- Symbols: 5,826
+- Edges: 38,995
 - Lines: 100,100
-- Full index elapsed: 16,484 ms
-- No-op incremental elapsed: 233 ms
+- Full index elapsed: 153,883 ms
+- No-op incremental elapsed: 249 ms
 - No-op incremental unchanged files: 853
-- Full throughput: 49.62 files/s and 352.58 symbols/s
-- No-op incremental throughput: 3,660.94 discovered files/s
+- Full throughput: 5.32 files/s and 37.86 symbols/s
+- No-op incremental throughput: 3,425.70 discovered files/s
 - Redacted secret scan: 0 high-confidence and 0 medium-confidence findings across 61,746 indexed non-test lines.
 - Graph export: 1,500 nodes and 1,500 edges.
-- Graph package import check restored 818 indexed files, 5,812 symbols, and 38,645 edges from the compressed graph snapshot.
+- Graph package import check restored 818 indexed files, 5,826 symbols, and 38,995 edges from the compressed graph snapshot.

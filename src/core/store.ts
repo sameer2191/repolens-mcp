@@ -3674,9 +3674,11 @@ function gitHistoryHotspots(root: string, limit: number): GitHistoryFile[] {
       "--max-count=200",
       "--date=short",
       "--pretty=format:--REPOLENS-COMMIT--%x09%H%x09%ad%x09%an%x09%s",
-      "--numstat"
+      "--numstat",
+      "--",
+      "."
     ],
-    { encoding: "utf8", maxBuffer: 8 * 1024 * 1024 }
+    { encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 5000 }
   );
   if (result.status !== 0 || !result.stdout.trim()) {
     return [];

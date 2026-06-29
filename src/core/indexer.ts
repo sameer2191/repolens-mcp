@@ -38,6 +38,9 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
     lockAcquired = true;
     const repoIgnore = await loadRepoIgnoreMatcher(root);
     const walked = await walk(root, root, options.includeHidden ?? false, repoIgnore);
+    if (options.maxFiles !== undefined && walked.length > options.maxFiles) {
+      throw new Error(`Index discovered ${walked.length} files, which exceeds maxFiles ${options.maxFiles}. Increase the limit or narrow the repository root.`);
+    }
     const walkedPaths = new Set(walked.map((file) => file.relativePath));
     const previousFiles = incremental ? new Map(store.listFiles().map((file) => [file.path, file])) : new Map<string, IndexedFile>();
     let filesRemoved = 0;

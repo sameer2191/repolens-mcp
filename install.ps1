@@ -5,6 +5,7 @@ param(
   [switch]$UninstallAgents,
   [switch]$DryRun,
   [switch]$Force,
+  [switch]$WithHooks,
   [switch]$SkipNpm,
   [string]$Db = $(if ($env:REPOLENS_DB) { $env:REPOLENS_DB } else { ".repolens/memory.db" }),
   [string]$Agents = "all",
@@ -18,7 +19,7 @@ function Show-Usage {
 RepoLens MCP local installer
 
 Usage:
-  .\install.ps1 [-InstallCodex] [-InstallAgents] [-UninstallCodex] [-UninstallAgents] [-DryRun] [-Force] [-Db path] [-Agents list] [-Target dir] [-SkipNpm]
+  .\install.ps1 [-InstallCodex] [-InstallAgents] [-UninstallCodex] [-UninstallAgents] [-WithHooks] [-DryRun] [-Force] [-Db path] [-Agents list] [-Target dir] [-SkipNpm]
 
 Options:
   -InstallCodex     Add or update the managed Codex MCP config block after build.
@@ -27,6 +28,7 @@ Options:
   -UninstallAgents  Remove managed RepoLens blocks from generated agent guidance.
   -DryRun           Show setup changes without writing them where supported.
   -Force            Replace an existing unmanaged Codex server entry.
+  -WithHooks        Include opt-in hook/reminder files for agent install/uninstall.
   -Db path          MCP database path to place in generated setup.
   -Agents list      Comma-separated agents for -InstallAgents, or "all".
   -Target dir       Project directory for -InstallAgents output. Defaults to this repo.
@@ -91,6 +93,7 @@ if ($InstallCodex) {
 
 if ($InstallAgents) {
   $agentArgs = @("--experimental-sqlite", $cliPath, "install-agents", "--target", $Target, "--agents", $Agents, "--db", $Db)
+  if ($WithHooks) { $agentArgs += "--with-hooks" }
   if ($DryRun) { $agentArgs += "--dry-run" }
   Invoke-Step "node" $agentArgs
 }
@@ -103,6 +106,7 @@ if ($UninstallCodex) {
 
 if ($UninstallAgents) {
   $agentArgs = @("--experimental-sqlite", $cliPath, "uninstall-agents", "--target", $Target, "--agents", $Agents)
+  if ($WithHooks) { $agentArgs += "--with-hooks" }
   if ($DryRun) { $agentArgs += "--dry-run" }
   Invoke-Step "node" $agentArgs
 }
@@ -116,6 +120,7 @@ Next steps:
   .\install.ps1 -InstallCodex -DryRun
   .\install.ps1 -InstallCodex
   .\install.ps1 -InstallAgents -DryRun
+  .\install.ps1 -InstallAgents -WithHooks -DryRun
   .\install.ps1 -UninstallAgents -DryRun
   node --experimental-sqlite "$cliPath" index .
   node --experimental-sqlite "$cliPath" serve
