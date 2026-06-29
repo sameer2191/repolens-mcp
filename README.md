@@ -37,7 +37,7 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Manifest and lockfile dependency graph**: extracts declared package/dependency nodes from npm, Composer, Python, Go, Cargo, Maven, Gradle, Dart, Elixir, Ruby, and `requirements.txt` manifests, plus pinned `lockfile` and `locked_dependency` nodes from common package-manager locks.
 - **Infrastructure graph nodes**: indexes Dockerfile stages/images, Kubernetes resources, container images, and Kustomize overlays with `DECLARES`, `CONFIGURES`, and `IMPORTS` edges.
 - **Architecture recommendations**: turns structural hotspots, git-history churn, import-resolved dependency cycles, dead-code candidates, and review signals into concrete next steps.
-- **Wide practical coverage**: TypeScript, JavaScript, Swift, Python, Go, Java, Rust, SQL, YAML, Markdown, JSON, and shell-oriented project files.
+- **Wide practical coverage**: TypeScript, JavaScript, Python, Go, Java, Rust, Swift, C/C++, C#, Kotlin, PHP, Ruby, Elixir, Dart, Terraform/HCL, QML, Apex, SQL, YAML, Markdown, JSON, and shell-oriented project files.
 - **Validation evidence**: tests, CI, CodeQL, OpenSSF Scorecard, CycloneDX SBOM generation, GitHub build-provenance attestations, docs, local dashboard smoke checks, and a documented local big-repo validation run.
 - **Architecture decisions built in**: persist ADR-style decisions next to the code graph.
 - **No frontend build required**: the dashboard is served by the CLI.
@@ -192,8 +192,10 @@ The extractor is intentionally compact and extensible:
 - Channel/event linking: EventEmitter/Socket.IO-style `emit`, `on`, `once`, `addListener`, `subscribe`, DOM `CustomEvent`, Python `@*.on`, and Swift `NotificationCenter` patterns become `channel` nodes with `EMITS` and `LISTENS_ON` edges.
 - Swift: classes, structs, enums, protocols, actors, functions, and imports.
 - Python: classes, functions, imports, route decorators.
-- Go, Java, Rust: common functions, types, classes, traits, structs, imports.
+- Go, Java, Rust: common functions, methods, types, classes, traits, structs, imports, and route decorators where applicable.
+- C/C++, C#, Kotlin, PHP, Dart, Ruby, Elixir, QML, and Apex: practical symbol extraction for classes/interfaces/records/modules/functions/methods, imports/includes/uses/requires, plus C#/PHP/Kotlin/Apex route annotations and route helpers.
 - SQL: created tables, views, indexes, functions, procedures.
+- Terraform/HCL: `resource`, `data`, `module`, `variable`, `output`, and `provider` blocks, including module `source` import edges.
 - YAML: multi-document Kubernetes resources from `kind` and `metadata.name`, container image links, and Kustomize `resources`, `bases`, and `components`.
 - Dockerfile: build stages, base images, and `COPY --from` stage dependencies.
 - Markdown: headings as knowledge nodes.
@@ -362,5 +364,5 @@ flowchart LR
 
 ## Roadmap
 
-- Deeper tree-sitter adapters for language-specific call/use precision.
+- Optional parser-backed adapters for deeper language-specific call/use precision where regex extractors are not enough.
 - Host-aware service-link inference from config, environment variables, and trace data.

@@ -8,6 +8,7 @@ import test from "node:test";
 import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
 import { addCallEdges, addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
 import { indexRepository } from "../src/core/indexer.js";
+import { detectLanguage } from "../src/core/language.js";
 import { MemoryStore } from "../src/core/store.js";
 import { watchRepository } from "../src/core/watcher.js";
 
@@ -113,6 +114,181 @@ export async function loadBillingOrders() {
   assert.ok(edge);
   assert.equal(edge.metadata?.host, "billing.internal");
   assert.equal(edge.metadata?.path, "/orders");
+});
+
+test("indexes broad language adapters with symbols, imports, routes, and infrastructure nodes", async () => {
+  assert.equal(detectLanguage("src/BillingController.cs"), "csharp");
+  assert.equal(detectLanguage("src/CheckoutService.kt"), "kotlin");
+  assert.equal(detectLanguage("src/OrderController.php"), "php");
+  assert.equal(detectLanguage("lib/sync_job.rb"), "ruby");
+  assert.equal(detectLanguage("lib/checkout_worker.ex"), "elixir");
+  assert.equal(detectLanguage("native/orders.cpp"), "cpp");
+  assert.equal(detectLanguage("infra/main.tf"), "terraform");
+  assert.equal(detectLanguage("ui/Checkout.qml"), "qml");
+  assert.equal(detectLanguage("force-app/classes/OrderController.cls"), "apex");
+
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-broad-languages-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.mkdir(path.join(repo, "lib"), { recursive: true });
+  await fs.mkdir(path.join(repo, "native"), { recursive: true });
+  await fs.mkdir(path.join(repo, "infra"), { recursive: true });
+  await fs.mkdir(path.join(repo, "ui"), { recursive: true });
+  await fs.mkdir(path.join(repo, "force-app", "classes"), { recursive: true });
+
+  await fs.writeFile(
+    path.join(repo, "src", "BillingController.cs"),
+    `
+using System.Threading.Tasks;
+
+public interface BillingPort {}
+public record Invoice(string Id);
+
+[Route("/api/billing")]
+public class BillingController : BaseController, BillingPort {
+  [HttpGet("/api/billing/{id}")]
+  public async Task<Invoice> GetInvoice(string id) {
+    return await LoadInvoice(id);
+  }
+
+  private Task<Invoice> LoadInvoice(string id) {
+    return Task.FromResult(new Invoice(id));
+  }
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "CheckoutService.kt"),
+    `
+import demo.billing.BillingClient
+
+interface CheckoutPort
+open class BaseCheckout
+class CheckoutService : BaseCheckout(), CheckoutPort {
+  fun checkout(order: Order) {
+    confirm(order)
+  }
+
+  fun confirm(order: Order) {}
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "OrderController.php"),
+    `
+<?php
+namespace App;
+use App\\Services\\OrderService;
+
+Route::get("/orders/{id}", [OrderController::class, "show"]);
+
+class OrderController extends BaseController implements Responsable {
+  public function show($id) {
+    return OrderService::load($id);
+  }
+}
+
+function helper_call() {}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "lib", "sync_job.rb"),
+    `
+require "sidekiq"
+
+module Billing
+  class SyncJob < ApplicationJob
+    def perform(order_id)
+      order_id
+    end
+  end
+end
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "lib", "checkout_worker.ex"),
+    `
+defmodule Checkout.Worker do
+  alias Checkout.Events
+
+  def perform(order) do
+    audit(order)
+  end
+
+  defp audit(order), do: Events.record(order)
+end
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "native", "orders.cpp"),
+    `
+#include "orders.hpp"
+
+class OrderIndex : public BaseIndex {};
+
+int build_index(int count) {
+  return count;
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "infra", "main.tf"),
+    `
+module "billing" {
+  source = "github.com/example/billing"
+}
+
+resource "aws_s3_bucket" "orders" {}
+variable "region" {}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "ui", "Checkout.qml"),
+    `
+import QtQuick
+
+component CheckoutPanel : Item {
+  property string orderId
+  signal submitted(string orderId)
+  function submitOrder() {
+    submitted(orderId)
+  }
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "force-app", "classes", "OrderController.cls"),
+    `
+public with sharing class OrderController {
+  public static Order__c loadOrder(Id orderId) {
+    return [SELECT Id FROM Order__c WHERE Id = :orderId];
+  }
+}
+`
+  );
+
+  const result = await indexRepository({ root: repo, dbPath });
+  assert.equal(result.filesIndexed, 9);
+
+  const store = new MemoryStore(dbPath);
+  try {
+    const arch = store.architecture(repo);
+    for (const language of ["csharp", "kotlin", "php", "ruby", "elixir", "cpp", "terraform", "qml", "apex"]) {
+      assert.ok(arch.languages.some((item) => item.language === language), `missing language ${language}`);
+    }
+
+    for (const name of ["BillingController", "CheckoutService", "OrderController", "SyncJob", "Checkout.Worker", "build_index", "billing", "aws_s3_bucket.orders", "CheckoutPanel", "loadOrder"]) {
+      assert.ok(store.searchSymbols(name).some((symbol) => symbol.name === name), `missing symbol ${name}`);
+    }
+
+    assert.ok(store.searchSymbols("/orders/{id}").some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/{id}"));
+    assert.ok(store.searchSymbols("/api/billing/{id}").some((symbol) => symbol.kind === "route" && symbol.name === "GET /api/billing/{id}"));
+    assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "IMPORTS"));
+    assert.ok(arch.nodeLabels.some((label) => label.kind === "resource"));
+  } finally {
+    store.close();
+  }
 });
 
 test("extracts typed inheritance, implementation, and usage edges", () => {

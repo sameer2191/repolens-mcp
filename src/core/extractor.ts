@@ -96,6 +96,69 @@ const patterns: Partial<Record<Language, Pattern[]>> = {
     { kind: "protocol", regex: /^\s*(?:public|internal|private|fileprivate|\s)*protocol\s+([A-Za-z_]\w*)/gm },
     { kind: "actor", regex: /^\s*(?:public|open|internal|private|fileprivate|final|\s)*actor\s+([A-Za-z_]\w*)/gm },
     { kind: "function", regex: /^\s*(?:public|open|internal|private|fileprivate|static|class|mutating|nonisolated|override|async|\s)*func\s+([A-Za-z_]\w*)/gm }
+  ],
+  c: [
+    { kind: "struct", regex: /^\s*(?:typedef\s+)?struct\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:typedef\s+)?enum\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:static\s+|inline\s+|extern\s+|__attribute__\s*\(\([^)]*\)\)\s*)*(?:[A-Za-z_][\w\s*]+\s+)+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm }
+  ],
+  cpp: [
+    { kind: "namespace", regex: /^\s*namespace\s+([A-Za-z_]\w*)\s*\{/gm },
+    { kind: "class", regex: /^\s*(?:template\s*<[^>]+>\s*)?(?:class)\s+([A-Za-z_]\w*)/gm },
+    { kind: "struct", regex: /^\s*(?:template\s*<[^>]+>\s*)?(?:struct)\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:enum\s+(?:class\s+)?)\s*([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:template\s*<[^>]+>\s*)?(?:[\w:<>,~*&\s]+\s+)+(?:(?:[A-Za-z_]\w*)::)?(~?[A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?(?:final\s*)?\{/gm }
+  ],
+  csharp: [
+    { kind: "class", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|abstract|sealed|static|partial|\s)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|partial|\s)*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "struct", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|readonly|partial|\s)*struct\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|\s)*enum\s+([A-Za-z_]\w*)/gm },
+    { kind: "record", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|sealed|abstract|partial|\s)*record(?:\s+class|\s+struct)?\s+([A-Za-z_]\w*)/gm },
+    { kind: "method", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|static|async|virtual|override|sealed|partial|extern|unsafe|\s)+[\w<>\[\],?]+\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:where\s+[^{]+)?\{/gm }
+  ],
+  kotlin: [
+    { kind: "class", regex: /^\s*(?:(?:data|sealed|open|abstract|inner|value)\s+)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*(?:fun\s+)?interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "object", regex: /^\s*(?:data\s+)?object\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*enum\s+class\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:public|private|protected|internal|suspend|inline|tailrec|operator|override|open|\s)*fun(?:\s+<[^>]+>)?\s+([A-Za-z_]\w*)/gm }
+  ],
+  php: [
+    { kind: "class", regex: /^\s*(?:abstract\s+|final\s+)?class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "trait", regex: /^\s*trait\s+([A-Za-z_]\w*)/gm },
+    { kind: "method", regex: /^\s*(?:public|private|protected|static|abstract|final|\s)+function\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*function\s+([A-Za-z_]\w*)/gm }
+  ],
+  dart: [
+    { kind: "class", regex: /^\s*(?:abstract\s+|base\s+|final\s+|interface\s+|sealed\s+)?class\s+([A-Za-z_]\w*)/gm },
+    { kind: "mixin", regex: /^\s*mixin\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*enum\s+([A-Za-z_]\w*)/gm },
+    { kind: "extension", regex: /^\s*extension\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*(?:[A-Za-z_][\w<>?,\s]*\s+)?([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:async\s*)?\{/gm }
+  ],
+  ruby: [
+    { kind: "class", regex: /^\s*class\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)/gm },
+    { kind: "module", regex: /^\s*module\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)/gm },
+    { kind: "function", regex: /^\s*def\s+(?:self\.)?([A-Za-z_]\w*[!?=]?)/gm }
+  ],
+  elixir: [
+    { kind: "module", regex: /^\s*defmodule\s+([A-Z][\w.]+)/gm },
+    { kind: "function", regex: /^\s*defp?\s+([A-Za-z_][\w?!]*)/gm },
+    { kind: "macro", regex: /^\s*defmacro\s+([A-Za-z_][\w?!]*)/gm }
+  ],
+  qml: [
+    { kind: "component", regex: /^\s*component\s+([A-Za-z_]\w*)\s*:/gm },
+    { kind: "property", regex: /^\s*property\s+[A-Za-z_][\w<>.]*\s+([A-Za-z_]\w*)/gm },
+    { kind: "signal", regex: /^\s*signal\s+([A-Za-z_]\w*)/gm },
+    { kind: "function", regex: /^\s*function\s+([A-Za-z_]\w*)/gm }
+  ],
+  apex: [
+    { kind: "class", regex: /^\s*(?:public|private|global|virtual|abstract|with\s+sharing|without\s+sharing|inherited\s+sharing|\s)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*(?:public|private|global|\s)*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "trigger", regex: /^\s*trigger\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)/gm },
+    { kind: "method", regex: /^\s*(?:public|private|protected|global|static|override|virtual|abstract|testMethod|\s)+[\w<>\[\],]+\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm }
   ]
 };
 
@@ -173,6 +236,21 @@ export function extractFromFile(filePath: string, language: Language, content: s
       symbols.push(symbol);
       edges.push({ source: fileNode, target: symbol.qualifiedName, type: symbol.kind === "route" ? "DEFINES" : "DECLARES", weight: 1 });
     }
+  } else if (language === "terraform") {
+    for (const symbol of extractTerraform(filePath, content)) {
+      symbols.push(symbol);
+      edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
+      const source = typeof symbol.metadata?.source === "string" ? symbol.metadata.source.trim() : "";
+      if (source) {
+        edges.push({
+          source: symbol.qualifiedName,
+          target: `external:${source}`,
+          type: "IMPORTS",
+          weight: 0.75,
+          metadata: { source }
+        });
+      }
+    }
   }
 
   if (isDockerfile(filePath)) {
@@ -189,10 +267,11 @@ export function extractFromFile(filePath: string, language: Language, content: s
   for (const pattern of languagePatterns) {
     for (const match of content.matchAll(pattern.regex)) {
       const rawName = match[pattern.nameGroup ?? 1];
-      if (!rawName) {
+      if (!rawName || isIgnoredDefinitionName(rawName)) {
         continue;
       }
-      const line = offsetToLine(content, match.index ?? 0);
+      const nameOffset = (match.index ?? 0) + Math.max(0, match[0].indexOf(rawName));
+      const line = offsetToLine(content, nameOffset);
       const signature = lines[line - 1]?.trim().slice(0, 220);
       const endLine = findBlockEndLine(language, lines, line);
       const symbol = makeSymbol(filePath, language, pattern.kind, rawName, line, endLine, signature, pattern.exported?.(match) ?? false);
@@ -621,7 +700,17 @@ export function extractImports(language: Language, content: string): string[] {
     go: [/^\s*import\s+(?:"([^"]+)"|`([^`]+)`)/gm],
     java: [/^\s*import\s+([\w.*]+);/gm],
     rust: [/^\s*use\s+([^;]+);/gm],
-    swift: [/^\s*import\s+([A-Za-z_][\w.]*)/gm]
+    swift: [/^\s*import\s+([A-Za-z_][\w.]*)/gm],
+    c: [/^\s*#\s*include\s+[<"]([^>"]+)[>"]/gm],
+    cpp: [/^\s*#\s*include\s+[<"]([^>"]+)[>"]/gm, /^\s*import\s+([A-Za-z_][\w.:]*)\s*;/gm],
+    csharp: [/^\s*using\s+(?:static\s+)?([A-Za-z_][\w.]*);/gm],
+    kotlin: [/^\s*import\s+([A-Za-z_][\w.*]*)/gm],
+    php: [/^\s*use\s+([^;]+);/gm, /\b(?:require|require_once|include|include_once)\s*\(?\s*["']([^"']+)["']/g],
+    dart: [/^\s*(?:import|export|part)\s+["']([^"']+)["']/gm],
+    ruby: [/^\s*require(?:_relative)?\s+["']([^"']+)["']/gm],
+    elixir: [/^\s*(?:alias|import|require|use)\s+([A-Z][\w.]+)/gm],
+    qml: [/^\s*import\s+([A-Za-z_][\w.]*)/gm],
+    apex: [/^\s*import\s+([\w.*]+);/gm]
   };
   for (const regex of patternsByLanguage[language] ?? []) {
     for (const match of content.matchAll(regex)) {
@@ -633,12 +722,16 @@ export function extractImports(language: Language, content: string): string[] {
 }
 
 function extractRoutes(filePath: string, language: Language, content: string): SymbolNode[] {
-  if (!["typescript", "javascript", "python", "java", "go"].includes(language)) {
+  if (!["typescript", "javascript", "python", "java", "go", "php", "csharp", "kotlin", "apex"].includes(language)) {
     return [];
   }
   const routeRegexes = [
     /\b(?:app|router|server)\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/gi,
+    /\bRoute::(get|post|put|patch|delete|options|any)\(\s*["']([^"']+)["']/gi,
+    /\b(MapGet|MapPost|MapPut|MapPatch|MapDelete|MapMethods)\(\s*["']([^"']+)["']/g,
+    /@(Get|Post|Put|Patch|Delete|Request)Mapping\(\s*(?:value\s*=\s*)?["']?([^"')]+)?["']?\s*\)/g,
     /@(Get|Post|Put|Patch|Delete|RequestMapping)\(\s*["']?([^"')]+)?["']?\s*\)/g,
+    /\[(HttpGet|HttpPost|HttpPut|HttpPatch|HttpDelete|Route)\(\s*["']?([^"')\]]+)?["']?\s*\)\s*\]/g,
     /@(?:app|router)\.route\(\s*["']([^"']+)["']/g
   ];
   const routes: SymbolNode[] = [];
@@ -664,8 +757,11 @@ function extractRoutes(filePath: string, language: Language, content: string): S
   }
   for (const regex of routeRegexes) {
     for (const match of content.matchAll(regex)) {
-      const method = match[1]?.toUpperCase() ?? "ROUTE";
-      const routePath = match[2] ?? match[1];
+      const method = normalizeRouteMethod(match[1] ?? "ROUTE");
+      const routePath = routePathFromMatch(match);
+      if (!routePath) {
+        continue;
+      }
       const line = offsetToLine(content, match.index ?? 0);
       routes.push(
         makeSymbol(filePath, language, "route", `${method} ${routePath}`, line, line, undefined, true, {
@@ -707,6 +803,25 @@ function nextRouteSegment(segment: string): string {
     return `:${dynamic[1]}`;
   }
   return segment;
+}
+
+function normalizeRouteMethod(value: string): string {
+  const normalized = value.replace(/^Http/i, "").replace(/^Map/i, "").replace(/Mapping$/i, "").toUpperCase();
+  if (!normalized || normalized.startsWith("/") || normalized === "REQUEST" || normalized === "REQUESTMAPPING" || normalized === "ROUTE") {
+    return "ROUTE";
+  }
+  if (normalized === "METHODS" || normalized === "ANY") {
+    return "ANY";
+  }
+  return normalized;
+}
+
+function routePathFromMatch(match: RegExpExecArray): string | null {
+  const raw = match[2] ?? match[1];
+  if (!raw || !raw.startsWith("/")) {
+    return null;
+  }
+  return raw;
 }
 
 function extractOpenApiRoutes(filePath: string, language: Language, content: string): SymbolNode[] {
@@ -2057,11 +2172,49 @@ function extractSql(filePath: string, content: string): SymbolNode[] {
   return symbols;
 }
 
+function extractTerraform(filePath: string, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  for (const match of content.matchAll(/^\s*(resource|data)\s+"([^"]+)"\s+"([^"]+)"\s*\{/gm)) {
+    const kind = match[1].toLowerCase();
+    const providerType = match[2];
+    const name = match[3];
+    const line = offsetToLine(content, match.index ?? 0);
+    symbols.push(
+      makeSymbol(filePath, "terraform", kind, `${providerType}.${name}`, line, findBlockEndLine("terraform", content.split(/\r?\n/), line), undefined, false, {
+        providerType,
+        name
+      })
+    );
+  }
+  for (const match of content.matchAll(/^\s*(module|variable|output|provider)\s+"([^"]+)"\s*\{/gm)) {
+    const kind = match[1].toLowerCase();
+    const name = match[2];
+    const line = offsetToLine(content, match.index ?? 0);
+    const endLine = findBlockEndLine("terraform", content.split(/\r?\n/), line);
+    const block = content
+      .split(/\r?\n/)
+      .slice(line - 1, endLine)
+      .join("\n");
+    const source = kind === "module" ? /^\s*source\s*=\s*"([^"]+)"/m.exec(block)?.[1] : undefined;
+    symbols.push(
+      makeSymbol(filePath, "terraform", kind, name, line, endLine, undefined, false, {
+        name,
+        ...(source ? { source } : {})
+      })
+    );
+  }
+  return dedupeSymbols(symbols);
+}
+
 function offsetToLine(content: string, offset: number): number {
   return content.slice(0, offset).split(/\r?\n/).length;
 }
 
 function findBlockEndLine(language: Language, lines: string[], startLine: number): number {
+  if (language === "ruby" || language === "elixir") {
+    return findEndKeywordBlockLine(language, lines, startLine);
+  }
+
   if (language === "python") {
     const start = lines[startLine - 1] ?? "";
     const indent = start.match(/^\s*/)?.[0].length ?? 0;
@@ -2092,6 +2245,30 @@ function findBlockEndLine(language: Language, lines: string[], startLine: number
   return startLine;
 }
 
+function findEndKeywordBlockLine(language: "ruby" | "elixir", lines: string[], startLine: number): number {
+  let depth = 0;
+  const opener =
+    language === "ruby"
+      ? /^\s*(?:class|module|def|if|unless|case|begin|while|until|for)\b|\bdo\s*(?:\|[^|]*\|)?\s*(?:#.*)?$/
+      : /^\s*(?:defmodule|defp?|defmacro|if|unless|case|cond|try|receive|for|with|fn)\b/;
+  for (let i = startLine - 1; i < lines.length; i += 1) {
+    const trimmed = lines[i].replace(/#.*/, "").trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (opener.test(trimmed)) {
+      depth += 1;
+    }
+    if (/^end\b/.test(trimmed)) {
+      depth -= 1;
+      if (depth <= 0) {
+        return i + 1;
+      }
+    }
+  }
+  return startLine;
+}
+
 function dedupeSymbols(symbols: SymbolNode[]): SymbolNode[] {
   const seen = new Set<string>();
   return symbols.filter((symbol) => {
@@ -2111,12 +2288,16 @@ function isCallableName(name: string): boolean {
   return !ignoredCallableNames.has(lowered);
 }
 
+function isIgnoredDefinitionName(name: string): boolean {
+  return ["catch", "do", "else", "for", "foreach", "function", "if", "new", "return", "switch", "try", "using", "while"].includes(name.toLowerCase());
+}
+
 function isTypeSymbol(symbol: SymbolNode): boolean {
-  return ["class", "interface", "type", "struct", "enum", "protocol", "actor", "trait"].includes(symbol.kind);
+  return ["class", "interface", "type", "struct", "enum", "protocol", "actor", "trait", "record", "object", "module", "mixin", "extension"].includes(symbol.kind);
 }
 
 function shouldScanTypeUses(symbol: SymbolNode): boolean {
-  return ["function", "method", "class", "interface", "type", "struct", "enum", "protocol", "actor", "trait"].includes(symbol.kind);
+  return ["function", "method", "class", "interface", "type", "struct", "enum", "protocol", "actor", "trait", "record", "object", "module", "mixin", "extension"].includes(symbol.kind);
 }
 
 function declarationTextForSymbol(symbol: SymbolNode, fileContents: Map<string, string>): string {
@@ -2171,10 +2352,10 @@ function declarationTypeRelations(symbol: SymbolNode, declaration: string): Arra
   if (rustTraitBounds?.[1]) {
     relations.push({ type: "INHERITS", targets: typeNamesFromList(rustTraitBounds[1]), reason: "trait bound" });
   }
-  if (["swift", "kotlin"].includes(symbol.language) || ["struct", "enum", "protocol", "actor"].includes(symbol.kind)) {
-    const swiftConformance = /\b(?:class|struct|enum|actor|protocol)\s+[A-Za-z_]\w*(?:<[^>{}]+>)?\s*:\s*([^{}]+)/.exec(compact);
+  if (["swift", "kotlin", "csharp", "cpp"].includes(symbol.language) || ["struct", "enum", "protocol", "actor", "record"].includes(symbol.kind)) {
+    const swiftConformance = /\b(?:class|struct|enum|actor|protocol|interface|record)\s+[A-Za-z_]\w*(?:<[^>{}]+>)?\s*:\s*([^{}]+)/.exec(compact);
     if (swiftConformance?.[1]) {
-      relations.push({ targets: typeNamesFromList(swiftConformance[1]), reason: "swift inheritance or conformance" });
+      relations.push({ targets: typeNamesFromList(swiftConformance[1]), reason: "colon inheritance or conformance" });
     }
   }
 
@@ -2196,6 +2377,8 @@ function typeNamesFromList(value: string): string[] {
   for (const segment of value.split(/[,|+&]/)) {
     const cleaned = segment
       .replace(/<[^<>]*>/g, " ")
+      .replace(/\b(?:public|private|protected|virtual|override|final|open|abstract|sealed)\b/g, " ")
+      .replace(/\(\s*\)/g, " ")
       .replace(/\bwhere\b[\s\S]*$/i, " ")
       .trim();
     const match = /(?:[A-Za-z_$][\w$]*\.)*([A-Za-z_$][\w$]*)/.exec(cleaned);
@@ -2229,7 +2412,10 @@ const ignoredTypeNames = new Set([
   "Number",
   "Object",
   "Partial",
+  "Private",
   "Promise",
+  "Protected",
+  "Public",
   "Record",
   "Request",
   "Response",

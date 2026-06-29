@@ -15,6 +15,27 @@ const byExtension = new Map<string, Language>([
   [".java", "java"],
   [".rs", "rust"],
   [".swift", "swift"],
+  [".c", "c"],
+  [".h", "c"],
+  [".cpp", "cpp"],
+  [".cc", "cpp"],
+  [".cxx", "cpp"],
+  [".hpp", "cpp"],
+  [".hh", "cpp"],
+  [".hxx", "cpp"],
+  [".ipp", "cpp"],
+  [".cs", "csharp"],
+  [".kt", "kotlin"],
+  [".kts", "kotlin"],
+  [".php", "php"],
+  [".phtml", "php"],
+  [".dart", "dart"],
+  [".tf", "terraform"],
+  [".tfvars", "terraform"],
+  [".hcl", "terraform"],
+  [".qml", "qml"],
+  [".cls", "apex"],
+  [".trigger", "apex"],
   [".sql", "sql"],
   [".yml", "yaml"],
   [".yaml", "yaml"],
@@ -28,8 +49,9 @@ const byExtension = new Map<string, Language>([
   [".gql", "graphql"],
   [".proto", "proto"],
   [".gradle", "gradle"],
-  [".kts", "gradle"],
+  [".rb", "ruby"],
   [".gemspec", "ruby"],
+  [".ex", "elixir"],
   [".exs", "elixir"],
   [".sh", "shell"],
   [".bash", "shell"],
@@ -52,6 +74,9 @@ export function detectLanguage(filePath: string): Language {
   }
   if (base === "mix.exs") {
     return "elixir";
+  }
+  if (base === "gemfile" || base === "rakefile" || base.endsWith(".rake")) {
+    return "ruby";
   }
   return byExtension.get(path.extname(base)) ?? "unknown";
 }
