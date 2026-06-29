@@ -23,7 +23,7 @@ Result:
 - TypeScript build passed.
 - Node test suite passed: 79 tests, 78 passing, 0 failures, 1 sandbox-only dashboard socket skip.
 - Test skip gate passed with explicit policies for the dashboard sandbox socket skip and git-unavailable skips.
-- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, generated setup value validation, MCP agent setup write guardrails for executable hooks, version/update status with npm-compatible registry checks, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing with byte and file-count budgets, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, git-aware watch skipping unchanged polls and refreshing dirty worktrees, bounded git-history hotspot extraction, MCP startup auto-indexing and git-aware auto-sync wiring from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, index-time graph package writing with `--write-package`, broad language extraction for Swift, C/C++, C#, Kotlin, PHP, Ruby, Elixir, Dart, Terraform/HCL, QML, and Apex, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema including relationship patterns and label property hints, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, `SKIP`, `IN`, and numeric comparisons, relative and workspace-package import cycle resolution, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
+- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, generated setup value validation, MCP agent setup write guardrails for executable hooks, version/update status with npm-compatible registry checks, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing with byte and file-count budgets, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, git-aware watch skipping unchanged polls and refreshing dirty worktrees, bounded git-history hotspot extraction, MCP startup auto-indexing and git-aware auto-sync wiring from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, index-time graph package writing with `--write-package`, broad language extraction for Swift, C/C++, C#, Kotlin, PHP, Ruby, Elixir, Dart, Terraform/HCL, QML, and Apex, broad namespace/file-like import edge resolution, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema including relationship patterns and label property hints, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, `SKIP`, `IN`, and numeric comparisons, relative and workspace-package import cycle resolution, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
 
 ## Package And Release
 
@@ -99,23 +99,23 @@ Result:
 - Files discovered: 92
 - Files indexed: 89
 - Files skipped: 3
-- Symbols: 1,171
-- Edges: 5,252
-- Lines indexed: 19,265 source rows; architecture totals report 21,249 physical lines.
-- Full index elapsed: 4,080 ms
-- No-op incremental elapsed: 40 ms
+- Symbols: 1,180
+- Edges: 5,232
+- Lines indexed: 19,441 source rows; architecture totals report 21,434 physical lines.
+- Full index elapsed: 2,653 ms
+- No-op incremental elapsed: 15 ms
 - No-op incremental unchanged files: 92
-- Benchmark command: full index 89/92 files in 2,354 ms, no-op incremental in 13 ms, 37.81 files/s full throughput, 7,076.92 discovered files/s incremental throughput, and 0 medium/high secret findings across 16,219 scanned lines.
-- Full-text code-search rows: 19,265 `code_lines` rows and 19,265 `code_fts` rows
-- Local vector rows: 947 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
+- Benchmark command: full index 89/92 files in 2,634 ms, no-op incremental in 15 ms, 33.79 files/s full throughput, 6,133.33 discovered files/s incremental throughput, and 0 medium/high secret findings across 16,329 scanned lines.
+- Full-text code-search rows: 19,441 `code_lines` rows and 19,441 `code_fts` rows
+- Local vector rows: 956 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
 - Reference lookup: `references vectorSearch` returned the API definition plus exact identifier references in `src/core/api.ts`, `src/cli.ts`, and docs.
 - MCP server tools registered: 38
 - Persistent config smoke test: `config set auto-index full`, `config get autoIndex`, and `config reset auto-index` worked against an isolated temp config file.
-- Redacted secret scan: 0 high/medium-confidence findings across 16,219 indexed non-test lines.
+- Redacted secret scan: 0 high/medium-confidence findings across 16,329 indexed non-test lines.
 - Channel graph rows: 12 `channel` nodes, 2 `EMITS` edges, and 18 `LISTENS_ON` edges
 - HTTP call graph rows: 17 `http_call` nodes, 17 `CALLS_HTTP_ENDPOINT` edges, and 16 generated `HTTP_CALLS` route edges
-- Type relationship rows: 547 `USES_TYPE` edges, 5 `INHERITS` edges, and 1 `IMPLEMENTS` edge.
-- Data-flow graph rows: 875 conservative `DATA_FLOWS` edges from unambiguous call arguments to callee parameters.
+- Type relationship rows: 553 `USES_TYPE` edges, 5 `INHERITS` edges, and 1 `IMPLEMENTS` edge.
+- Data-flow graph rows: 884 conservative `DATA_FLOWS` edges from unambiguous call arguments to callee parameters.
 - Import graph rows: 81 `IMPORTS_FILE` edges resolving local relative imports and package-local imports to file nodes.
 - Protocol graph rows: 2 `graphql_operation` nodes, 1 `graphql_type` node, 1 `grpc_service` node, 2 `trpc_procedure` nodes, 1 `trpc_call` node, and 13 `route` nodes across fixture and app routes
 - Manifest graph rows: 11 `package` nodes and 27 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
@@ -123,13 +123,13 @@ Result:
 - Git history hotspots: architecture summaries and reports rank high-churn files, including `src/core/store.ts` at 32 commits and 4,366 changed lines, and include a history-aware recommendation before risky edits.
 - MCP startup auto-index: `REPOLENS_AUTO_INDEX=1` performed an incremental startup refresh on the fixture repo, and `REPOLENS_AUTO_INDEX=full` performed a full startup rebuild through the same `runIndex` path.
 - Graph package bootstrap: a missing database imported `.repolens/graph.rlgz`, reported the `bootstrapPackage` metadata, then ran an incremental refresh with unchanged files instead of rebuilding from scratch; `bootstrapPackage: false` kept the full rebuild path.
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 89 files, 1,171 symbols, and 5,252 edges; the latest run discovered 92 files with 3 skipped by policy.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 89 files, 1,180 symbols, and 5,232 edges; the latest run discovered 92 files with 3 skipped by policy.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, agent setup helpers, and fixture route/client communities.
 - Graph package import: `.repolens/self.rlgz` restored the self graph snapshot successfully with checksum verification.
-- Graph package: `.repolens/self.rlgz` is 2,710,937 bytes from an 11,018,240-byte SQLite snapshot, SHA-256 `11ee3634595c3d4a439b0ccfb832cb48a704b7f027e98cb857e39a79c6eb33d2`.
-- Imported package totals: 89 files, 1,171 symbols, 5,252 edges, plus 947 persisted vector rows at 384 dimensions.
-- Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files. A separate temp-repo indexing test covers C/C++, C#, Kotlin, PHP, Dart, Terraform/HCL, QML, and Apex detection, symbols, routes, imports, and infrastructure nodes.
+- Graph package: `.repolens/self.rlgz` is 2,915,082 bytes from an 11,419,648-byte SQLite snapshot, SHA-256 `be2775762c03a062cbf4c98cd1bafa258e177c5053d77f367882fa1837699d05`.
+- Imported package totals: 89 files, 1,180 symbols, 5,232 edges, plus 956 persisted vector rows at 384 dimensions.
+- Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files. A separate temp-repo indexing test covers C/C++, C#, Kotlin, PHP, Dart, Terraform/HCL, QML, and Apex detection, symbols, routes, imports, namespace/file-like import edges, and infrastructure nodes.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, `tests/mcp-server.test.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
 

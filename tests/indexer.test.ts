@@ -131,7 +131,12 @@ test("indexes broad language adapters with symbols, imports, routes, and infrast
   const repo = path.join(tmp, "repo");
   const dbPath = path.join(tmp, "memory.db");
   await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.mkdir(path.join(repo, "src", "CSharpDemo"), { recursive: true });
+  await fs.mkdir(path.join(repo, "src", "demo", "billing"), { recursive: true });
+  await fs.mkdir(path.join(repo, "src", "App", "Services"), { recursive: true });
   await fs.mkdir(path.join(repo, "lib"), { recursive: true });
+  await fs.mkdir(path.join(repo, "lib", "support"), { recursive: true });
+  await fs.mkdir(path.join(repo, "lib", "checkout"), { recursive: true });
   await fs.mkdir(path.join(repo, "native"), { recursive: true });
   await fs.mkdir(path.join(repo, "infra"), { recursive: true });
   await fs.mkdir(path.join(repo, "ui"), { recursive: true });
@@ -141,6 +146,7 @@ test("indexes broad language adapters with symbols, imports, routes, and infrast
     path.join(repo, "src", "BillingController.cs"),
     `
 using System.Threading.Tasks;
+using CSharpDemo.Shared;
 
 public interface BillingPort {}
 public record Invoice(string Id);
@@ -159,6 +165,13 @@ public class BillingController : BaseController, BillingPort {
 `
   );
   await fs.writeFile(
+    path.join(repo, "src", "CSharpDemo", "Shared.cs"),
+    `
+namespace CSharpDemo;
+public class Shared {}
+`
+  );
+  await fs.writeFile(
     path.join(repo, "src", "CheckoutService.kt"),
     `
 import demo.billing.BillingClient
@@ -172,6 +185,13 @@ class CheckoutService : BaseCheckout(), CheckoutPort {
 
   fun confirm(order: Order) {}
 }
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "demo", "billing", "BillingClient.kt"),
+    `
+package demo.billing
+class BillingClient
 `
   );
   await fs.writeFile(
@@ -193,9 +213,17 @@ function helper_call() {}
 `
   );
   await fs.writeFile(
+    path.join(repo, "src", "App", "Services", "OrderService.php"),
+    `
+<?php
+namespace App\\Services;
+class OrderService {}
+`
+  );
+  await fs.writeFile(
     path.join(repo, "lib", "sync_job.rb"),
     `
-require "sidekiq"
+require_relative "support/worker_base"
 
 module Billing
   class SyncJob < ApplicationJob
@@ -203,6 +231,13 @@ module Billing
       order_id
     end
   end
+end
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "lib", "support", "worker_base.rb"),
+    `
+class WorkerBase
 end
 `
   );
@@ -221,6 +256,14 @@ end
 `
   );
   await fs.writeFile(
+    path.join(repo, "lib", "checkout", "events.ex"),
+    `
+defmodule Checkout.Events do
+  def record(order), do: order
+end
+`
+  );
+  await fs.writeFile(
     path.join(repo, "native", "orders.cpp"),
     `
 #include "orders.hpp"
@@ -230,6 +273,12 @@ class OrderIndex : public BaseIndex {};
 int build_index(int count) {
   return count;
 }
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "native", "orders.hpp"),
+    `
+class OrdersHeader {};
 `
   );
   await fs.writeFile(
@@ -269,7 +318,7 @@ public with sharing class OrderController {
   );
 
   const result = await indexRepository({ root: repo, dbPath });
-  assert.equal(result.filesIndexed, 9);
+  assert.equal(result.filesIndexed, 15);
 
   const store = new MemoryStore(dbPath);
   try {
@@ -285,7 +334,25 @@ public with sharing class OrderController {
     assert.ok(store.searchSymbols("/orders/{id}").some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/{id}"));
     assert.ok(store.searchSymbols("/api/billing/{id}").some((symbol) => symbol.kind === "route" && symbol.name === "GET /api/billing/{id}"));
     assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "IMPORTS"));
+    assert.ok(arch.edgeTypes.some((edgeType) => edgeType.type === "IMPORTS_FILE"));
     assert.ok(arch.nodeLabels.some((label) => label.kind === "resource"));
+
+    for (const [source, target] of [
+      ["src/BillingController.cs", "src/CSharpDemo/Shared.cs"],
+      ["src/CheckoutService.kt", "src/demo/billing/BillingClient.kt"],
+      ["src/OrderController.php", "src/App/Services/OrderService.php"],
+      ["lib/sync_job.rb", "lib/support/worker_base.rb"],
+      ["lib/checkout_worker.ex", "lib/checkout/events.ex"],
+      ["native/orders.cpp", "native/orders.hpp"]
+    ]) {
+      const imports = store.queryGraph(
+        `MATCH (a)-[r:IMPORTS_FILE]->(b) WHERE a.filePath = '${source}' AND b.filePath = '${target}' RETURN a.filePath,b.filePath,r.type LIMIT 1`
+      ).rows;
+      assert.ok(
+        imports.some((row) => row["a.filePath"] === source && row["b.filePath"] === target && row["r.type"] === "IMPORTS_FILE"),
+        `missing import edge ${source} -> ${target}`
+      );
+    }
   } finally {
     store.close();
   }

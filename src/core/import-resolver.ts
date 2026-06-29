@@ -15,9 +15,21 @@ interface AliasMapping {
 
 interface ResolvedImport {
   targetFile: string;
-  resolver: "relative" | "workspace-package" | "path-alias" | "source-root";
+  resolver: "relative" | "workspace-package" | "path-alias" | "source-root" | "namespace";
   configFile?: string;
 }
+
+const sourceRootCandidates = [
+  "src",
+  "app",
+  "lib",
+  "packages",
+  "services",
+  "src/main/java",
+  "src/main/kotlin",
+  "src/main/csharp",
+  "force-app/main/default/classes"
+];
 
 export function buildResolvedImportEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
   const fileSymbols = symbols.filter((symbol) => symbol.kind === "file");
@@ -76,6 +88,11 @@ export function resolveImportFile(
     return targetFile ? { targetFile, resolver: "relative" } : null;
   }
 
+  const fileLike = resolveFileLikeImport(sourceFile, specifier, filePaths);
+  if (fileLike) {
+    return fileLike;
+  }
+
   for (const alias of aliases) {
     const targetFile = resolveAlias(specifier, alias, filePaths);
     if (targetFile) {
@@ -119,7 +136,88 @@ export function resolveImportFile(
     }
   }
 
+  const namespaceTarget = resolveNamespaceImport(specifier, filePaths);
+  if (namespaceTarget) {
+    return { targetFile: namespaceTarget, resolver: "namespace" };
+  }
+
   return null;
+}
+
+function resolveFileLikeImport(sourceFile: string, specifier: string, filePaths: Set<string>): ResolvedImport | null {
+  if (!looksLikeFileSpecifier(specifier) || !isSafeImportSubpath(specifier)) {
+    return null;
+  }
+  const relative = resolveCandidate(path.posix.normalize(path.posix.join(path.posix.dirname(sourceFile), specifier)), filePaths);
+  if (relative) {
+    return { targetFile: relative, resolver: "relative" };
+  }
+  const root = resolveCandidate(path.posix.normalize(specifier), filePaths);
+  if (root) {
+    return { targetFile: root, resolver: "source-root" };
+  }
+  for (const sourceRoot of sourceRootCandidates) {
+    const targetFile = resolveCandidate(path.posix.join(sourceRoot, specifier), filePaths);
+    if (targetFile) {
+      return { targetFile, resolver: "source-root" };
+    }
+  }
+  return null;
+}
+
+function resolveNamespaceImport(specifier: string, filePaths: Set<string>): string | null {
+  const namespacePath = namespaceSpecifierPath(specifier);
+  if (!namespacePath) {
+    return null;
+  }
+  for (const variant of namespacePathVariants(namespacePath)) {
+    for (const sourceRoot of ["", ...sourceRootCandidates]) {
+      const targetFile = resolveCandidate(path.posix.join(sourceRoot, variant), filePaths);
+      if (targetFile) {
+        return targetFile;
+      }
+    }
+  }
+  return null;
+}
+
+function looksLikeFileSpecifier(specifier: string): boolean {
+  return specifier.includes("/") || /\.[A-Za-z0-9]+$/.test(specifier);
+}
+
+function namespaceSpecifierPath(specifier: string): string | null {
+  const trimmed = specifier.trim().replace(/;$/, "");
+  if (
+    !trimmed ||
+    trimmed.startsWith(".") ||
+    trimmed.startsWith("@") ||
+    trimmed.includes("/") ||
+    trimmed.includes("\0") ||
+    trimmed.includes("*") ||
+    /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+  ) {
+    return null;
+  }
+  const separator = trimmed.includes("\\") ? "\\" : trimmed.includes(".") ? "." : null;
+  if (!separator) {
+    return null;
+  }
+  const parts = trimmed.split(separator).filter(Boolean);
+  if (parts.length < 2 || parts.some((part) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(part))) {
+    return null;
+  }
+  return parts.join("/");
+}
+
+function namespacePathVariants(namespacePath: string): string[] {
+  const variants = new Set<string>([namespacePath]);
+  variants.add(namespacePath.toLowerCase());
+  const parts = namespacePath.split("/");
+  if (parts.length > 1) {
+    variants.add(parts.slice(1).join("/"));
+    variants.add(parts.slice(1).join("/").toLowerCase());
+  }
+  return [...variants];
 }
 
 function pathAliases(fileContents: Map<string, string>): AliasMapping[] {
@@ -235,10 +333,30 @@ function resolveCandidate(base: string, filePaths: Set<string>): string | null {
     `${withoutExtension}.go`,
     `${withoutExtension}.java`,
     `${withoutExtension}.rs`,
+    `${withoutExtension}.c`,
+    `${withoutExtension}.h`,
+    `${withoutExtension}.cpp`,
+    `${withoutExtension}.cc`,
+    `${withoutExtension}.cxx`,
+    `${withoutExtension}.hpp`,
+    `${withoutExtension}.cs`,
+    `${withoutExtension}.kt`,
+    `${withoutExtension}.kts`,
+    `${withoutExtension}.php`,
+    `${withoutExtension}.rb`,
+    `${withoutExtension}.ex`,
+    `${withoutExtension}.exs`,
+    `${withoutExtension}.dart`,
+    `${withoutExtension}.tf`,
+    `${withoutExtension}.qml`,
+    `${withoutExtension}.cls`,
     `${withoutExtension}/index.ts`,
     `${withoutExtension}/index.tsx`,
     `${withoutExtension}/index.js`,
-    `${withoutExtension}/index.jsx`
+    `${withoutExtension}/index.jsx`,
+    `${withoutExtension}/index.rb`,
+    `${withoutExtension}/index.php`,
+    `${withoutExtension}/mod.rs`
   ];
 
   for (const candidate of candidates.map((item) => path.posix.normalize(item))) {
@@ -366,5 +484,5 @@ function specificity(pattern: string): number {
 }
 
 function stripKnownExtension(value: string): string {
-  return value.replace(/\.(tsx?|jsx?|mjs|cjs|swift|py|go|java|rs|sql|json|ya?ml|md|sh)$/i, "");
+  return value.replace(/\.(tsx?|jsx?|mjs|cjs|swift|py|go|java|rs|c|h|cpp|cc|cxx|hpp|cs|kt|kts|php|rb|exs?|dart|tf|qml|cls|sql|json|ya?ml|md|sh)$/i, "");
 }
