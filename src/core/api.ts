@@ -8,6 +8,7 @@ import {
   recordProjectIndex
 } from "./catalog.js";
 import { getRepoLensConfigValue, readRepoLensConfig, resetRepoLensConfigValue, setRepoLensConfigValue } from "./config.js";
+import { createDiagnosticsSink, diagnosticErrorPayload } from "./diagnostics.js";
 import { buildFleetGraph, type FleetGraphOptions } from "./fleet-graph.js";
 import { indexRepository } from "./indexer.js";
 import { buildArchitectureReport } from "./report.js";
@@ -49,42 +50,61 @@ export async function runWatch(options: WatchIndexOptions) {
 }
 
 export async function benchmarkRepository(options: BenchmarkOptions): Promise<BenchmarkResult> {
-  const fullIndex = await runIndex({ ...options, incremental: false });
-  const incrementalIndex = await runIndex({ ...options, incremental: true });
-  const architecture = getArchitecture(fullIndex.dbPath);
-  const secretScanResult =
-    options.secretScan === false ? undefined : scanSecrets({ limit: options.secretScanLimit ?? 20, minConfidence: "medium" }, fullIndex.dbPath);
+  const root = path.resolve(options.root);
+  const diagnostics = createDiagnosticsSink({ root, diagnosticsPath: options.diagnosticsPath });
+  diagnostics.emit("benchmark.start", { root, dbPath: options.dbPath, maxFileBytes: options.maxFileBytes, maxFiles: options.maxFiles, secretScan: options.secretScan !== false });
+  try {
+    const fullIndex = await runIndex({ ...options, incremental: false });
+    const incrementalIndex = await runIndex({ ...options, incremental: true });
+    const architecture = getArchitecture(fullIndex.dbPath);
+    const secretScanResult =
+      options.secretScan === false ? undefined : scanSecrets({ limit: options.secretScanLimit ?? 20, minConfidence: "medium" }, fullIndex.dbPath);
 
-  return {
-    root: fullIndex.root,
-    dbPath: fullIndex.dbPath,
-    generatedAt: new Date().toISOString(),
-    fullIndex,
-    incrementalIndex,
-    throughput: {
-      fullFilesPerSecond: rate(fullIndex.filesIndexed, fullIndex.elapsedMs),
-      fullSymbolsPerSecond: rate(fullIndex.symbols, fullIndex.elapsedMs),
-      incrementalFilesPerSecond: rate(incrementalIndex.filesDiscovered, incrementalIndex.elapsedMs)
-    },
-    architecture: {
-      totals: architecture.totals,
-      languages: architecture.languages.slice(0, 12),
-      nodeLabels: architecture.nodeLabels.slice(0, 20),
-      edgeTypes: architecture.edgeTypes.slice(0, 24),
-      entrypoints: architecture.entrypoints,
-      risks: architecture.risks
-    },
-    secretScan: secretScanResult
-      ? {
-          scannedLines: secretScanResult.scannedLines,
-          findings: secretScanResult.totals.findings,
-          high: secretScanResult.totals.high,
-          medium: secretScanResult.totals.medium,
-          low: secretScanResult.totals.low,
-          risks: secretScanResult.risks
-        }
-      : undefined
-  };
+    const result = {
+      root: fullIndex.root,
+      dbPath: fullIndex.dbPath,
+      generatedAt: new Date().toISOString(),
+      fullIndex,
+      incrementalIndex,
+      throughput: {
+        fullFilesPerSecond: rate(fullIndex.filesIndexed, fullIndex.elapsedMs),
+        fullSymbolsPerSecond: rate(fullIndex.symbols, fullIndex.elapsedMs),
+        incrementalFilesPerSecond: rate(incrementalIndex.filesDiscovered, incrementalIndex.elapsedMs)
+      },
+      architecture: {
+        totals: architecture.totals,
+        languages: architecture.languages.slice(0, 12),
+        nodeLabels: architecture.nodeLabels.slice(0, 20),
+        edgeTypes: architecture.edgeTypes.slice(0, 24),
+        entrypoints: architecture.entrypoints,
+        risks: architecture.risks
+      },
+      secretScan: secretScanResult
+        ? {
+            scannedLines: secretScanResult.scannedLines,
+            findings: secretScanResult.totals.findings,
+            high: secretScanResult.totals.high,
+            medium: secretScanResult.totals.medium,
+            low: secretScanResult.totals.low,
+            risks: secretScanResult.risks
+          }
+        : undefined
+    };
+    diagnostics.emit("benchmark.finish", {
+      root: result.root,
+      dbPath: result.dbPath,
+      fullElapsedMs: result.fullIndex.elapsedMs,
+      incrementalElapsedMs: result.incrementalIndex.elapsedMs,
+      filesIndexed: result.fullIndex.filesIndexed,
+      symbols: result.fullIndex.symbols,
+      edges: result.fullIndex.edges,
+      secretFindings: result.secretScan?.findings
+    });
+    return result;
+  } catch (error) {
+    diagnostics.emit("benchmark.error", { root, dbPath: options.dbPath, ...diagnosticErrorPayload(error) });
+    throw error;
+  }
 }
 
 export async function listProjects(limit?: number) {

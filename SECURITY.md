@@ -46,6 +46,8 @@ GITHUB_REPOSITORY=sameer2191/repolens-mcp GH_TOKEN="$(gh auth token)" npm run se
 
 Use `-- --format json` for automation or `-- --fail-on-actionable` to exit non-zero when CodeQL, Dependabot, or secret-scanning alerts are open. With `--fail-on-actionable`, unavailable GitHub alert endpoints also fail the gate unless `-- --allow-unavailable` is explicitly provided for a best-effort check. OpenSSF Scorecard alerts are reported separately as process signals so they are visible without being confused with code vulnerabilities.
 
+For local runs, use a token with repository security-alert visibility, such as a fine-grained token that can read code scanning, Dependabot alerts, and secret scanning alerts. The release workflow uses the GitHub Actions token with `security-events: read`; a normal `gh auth token` may return `404` for alert endpoints when the account or token lacks those permissions.
+
 ## Reporting A Vulnerability
 
 Use GitHub's private vulnerability reporting for this repository when available:

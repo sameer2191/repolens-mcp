@@ -27,6 +27,9 @@ test("persists RepoLens config values with aliases and reset support", async () 
   result = setRepoLensConfigValue("bootstrap-package", "off", configPath);
   assert.equal(result.config.bootstrapPackage, false);
 
+  result = setRepoLensConfigValue("diagnostics-path", ".repolens/diagnostics.jsonl", configPath);
+  assert.equal(result.config.diagnosticsPath, ".repolens/diagnostics.jsonl");
+
   const loaded = readRepoLensConfig(configPath);
   assert.equal(loaded.path, configPath);
   assert.equal(loaded.config.autoIndex, "incremental");
@@ -35,6 +38,7 @@ test("persists RepoLens config values with aliases and reset support", async () 
   assert.equal(loaded.config.maxFileBytes, 750000);
   assert.equal(loaded.config.maxFiles, 250);
   assert.equal(loaded.config.bootstrapPackage, false);
+  assert.equal(loaded.config.diagnosticsPath, ".repolens/diagnostics.jsonl");
 
   const value = getRepoLensConfigValue("autoIndex", configPath);
   assert.equal(value.key, "autoIndex");

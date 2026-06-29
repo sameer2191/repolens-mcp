@@ -1,7 +1,7 @@
 {
   "name": "repolens-mcp",
   "version": "1.0.0",
-  "description": "Local-first repository intelligence MCP server with multi-agent setup, executable agent hook reminders, persistent config, project catalog, fleet summaries, cross-repo graphing, graph package bootstrap, optional startup auto-indexing, git-aware MCP auto-sync, incremental indexing, BM25 code search, reference lookup, typed relationship and data-flow edges, local vector search, redacted secret scanning, context packs, runtime trace ingestion, import-resolved file graphs, multi-ecosystem manifest and lockfile parsing, Docker/Kubernetes graph indexing, channel/event graph edges, git-history hotspots, watch mode, graph search, graph communities, semantic search, route-call links, read-only graph queries, source snippets, dependency-cycle checks, architecture reports, graph packages, ADR memory, graph export, and a dashboard.",
+  "description": "Local-first repository intelligence MCP server with multi-agent setup, executable agent hook reminders, persistent config, project catalog, fleet summaries, cross-repo graphing, fleet graph artifacts, graph package bootstrap, optional startup auto-indexing, git-aware MCP auto-sync, JSONL diagnostics, incremental indexing, BM25 code search, reference lookup, typed relationship, data-flow, and configuration-link edges, local vector search, redacted secret scanning, context packs, runtime trace ingestion, import-resolved file graphs, multi-ecosystem manifest and lockfile parsing, Docker/Kubernetes graph indexing, channel/event graph edges, git-history hotspots, watch mode, graph search, graph communities, semantic search, route-call links, read-only graph queries, source snippets, dependency-cycle checks, architecture reports, graph packages, ADR memory, graph export, and a dashboard.",
   "type": "module",
   "mcpName": "io.github.sameer2191/repolens-mcp",
   "bin": {
@@ -24,8 +24,8 @@
   ],
   "scripts": {
     "clean": "node scripts/clean-dist.mjs",
-    "build": "npm run clean && tsc && chmod 755 dist/src/cli.js",
-    "typecheck": "tsc --noEmit",
+    "build": "npm run clean && node scripts/run-tsc.mjs && chmod 755 dist/src/cli.js",
+    "typecheck": "node scripts/run-tsc.mjs --noEmit",
     "test": "node --test --experimental-sqlite dist/tests/*.test.js",
     "test:skip-gate": "node scripts/test-skip-gate.mjs",
     "test:src": "npm run build && npm test",

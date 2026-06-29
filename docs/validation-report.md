@@ -21,9 +21,9 @@ npm run test:skip-gate
 Result:
 
 - TypeScript build passed.
-- Node test suite passed: 80 tests, 79 passing, 0 failures, 1 sandbox-only dashboard socket skip.
+- Node test suite passed: 84 tests, 83 passing, 0 failures, 1 sandbox-only dashboard socket skip.
 - Test skip gate passed with explicit policies for the dashboard sandbox socket skip and git-unavailable skips.
-- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, generated setup value validation, MCP agent setup write guardrails for executable hooks, version/update status with npm-compatible registry checks, persistent config list/get/set/reset behavior, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing with byte and file-count budgets, project-specific `.repolens.json` language overrides, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, git-aware watch skipping unchanged polls and refreshing dirty worktrees, bounded git-history hotspot extraction, MCP startup auto-indexing and git-aware auto-sync wiring from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, index-time graph package writing with `--write-package`, interactive dashboard/report/export graph explorer controls, broad language extraction for Swift, C/C++, C#, Kotlin, PHP, Ruby, Elixir, Dart, Terraform/HCL, QML, and Apex, broad namespace/file-like import edge resolution, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema including relationship patterns and label property hints, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, `SKIP`, `IN`, and numeric comparisons, relative and workspace-package import cycle resolution, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
+- Covered multi-agent MCP setup rendering/dry-run/write/uninstall behavior, generated setup value validation, MCP agent setup write guardrails for executable hooks, version/update status with npm-compatible registry checks, persistent config list/get/set/reset behavior including diagnostics paths, Codex MCP config rendering/install/uninstall safeguards including forced replacement of old unmanaged sections, project catalog list/status/delete behavior, fleet summary aggregation with inferred service links, cross-repo fleet graph generation, concurrent catalog writes, decision persistence, repository indexing with byte and file-count budgets, project-specific `.repolens.json` language overrides, config-key/dependency/file-reference `CONFIGURES` links, opt-in JSONL diagnostics for index and watch lifecycles, benchmark full/no-op incremental evidence, incremental refresh, removed-file pruning, watch-mode refresh, git-aware watch skipping unchanged polls and refreshing dirty worktrees, bounded git-history hotspot extraction, MCP startup auto-indexing and git-aware auto-sync wiring from env and persisted config, MCP stdio JSON-RPC initialization, tool listing, and invalid tool-call rejection under bounded fuzzing, graph package bootstrap from `.repolens/graph.rlgz`, index-writer locking, graph package export/import, index-time graph package writing with `--write-package`, interactive dashboard/report/export graph explorer controls, broad language extraction for Swift, C/C++, C#, Kotlin, PHP, Ruby, Elixir, Dart, Terraform/HCL, QML, and Apex, broad namespace/file-like import edge resolution, Next.js App Router route extraction, GraphQL/protobuf/tRPC/OpenAPI protocol extraction, import-resolved file edge extraction with aliases/workspace packages/relative imports, typed `INHERITS`/`IMPLEMENTS`/`USES_TYPE` relationship extraction, conservative `DATA_FLOWS` extraction, positional argument-to-parameter mapping, ambiguous callee suppression, stale data-flow edge pruning on incremental refresh, trace modes for calls/data-flow/cross-service edges, multi-ecosystem manifest extraction, package-manager lockfile extraction, Dockerfile/Kubernetes/Kustomize graph extraction, channel/event graph extraction with `EMITS` and `LISTENS_ON`, runtime trace ingestion with `OBSERVED_*` edges, symbol search, indexed reference lookup, BM25 code search with camelCase/snake_case token expansion, redacted secret scanning, semantic search, local vector search, context-pack assembly, first-class `http_call` nodes with `CALLS_HTTP_ENDPOINT`, generated `HTTP_CALLS` route-call edges, graph community detection, source snippets, graph schema including relationship patterns and label property hints, structural graph search, read-only Cypher-like graph queries including `DISTINCT`, `count`, `ORDER BY`, `SKIP`, `IN`, and numeric comparisons, relative and workspace-package import cycle resolution, history-aware architecture recommendations, architecture recommendations, dead-code candidates, architecture summary, property-based resolver fuzzing, and trace behavior on fixture repositories.
 
 ## Package And Release
 
@@ -44,7 +44,9 @@ node --experimental-sqlite dist/src/cli.js uninstall-agents --target /tmp/repole
 node --experimental-sqlite dist/src/cli.js config set auto-index full --config /tmp/repolens-config-smoke.json
 node --experimental-sqlite dist/src/cli.js config get autoIndex --config /tmp/repolens-config-smoke.json
 node --experimental-sqlite dist/src/cli.js config reset auto-index --config /tmp/repolens-config-smoke.json
+node --experimental-sqlite dist/src/cli.js config set diagnostics-path .repolens/diagnostics.jsonl --config /tmp/repolens-config-smoke.json
 node --experimental-sqlite dist/src/cli.js benchmark tests/fixtures/sample-repo --db /tmp/repolens-benchmark-smoke.db --max-file-bytes 750000 --max-files 1000 --label benchmark-smoke
+node --experimental-sqlite dist/src/cli.js index tests/fixtures/sample-repo --db /tmp/repolens-diagnostics-smoke.db --diagnostics /tmp/repolens-diagnostics-smoke.jsonl
 node --experimental-sqlite dist/src/cli.js index /tmp/repolens-write-package-smoke/repo --db /tmp/repolens-write-package-smoke/repo/.repolens/memory.db --write-package --label cli-write-package
 npm sbom --sbom-format cyclonedx --json
 ruby -e 'require "yaml"; Dir[".github/workflows/*.yml"].each { |file| YAML.load_file(file); puts file }'
@@ -54,9 +56,9 @@ Result:
 
 - Production dependency audit passed with `npm run audit:prod`: 0 vulnerabilities.
 - Package dry run passed for `repolens-mcp@1.0.0`.
-- Packed artifact: `repolens-mcp-1.0.0.tgz`, 200,112 bytes packed, 1,027,110 bytes unpacked, 90 runtime/doc entries.
+- Packed artifact: `repolens-mcp-1.0.0.tgz`, 219,630 bytes packed, 1,134,660 bytes unpacked, 94 runtime/doc entries.
 - Package contents are scoped to `dist/src`, `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, selected public docs, `llms.txt`, scripts, `package.json`, `server.json`, `install.sh`, and `install.ps1`; compiled tests, source TypeScript, stale compiled files without matching source, local graph memory, SQLite databases, graph packages, fixtures, private validation output, and local workstation paths are excluded.
-- Package contents gate passed: 90 files inspected.
+- Package contents gate passed: 94 files inspected.
 - Installer audit passed for `install.sh` hook-enabled dry-run setup under a temporary home and target directory. `install.ps1` dry-run audit is enforced when `pwsh` is available and in CI.
 - CycloneDX SBOM generation passed with `npm sbom --sbom-format cyclonedx --json`.
 - Local installer syntax check passed for `install.sh`; the script verifies Node 24, runs `npm ci`, builds the project, runs `doctor`, can apply `install-codex` with `--dry-run`/`--force` controls, and can render or write project-local setup guidance through `install-agents`, including `--with-hooks`.
@@ -64,12 +66,14 @@ Result:
 - GitHub security summary script reported 0 actionable open alerts, 0 CodeQL alerts, 0 Dependabot alerts, 0 secret-scanning alerts, 4 OpenSSF Scorecard process signals, and 0 other code-scanning alerts.
 - `agent-setup` dry-run rendered the expected guide and instruction targets for Codex, Claude, and Gemini without writing files.
 - `hook-augment --claude` smoke test emitted Claude-compatible `hookSpecificOutput.additionalContext` for a fake Grep PreToolUse payload without querying the local graph by default; the opt-in `--with-query` smoke on the fixture graph appended local symbol metadata matches, a fake Read payload exited 0 with no blocking output, and Claude hook setup tests verified managed `.claude/settings.local.json` install/update/uninstall behavior while preserving unrelated hooks.
-- `config set/get/reset` persisted startup defaults in an isolated temp config file and removed the managed key cleanly.
+- `config set/get/reset` persisted startup defaults in an isolated temp config file, including `diagnostics-path`, and removed the managed key cleanly.
 - Startup auto-index rejected a repository when `REPOLENS_MAX_FILES` was lower than the discovered file count, and config persistence covered the equivalent `max-files` key.
 - `uninstall-codex --dry-run` detected the managed Codex block without writing, and `uninstall-agents` removed generated managed blocks from a temporary project target.
 - `benchmark` on the fixture repository ran a full index plus no-op incremental index, returned graph totals and throughput, and reported 0 medium/high secret findings.
+- `index --diagnostics` wrote JSONL lifecycle events for start, walk, rebuild, and finish without storing indexed source content.
 - `index --write-package` on the fixture repository wrote the default `.repolens/graph.rlgz` package and returned graph-package metadata in the index result.
 - Release workflow added for version tags and manual runs. It now separates unprivileged `verify-package` work from privileged `publish` work: package verification runs install, verification, dependency audit, demo indexing, package contents gating, `npm pack --json`, CycloneDX SBOM generation, SHA-256 checksum generation, and artifact upload with read-only contents plus `security-events: read`; tag publishing downloads the verified artifact in a separate job with `contents: write`, `id-token: write`, and `attestations: write`.
+- Release verification repeats `npm run test:skip-gate` and `npm run installer:audit` before package creation, matching the local prepublish guardrails.
 - Release publishing calls `actions/attest-build-provenance@v2` for the tarball, SBOM, and checksum manifest, uploads GitHub release assets for tags, and publishes the tarball to npm with provenance.
 - Tag release publishing now fails when `NPM_TOKEN` is missing instead of silently skipping npm publication.
 - Release workflow runs `npm run release:security-gate` with `security-events: read` before packaging/publishing; the gate uses the GitHub security summary to fail on actionable CodeQL, Dependabot, or secret-scanning alerts and fails closed when alert endpoints are unavailable unless `--allow-unavailable` is explicitly provided.
@@ -84,52 +88,54 @@ Command:
 ```bash
 node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000
 node --experimental-sqlite dist/src/cli.js index . --db .repolens/self.db --max-file-bytes 750000 --incremental
-node --experimental-sqlite dist/src/cli.js benchmark . --db .repolens/benchmark.db --max-file-bytes 750000 --label self-benchmark
+node --experimental-sqlite dist/src/cli.js benchmark . --db .repolens/self.db --max-file-bytes 750000 --label self-validation-fleet-artifacts --diagnostics .repolens/diagnostics.jsonl
 node --experimental-sqlite dist/src/cli.js architecture --db .repolens/self.db
 node --experimental-sqlite dist/src/cli.js vector "local vector search" --db .repolens/self.db --limit 5
 node --experimental-sqlite dist/src/cli.js references vectorSearch --db .repolens/self.db --limit 5
 node --experimental-sqlite dist/src/cli.js scan-secrets --db .repolens/self.db --limit 20 --min-confidence medium
 node --experimental-sqlite dist/src/cli.js communities --db .repolens/self.db --limit 5 --min-size 4
-node --experimental-sqlite dist/src/cli.js pack-graph --db .repolens/self.db --out .repolens/self.rlgz --label self-validation-language-overrides
-node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db .repolens/self-imported.db --overwrite
+node --experimental-sqlite dist/src/cli.js pack-graph --db .repolens/self.db --out .repolens/self.rlgz --label self-validation-fleet-artifacts
+node --experimental-sqlite dist/src/cli.js unpack-graph .repolens/self.rlgz --db /tmp/repolens-self-imported-fleet-artifacts.db --overwrite
 ```
 
 Result:
 
-- Files discovered: 92
-- Files indexed: 89
+- Files discovered: 95
+- Files indexed: 92
 - Files skipped: 3
-- Symbols: 1,203
-- Edges: 5,399
-- Lines indexed: 19,878 source rows; architecture totals report 21,877 physical lines.
-- Full index elapsed: 2,881 ms
-- No-op incremental elapsed: 14 ms
-- No-op incremental unchanged files: 92
-- Benchmark command: full index 89/92 files in 2,881 ms, no-op incremental in 14 ms, 30.89 files/s full throughput, 6,571.43 discovered files/s incremental throughput, and 0 medium/high secret findings across 16,721 scanned lines.
-- Full-text code-search rows: 19,878 `code_lines` rows and 19,878 `code_fts` rows
-- Local vector rows: 979 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
+- Symbols: 1,262
+- Edges: 5,654
+- Lines indexed: 20,708 source rows; architecture totals report 22,784 physical lines.
+- Full index elapsed: 2,946 ms
+- No-op incremental elapsed: 15 ms
+- No-op incremental unchanged files: 95
+- Benchmark command: full index 92/95 files in 2,946 ms, no-op incremental in 15 ms, 31.23 files/s full throughput, 6,333.33 discovered files/s incremental throughput, and 0 medium/high secret findings across 17,405 scanned lines.
+- Diagnostics smoke: `.repolens/diagnostics.jsonl` recorded `benchmark.start`, `index.start`, `index.walk`, `index.rebuild`, `index.finish`, and `benchmark.finish` lifecycle events without storing indexed source content.
+- Full-text code-search rows: 20,708 `code_lines` rows and 20,708 `code_fts` rows
+- Local vector rows: 1,035 `symbol_vectors` rows at 384 dimensions; `vector "local vector search"` returned `LocalVector`, `vectorSearch`, and `VectorSearchMatch` as the top three results.
 - Reference lookup: `references vectorSearch` returned the API definition plus exact identifier references in `src/core/api.ts`, `src/cli.ts`, and docs.
 - MCP server tools registered: 38
 - Persistent config smoke test: `config set auto-index full`, `config get autoIndex`, and `config reset auto-index` worked against an isolated temp config file.
-- Redacted secret scan: 0 high/medium-confidence findings across 16,721 indexed non-test lines.
-- Channel graph rows: 14 `channel` nodes, 2 `EMITS` edges, and 27 `LISTENS_ON` edges
+- Redacted secret scan: 0 high/medium-confidence findings across 17,405 indexed non-test lines.
+- Channel graph rows: 29 `channel` nodes, 17 `EMITS` edges, and 27 `LISTENS_ON` edges
 - HTTP call graph rows: 17 `http_call` nodes, 17 `CALLS_HTTP_ENDPOINT` edges, and 16 generated `HTTP_CALLS` route edges
-- Type relationship rows: 561 `USES_TYPE` edges, 5 `INHERITS` edges, and 1 `IMPLEMENTS` edge.
-- Data-flow graph rows: 901 conservative `DATA_FLOWS` edges from unambiguous call arguments to callee parameters.
-- Import graph rows: 82 `IMPORTS_FILE` edges resolving local relative imports and package-local imports to file nodes.
+- Type relationship rows: 587 `USES_TYPE` edges, 5 `INHERITS` edges, and 2 `IMPLEMENTS` edges.
+- Data-flow graph rows: 968 conservative `DATA_FLOWS` edges from unambiguous call arguments to callee parameters.
+- Configuration graph rows: 3 `config_key` nodes and 6 scoped `CONFIGURES` edges covering infrastructure images and dependency-to-import links without leaking nested fixture dependencies outside their package directory.
+- Import graph rows: 89 `IMPORTS_FILE` edges resolving local relative imports and package-local imports to file nodes.
 - Protocol graph rows: 2 `graphql_operation` nodes, 1 `graphql_type` node, 1 `grpc_service` node, 2 `trpc_procedure` nodes, 1 `trpc_call` node, and 13 `route` nodes across fixture and app routes
 - Manifest graph rows: 11 `package` nodes and 27 `dependency` nodes across npm, Python, Go, Cargo, Composer, Maven, Gradle, Dart, Elixir, Ruby, and requirements fixtures
 - Lockfile graph rows: 1 `lockfile` node, 96 `locked_dependency` nodes, and 96 `LOCKS` edges from `package-lock.json`.
 - Git history hotspots: architecture summaries and reports rank high-churn files, including `src/core/store.ts` at 32 commits and 4,366 changed lines, and include a history-aware recommendation before risky edits.
 - MCP startup auto-index: `REPOLENS_AUTO_INDEX=1` performed an incremental startup refresh on the fixture repo, and `REPOLENS_AUTO_INDEX=full` performed a full startup rebuild through the same `runIndex` path.
 - Graph package bootstrap: a missing database imported `.repolens/graph.rlgz`, reported the `bootstrapPackage` metadata, then ran an incremental refresh with unchanged files instead of rebuilding from scratch; `bootstrapPackage: false` kept the full rebuild path.
-- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 89 files, 1,203 symbols, and 5,399 edges; the latest run discovered 92 files with 3 skipped by policy.
+- Project catalog status: `list-projects` and `project-status repolens-mcp` returned the self graph with live totals of 92 files, 1,262 symbols, and 5,654 edges; the latest run discovered 95 files with 3 skipped by policy.
 - Infrastructure graph labels present: `container_image`, `resource`, `stage`, and `module`; `CONFIGURES` edges present.
 - Graph communities: 5 sampled, including CLI/MCP/dashboard, report rendering, type model, agent setup helpers, and fixture route/client communities.
 - Graph package import: `.repolens/self.rlgz` restored the self graph snapshot successfully with checksum verification.
-- Graph package: `.repolens/self.rlgz` is 2,346,038 bytes from a 10,407,936-byte SQLite snapshot, SHA-256 `be9f57b89303f30fe5b3093ee84851a951355071f4ce27ba0c5426627f648f8a`.
-- Imported package totals: 89 files, 1,203 symbols, 5,399 edges, plus 979 persisted vector rows at 384 dimensions.
-- Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files. Separate temp-repo indexing tests cover C/C++, C#, Kotlin, PHP, Dart, Terraform/HCL, QML, Apex, and `.repolens.json` custom suffix mapping for detection, symbols, routes, imports, namespace/file-like import edges, and infrastructure nodes.
+- Graph package: `.repolens/self.rlgz` is 2,439,338 bytes from a 10,870,784-byte SQLite snapshot, SHA-256 `8657b311ad35b65584ad53c047037cd5259e4f81c354b7f111d5306c204c903e`.
+- Imported package totals: 92 files, 1,262 symbols, 5,654 edges, plus 1,035 persisted vector rows at 384 dimensions.
+- Language mix: TypeScript, Markdown, JSON, YAML/OpenAPI, TOML, XML, GraphQL, protobuf, Go, Gradle, Ruby, Elixir, Dockerfile/shell fixture, Swift fixture, and unknown text files. Separate temp-repo indexing tests cover C/C++, C#, Kotlin, PHP, Dart, Terraform/HCL, QML, Apex, `.repolens.json` custom suffix mapping, and scoped configuration links for detection, symbols, routes, imports, namespace/file-like import edges, dependency/config relationships, and infrastructure nodes.
 - Entrypoints detected: `package.json`, `server.json`, `src/cli.ts`, `src/dashboard/server.ts`, `src/index.ts`, `src/mcp/server.ts`, `tests/mcp-server.test.ts`, and fixture server files.
 - Import-resolved dependency cycles: 0
 
@@ -552,7 +558,7 @@ env REPOLENS_CATALOG=/tmp/repolens-project-catalog-smoke.json node --experimenta
 env REPOLENS_CATALOG=/tmp/repolens-project-catalog-smoke.json node --experimental-sqlite dist/src/cli.js delete-project sample-repo --delete-db
 ```
 
-Confirmed the isolated catalog listed the fixture project, returned live totals of 22 files, 93 symbols, and 134 edges from the SQLite graph, then removed the catalog entry and safely deleted `/tmp/repolens-project-catalog/.repolens/smoke.db`.
+Confirmed the isolated catalog listed the fixture project, returned live totals of 22 files, 95 symbols, and 138 edges from the SQLite graph, then removed the catalog entry and safely deleted `/tmp/repolens-project-catalog/.repolens/smoke.db`.
 
 Fleet summary checks:
 
@@ -561,9 +567,11 @@ env REPOLENS_CATALOG=/tmp/repolens-fleet-smoke-locked.json node --experimental-s
 env REPOLENS_CATALOG=/tmp/repolens-fleet-smoke-locked.json node --experimental-sqlite dist/src/cli.js index tests/fixtures/sample-repo --db /tmp/repolens-fleet-smoke-locked/service-b/.repolens/memory.db --max-file-bytes 750000 --label service-b
 env REPOLENS_CATALOG=/tmp/repolens-fleet-smoke-locked.json node --experimental-sqlite dist/src/cli.js fleet-summary --limit 5
 env REPOLENS_CATALOG=/tmp/repolens-fleet-smoke-locked.json node --experimental-sqlite dist/src/cli.js fleet-graph --limit 5 --max-nodes 200 --max-edges 500
+env REPOLENS_CATALOG=/tmp/repolens-fleet-smoke-locked.json node --experimental-sqlite dist/src/cli.js fleet-graph --limit 5 --max-nodes 200 --max-edges 500 --out /tmp/repolens-fleet-smoke.html
+env REPOLENS_CATALOG=/tmp/repolens-fleet-smoke-locked.json node --experimental-sqlite dist/src/cli.js fleet-graph --limit 5 --max-nodes 200 --max-edges 500 --out /tmp/repolens-fleet-smoke.json
 ```
 
-Confirmed parallel catalog writes retained both labeled projects. `fleet-summary` returned 2 projects, 44 files, 186 symbols, 268 edges, 6 routes, 4 HTTP calls, 4 inferred service links, shared dependency overlap including `express`, and route overlaps including `GET /orders` and `POST /orders`. `fleet-graph` returned project nodes, dependency nodes, route nodes, `DEPENDS_ON` edges, `ROUTE_OVERLAP` edges, and `CROSS_REPO_HTTP_CALLS` edges between the indexed fixture projects.
+Confirmed parallel catalog writes retained both labeled projects. `fleet-summary` returned 2 projects, 44 files, 190 symbols, 276 edges, 14 routes, 4 HTTP calls, 4 inferred service links, shared dependency overlap including `express`, and route overlaps including `GET /orders` and `POST /orders`. `fleet-graph` returned project nodes, dependency nodes, route nodes, `DEPENDS_ON` edges, `ROUTE_OVERLAP` edges, and `CROSS_REPO_HTTP_CALLS` edges between the indexed fixture projects. `fleet-graph --out` wrote both HTML and JSON artifacts with 44 nodes, 150 edges, and 4 cross-repo edges.
 
 Runtime trace ingestion checks:
 

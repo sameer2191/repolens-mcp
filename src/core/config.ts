@@ -14,6 +14,7 @@ export interface RepoLensConfig {
   maxFiles?: number;
   autoIndexLabel?: string;
   bootstrapPackage?: string | false;
+  diagnosticsPath?: string | false;
 }
 
 export interface ConfigResult {
@@ -49,7 +50,11 @@ const keyAliases = new Map<string, keyof RepoLensConfig>([
   ["bootstrap", "bootstrapPackage"],
   ["bootstrappackage", "bootstrapPackage"],
   ["bootstrap-package", "bootstrapPackage"],
-  ["bootstrap_package", "bootstrapPackage"]
+  ["bootstrap_package", "bootstrapPackage"],
+  ["diagnostics", "diagnosticsPath"],
+  ["diagnosticspath", "diagnosticsPath"],
+  ["diagnostics-path", "diagnosticsPath"],
+  ["diagnostics_path", "diagnosticsPath"]
 ]);
 
 export function repoLensConfigPath(configPath?: string): string {
@@ -144,6 +149,9 @@ function normalizeRawConfigValue(key: keyof RepoLensConfig, value: unknown): Rep
   if (key === "bootstrapPackage" && value === false) {
     return false;
   }
+  if (key === "diagnosticsPath" && value === false) {
+    return false;
+  }
   throw new Error(`Invalid RepoLens config value for ${key}`);
 }
 
@@ -171,6 +179,9 @@ function parseConfigValue(key: keyof RepoLensConfig, value: string): RepoLensCon
   if (key === "bootstrapPackage" && ["0", "false", "off", "no"].includes(trimmed.toLowerCase())) {
     return false;
   }
+  if (key === "diagnosticsPath" && ["0", "false", "off", "no"].includes(trimmed.toLowerCase())) {
+    return false;
+  }
   if (!trimmed) {
     throw new Error(`${key} cannot be empty`);
   }
@@ -195,7 +206,18 @@ function normalizeConfigKey(key: string): keyof RepoLensConfig {
 
 function sortConfig(config: RepoLensConfig): RepoLensConfig {
   const sorted: RepoLensConfig = {};
-  for (const key of ["autoIndex", "autoSync", "autoSyncIntervalMs", "root", "dbPath", "maxFileBytes", "maxFiles", "autoIndexLabel", "bootstrapPackage"] as const) {
+  for (const key of [
+    "autoIndex",
+    "autoSync",
+    "autoSyncIntervalMs",
+    "root",
+    "dbPath",
+    "maxFileBytes",
+    "maxFiles",
+    "autoIndexLabel",
+    "bootstrapPackage",
+    "diagnosticsPath"
+  ] as const) {
     if (config[key] !== undefined) {
       sorted[key] = config[key] as never;
     }

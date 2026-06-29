@@ -389,6 +389,79 @@ export function renderProfile(name: string) {
   }
 });
 
+test("links configuration keys, dependency imports, and config file references", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-config-links-"));
+  const repo = path.join(tmp, "repo");
+  const dbPath = path.join(tmp, "memory.db");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.mkdir(path.join(repo, "packages", "api", "src"), { recursive: true });
+  await fs.writeFile(
+    path.join(repo, "config.toml"),
+    `
+[service]
+max_connections = 25
+request_timeout = 5000
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "package.json"),
+    JSON.stringify({ name: "config-link-fixture", dependencies: { express: "^4.18.0" } }, null, 2)
+  );
+  await fs.writeFile(
+    path.join(repo, "src", "server.ts"),
+    `
+import express from "express";
+import lodash from "lodash";
+
+export function getMaxConnections() {
+  return Number(process.env.MAX_CONNECTIONS ?? "25");
+}
+
+export function loadConfigFile() {
+  return "config.toml";
+}
+`
+  );
+  await fs.writeFile(
+    path.join(repo, "packages", "api", "package.json"),
+    JSON.stringify({ name: "nested-api", dependencies: { lodash: "^4.17.21" } }, null, 2)
+  );
+  await fs.writeFile(
+    path.join(repo, "packages", "api", "src", "api.ts"),
+    `
+import lodash from "lodash";
+
+export function compactValues(values: string[]) {
+  return lodash.compact(values);
+}
+`
+  );
+
+  await indexRepository({ root: repo, dbPath });
+  const store = new MemoryStore(dbPath);
+  try {
+    assert.ok(store.searchGraph({ kind: "config_key", query: "max_connections" }).some((match) => match.symbol.name === "service.max_connections"));
+    const schema = store.graphSchema();
+    assert.ok(schema.nodeLabels.some((label) => label.kind === "config_key"));
+    assert.ok(schema.relationshipPatterns.some((pattern) => pattern.sourceKind === "config_key" && pattern.type === "CONFIGURES" && pattern.targetKind === "function"));
+
+    const keyQuery = store.queryGraph("MATCH (a)-[r:CONFIGURES]->(b) WHERE a.name = 'service.max_connections' RETURN a.name,b.name,r.type LIMIT 10");
+    assert.ok(keyQuery.rows.some((row) => row["b.name"] === "getMaxConnections" && row["r.type"] === "CONFIGURES"));
+
+    const dependencyQuery = store.queryGraph("MATCH (a)-[r:CONFIGURES]->(b) WHERE a.name = 'express' RETURN a.name,b.name,r.type LIMIT 10");
+    assert.ok(dependencyQuery.rows.some((row) => row["b.name"] === "server.ts" && row["r.type"] === "CONFIGURES"));
+
+    const fileQuery = store.queryGraph("MATCH (a)-[r:CONFIGURES]->(b) WHERE a.name = 'config.toml' RETURN a.name,b.name,r.type LIMIT 10");
+    assert.ok(fileQuery.rows.some((row) => row["b.name"] === "loadConfigFile" && row["r.type"] === "CONFIGURES"));
+
+    const nestedDependencyQuery = store.queryGraph("MATCH (a)-[r:CONFIGURES]->(b) WHERE a.name = 'lodash' RETURN a.name,b.filePath,r.type LIMIT 10");
+    assert.ok(nestedDependencyQuery.rows.some((row) => row["b.filePath"] === "packages/api/src/api.ts" && row["r.type"] === "CONFIGURES"));
+    assert.ok(!nestedDependencyQuery.rows.some((row) => row["b.filePath"] === "src/server.ts"));
+  } finally {
+    store.close();
+  }
+});
+
 test("extracts typed inheritance, implementation, and usage edges", () => {
   const content = `
 export interface Order {

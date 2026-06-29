@@ -355,6 +355,21 @@ export class MemoryStore {
       .run();
   }
 
+  deleteConfigurationLinkEdges(): void {
+    this.db
+      .prepare(
+        `DELETE FROM edges
+         WHERE type = 'CONFIGURES'
+           AND (
+             metadata LIKE '%"strategy":"config_key_symbol"%'
+             OR metadata LIKE '%"strategy":"config_key_reference"%'
+             OR metadata LIKE '%"strategy":"config_file_reference"%'
+             OR metadata LIKE '%"strategy":"dependency_import"%'
+           )`
+      )
+      .run();
+  }
+
   counts(): { symbols: number; edges: number } {
     return {
       symbols: getCount(this.db, "SELECT count(*) AS count FROM symbols"),

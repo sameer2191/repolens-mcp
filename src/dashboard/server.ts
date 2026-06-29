@@ -93,6 +93,11 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
     const onError = (error: Error) => {
       clearTimeout(timeout);
       server.off("listening", onListening);
+      try {
+        server.close();
+      } catch {
+        // Ignore close errors while surfacing the original listen failure.
+      }
       reject(error);
     };
     const onListening = () => {

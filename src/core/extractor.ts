@@ -200,6 +200,11 @@ export function extractFromFile(filePath: string, language: Language, content: s
     edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 1 });
   }
 
+  for (const symbol of extractConfigurationSymbols(filePath, language, content)) {
+    symbols.push(symbol);
+    edges.push({ source: fileNode, target: symbol.qualifiedName, type: "DECLARES", weight: 0.85 });
+  }
+
   const lockfile = extractLockfile(filePath, language, content);
   for (const symbol of lockfile.symbols) {
     symbols.push(symbol);
@@ -655,6 +660,116 @@ export function addHttpEdges(symbols: SymbolNode[], fileContents: Map<string, st
       });
     }
   }
+  return edges;
+}
+
+export function addConfigurationEdges(symbols: SymbolNode[], fileContents: Map<string, string>): Edge[] {
+  const edges: Edge[] = [];
+  const seen = new Set<string>();
+  const fileSymbols = symbols.filter((symbol) => symbol.kind === "file");
+  const codeSymbols = symbols.filter(isConfigurationTargetSymbol);
+  const configKeys = symbols.filter((symbol) => symbol.kind === "config_key");
+  const dependencies = symbols.filter((symbol) => symbol.kind === "dependency");
+  const configFiles = fileSymbols.filter((symbol) => isConfigurationFilePath(symbol.filePath, symbol.language));
+
+  const addEdge = (source: string, target: string, weight: number, metadata: Record<string, unknown>) => {
+    if (source === target) {
+      return;
+    }
+    const key = `${source}\0${target}\0CONFIGURES`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    edges.push({ source, target, type: "CONFIGURES", weight, metadata });
+  };
+
+  for (const configKey of configKeys) {
+    const tokenSets = configKeyTokenSets(String(configKey.metadata?.key ?? configKey.name));
+    for (const target of codeSymbols) {
+      if (target.filePath === configKey.filePath) {
+        continue;
+      }
+      const targetTokens = configTokens(target.name);
+      if (tokenSets.some((tokens) => configTokenSetMatches(tokens, targetTokens))) {
+        addEdge(configKey.qualifiedName, target.qualifiedName, 0.72, {
+          strategy: "config_key_symbol",
+          key: configKey.name,
+          target: target.name
+        });
+      }
+    }
+  }
+
+  for (const configKey of configKeys) {
+    const variants = configReferenceVariants(String(configKey.metadata?.key ?? configKey.name));
+    if (variants.length === 0) {
+      continue;
+    }
+    for (const [filePath, content] of fileContents) {
+      if (filePath === configKey.filePath) {
+        continue;
+      }
+      const line = firstNeedleLine(content, variants);
+      if (line === null) {
+        continue;
+      }
+      const target = sourceSymbolForLine(symbols, line, filePath)?.qualifiedName ?? fileQualifiedName(filePath);
+      addEdge(configKey.qualifiedName, target, 0.8, {
+        strategy: "config_key_reference",
+        key: configKey.name,
+        line
+      });
+    }
+  }
+
+  for (const dependency of dependencies) {
+    for (const file of fileSymbols) {
+      if (file.filePath === dependency.filePath) {
+        continue;
+      }
+      if (!dependencyAppliesToFile(dependency, file.filePath)) {
+        continue;
+      }
+      const content = fileContents.get(file.filePath);
+      if (!content) {
+        continue;
+      }
+      const imports = extractImports(file.language, content);
+      const matchedImport = imports.find((imported) => dependencyImportMatches(dependency, imported));
+      if (!matchedImport) {
+        continue;
+      }
+      addEdge(dependency.qualifiedName, file.qualifiedName, 0.68, {
+        strategy: "dependency_import",
+        dependency: dependency.name,
+        import: matchedImport
+      });
+    }
+  }
+
+  for (const configFile of configFiles) {
+    const references = configFileReferenceVariants(configFile.filePath);
+    if (references.length === 0) {
+      continue;
+    }
+    for (const [filePath, content] of fileContents) {
+      if (filePath === configFile.filePath) {
+        continue;
+      }
+      const line = firstNeedleLine(content, references);
+      if (line === null) {
+        continue;
+      }
+      const target = sourceSymbolForLine(symbols, line, filePath)?.qualifiedName ?? fileQualifiedName(filePath);
+      addEdge(configFile.qualifiedName, target, 0.7, {
+        strategy: "config_file_reference",
+        configFile: configFile.filePath,
+        line
+      });
+    }
+  }
+
   return edges;
 }
 
@@ -1541,6 +1656,253 @@ function manifestSymbol(filePath: string, language: Language, kind: "package" | 
     ...(version ? { version } : {})
   });
 }
+
+function extractConfigurationSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  if (!isConfigurationFilePath(filePath, language)) {
+    return [];
+  }
+  const base = path.posix.basename(filePath).toLowerCase();
+  if (base.startsWith(".env")) {
+    return extractEnvConfigSymbols(filePath, language, content);
+  }
+  if (language === "json") {
+    return extractJsonConfigSymbols(filePath, language, content);
+  }
+  if (language === "toml") {
+    return extractTomlConfigSymbols(filePath, language, content);
+  }
+  if (language === "yaml") {
+    return extractYamlConfigSymbols(filePath, language, content);
+  }
+  return [];
+}
+
+function extractEnvConfigSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const lines = content.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(lines[index]);
+    if (match) {
+      symbols.push(configKeySymbol(filePath, language, match[1], index + 1, "env"));
+    }
+  }
+  return symbols;
+}
+
+function extractJsonConfigSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    const symbols: SymbolNode[] = [];
+    const visit = (value: unknown, prefix: string[], depth: number) => {
+      if (depth > 4 || value === null || Array.isArray(value)) {
+        return;
+      }
+      if (typeof value !== "object") {
+        if (prefix.length > 0) {
+          const key = prefix.join(".");
+          symbols.push(configKeySymbol(filePath, language, key, jsonPropertyLine(content, prefix[prefix.length - 1]), "json-config"));
+        }
+        return;
+      }
+      for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+        if (isUsableConfigKey(key)) {
+          visit(child, [...prefix, key], depth + 1);
+        }
+      }
+    };
+    visit(parsed, [], 0);
+    return dedupeSymbols(symbols);
+  } catch {
+    return [];
+  }
+}
+
+function extractTomlConfigSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  let section: string[] = [];
+  for (const [index, line] of content.split(/\r?\n/).entries()) {
+    const header = /^\s*\[([^\]]+)\]\s*$/.exec(line);
+    if (header) {
+      section = header[1].split(".").map((part) => part.trim()).filter(isUsableConfigKey);
+      continue;
+    }
+    const match = /^\s*([A-Za-z0-9_.-]+)\s*=/.exec(line.replace(/#.*/, ""));
+    if (!match || !isUsableConfigKey(match[1])) {
+      continue;
+    }
+    symbols.push(configKeySymbol(filePath, language, [...section, match[1]].join("."), index + 1, "toml-config"));
+  }
+  return dedupeSymbols(symbols);
+}
+
+function extractYamlConfigSymbols(filePath: string, language: Language, content: string): SymbolNode[] {
+  const symbols: SymbolNode[] = [];
+  const stack: Array<{ indent: number; key: string }> = [];
+  for (const [index, line] of content.split(/\r?\n/).entries()) {
+    const match = /^(\s*)([A-Za-z0-9_.-]+)\s*:\s*(.*?)\s*(?:#.*)?$/.exec(line);
+    if (!match || !isUsableConfigKey(match[2])) {
+      continue;
+    }
+    const indent = match[1].length;
+    const value = match[3].trim();
+    while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
+      stack.pop();
+    }
+    const keyPath = [...stack.map((item) => item.key), match[2]].join(".");
+    if (value && value !== "|" && value !== ">") {
+      symbols.push(configKeySymbol(filePath, language, keyPath, index + 1, "yaml-config"));
+    } else {
+      stack.push({ indent, key: match[2] });
+    }
+  }
+  return dedupeSymbols(symbols);
+}
+
+function configKeySymbol(filePath: string, language: Language, key: string, line: number, source: string): SymbolNode {
+  return makeSymbol(filePath, language, "config_key", key.slice(0, 180), line, line, undefined, false, {
+    key,
+    normalizedKey: configTokens(key).join("_"),
+    source
+  });
+}
+
+function isConfigurationTargetSymbol(symbol: SymbolNode): boolean {
+  return ["function", "method", "class", "route"].includes(symbol.kind);
+}
+
+function isConfigurationFilePath(filePath: string, language: Language): boolean {
+  const normalized = path.posix.normalize(filePath).toLowerCase();
+  const base = path.posix.basename(normalized);
+  const stem = base.replace(/\.[^.]+$/, "");
+  if (base.startsWith(".env")) {
+    return true;
+  }
+  if (/^appsettings(?:\.[^.]+)?\.json$/.test(base)) {
+    return true;
+  }
+  if (/^application(?:[-.][^.]+)?\.ya?ml$/.test(base)) {
+    return true;
+  }
+  if (/^(?:config|settings)\.(?:json|ya?ml|toml)$/.test(base)) {
+    return true;
+  }
+  if (/(^|[._-])(?:config|settings)(?:[._-]|$)/.test(stem) && ["json", "yaml", "toml"].includes(language)) {
+    return true;
+  }
+  return /\/configs?\//.test(normalized) && ["json", "yaml", "toml"].includes(language);
+}
+
+function isUsableConfigKey(key: string): boolean {
+  const trimmed = key.trim();
+  if (!trimmed || trimmed.length > 120 || trimmed.includes("\0")) {
+    return false;
+  }
+  return /[A-Za-z]/.test(trimmed);
+}
+
+function configKeyTokenSets(value: string): string[][] {
+  const parts = value.split(/[.:[\]]+/).filter(Boolean);
+  const full = configTokens(value);
+  const leaf = configTokens(parts[parts.length - 1] ?? value);
+  const parentLeaf = parts.length > 1 ? configTokens(parts.slice(-2).join(".")) : [];
+  const sets = [leaf, parentLeaf, full].filter((tokens) => tokens.length >= 2);
+  const seen = new Set<string>();
+  return sets.filter((tokens) => {
+    const key = tokens.join("\0");
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function configTokens(value: string): string[] {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((part) => part.length > 1 && !configTokenStopwords.has(part));
+}
+
+function configTokenSetMatches(configKeyTokens: string[], targetTokens: string[]): boolean {
+  if (configKeyTokens.length < 2 || targetTokens.length === 0) {
+    return false;
+  }
+  const target = new Set(targetTokens);
+  return configKeyTokens.every((token) => target.has(token));
+}
+
+function configReferenceVariants(value: string): string[] {
+  const parts = value.split(/[.:[\]]+/).filter(Boolean);
+  const leaf = parts[parts.length - 1] ?? value;
+  const tokens = configTokens(leaf);
+  const variants = new Set([value]);
+  if (tokens.length >= 2) {
+    variants.add(leaf);
+    variants.add(tokens.join("_"));
+    variants.add(tokens.join("_").toUpperCase());
+    variants.add(tokens.map((token, index) => (index === 0 ? token : `${token[0].toUpperCase()}${token.slice(1)}`)).join(""));
+  }
+  return [...variants].filter((variant) => variant.length >= 5 && variant.length <= 160);
+}
+
+function configFileReferenceVariants(filePath: string): string[] {
+  const normalized = path.posix.normalize(filePath);
+  const base = path.posix.basename(normalized);
+  return [...new Set([normalized, base])].filter((variant) => variant.length >= 5 && variant.length <= 200);
+}
+
+function firstNeedleLine(content: string, needles: string[]): number | null {
+  let bestIndex = Number.POSITIVE_INFINITY;
+  for (const needle of needles) {
+    const index = content.indexOf(needle);
+    if (index >= 0 && index < bestIndex) {
+      bestIndex = index;
+    }
+  }
+  return Number.isFinite(bestIndex) ? offsetToLine(content, bestIndex) : null;
+}
+
+function dependencyImportMatches(dependency: SymbolNode, imported: string): boolean {
+  const dependencyName = dependency.name.toLowerCase();
+  const importName = imported.toLowerCase();
+  if (importName === dependencyName || importName.startsWith(`${dependencyName}/`)) {
+    return true;
+  }
+  if (dependencyName.includes(":")) {
+    const [group, artifact] = dependencyName.split(":");
+    if (group && importName.startsWith(group.replace(/-/g, "."))) {
+      return true;
+    }
+    if (artifact && artifact.length >= 5 && importName.includes(artifact.replace(/-/g, ""))) {
+      return true;
+    }
+  }
+  const lastSegment = dependencyName.split(/[/:]/).filter(Boolean).at(-1) ?? "";
+  return lastSegment.length >= 5 && (importName === lastSegment || importName.startsWith(`${lastSegment}/`) || importName.endsWith(`.${lastSegment}`));
+}
+
+function dependencyAppliesToFile(dependency: SymbolNode, filePath: string): boolean {
+  const manifestDir = path.posix.dirname(dependency.filePath);
+  if (manifestDir === "." || manifestDir === "") {
+    return true;
+  }
+  return filePath === manifestDir || filePath.startsWith(`${manifestDir}/`);
+}
+
+const configTokenStopwords = new Set([
+  "app",
+  "application",
+  "config",
+  "configuration",
+  "setting",
+  "settings",
+  "value",
+  "values",
+  "default",
+  "defaults"
+]);
 
 interface LockedDependency {
   name: string;

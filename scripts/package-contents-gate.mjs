@@ -20,6 +20,7 @@ const requiredFiles = [
   "scripts/github-security-summary.mjs",
   "scripts/installer-audit.mjs",
   "scripts/package-contents-gate.mjs",
+  "scripts/run-tsc.mjs",
   "scripts/test-skip-gate.mjs",
   "dist/src/cli.js",
   "dist/src/mcp/server.js"
@@ -43,6 +44,7 @@ const allowedExactFiles = new Set([
   "scripts/github-security-summary.mjs",
   "scripts/installer-audit.mjs",
   "scripts/package-contents-gate.mjs",
+  "scripts/run-tsc.mjs",
   "scripts/test-skip-gate.mjs"
 ]);
 

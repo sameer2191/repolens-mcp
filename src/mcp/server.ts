@@ -46,6 +46,7 @@ import {
 } from "../core/api.js";
 import { agentProfiles, installAgentSetup, type AgentId } from "../core/agents.js";
 import { configValueFromEnvOrConfig, loadRepoLensConfig } from "../core/config.js";
+import { diagnosticsSettingFromEnvOrConfig } from "../core/diagnostics.js";
 import { watchRepository } from "../core/watcher.js";
 import type { IndexResult } from "../core/types.js";
 
@@ -78,12 +79,22 @@ export async function startMcpServer(): Promise<void> {
         maxFiles: z.number().int().positive().optional().describe("Refuse indexing when repository discovery exceeds this file count."),
         bootstrapPackage: z.string().optional().describe("Optional .rlgz graph package to import when the target database is missing."),
         noBootstrap: z.boolean().optional().describe("Disable default .repolens/graph.rlgz bootstrap when true."),
-        writePackage: z.string().optional().describe("Optional .rlgz graph package path to write after a successful index.")
+        writePackage: z.string().optional().describe("Optional .rlgz graph package path to write after a successful index."),
+        diagnosticsPath: z.string().optional().describe("Optional JSONL diagnostics path for index lifecycle events. Use 'true' for .repolens/diagnostics.jsonl.")
       }
     },
-    async ({ root, dbPath, incremental, maxFileBytes, maxFiles, bootstrapPackage, noBootstrap, writePackage }) =>
+    async ({ root, dbPath, incremental, maxFileBytes, maxFiles, bootstrapPackage, noBootstrap, writePackage, diagnosticsPath }) =>
       text(
-        await runIndex({ root: root ?? process.cwd(), dbPath, incremental, maxFileBytes, maxFiles, bootstrapPackage: noBootstrap ? false : bootstrapPackage, writePackage })
+        await runIndex({
+          root: root ?? process.cwd(),
+          dbPath,
+          incremental,
+          maxFileBytes,
+          maxFiles,
+          bootstrapPackage: noBootstrap ? false : bootstrapPackage,
+          writePackage,
+          diagnosticsPath
+        })
       )
   );
 
@@ -100,10 +111,11 @@ export async function startMcpServer(): Promise<void> {
         noBootstrap: z.boolean().optional().describe("Disable default .repolens/graph.rlgz bootstrap when true."),
         label: z.string().optional().describe("Optional project catalog label for the benchmark run."),
         secretScan: z.boolean().optional().describe("Set false to skip the medium-confidence redacted secret scan."),
-        secretScanLimit: z.number().int().positive().max(500).optional().describe("Maximum redacted secret findings to include in the summary.")
+        secretScanLimit: z.number().int().positive().max(500).optional().describe("Maximum redacted secret findings to include in the summary."),
+        diagnosticsPath: z.string().optional().describe("Optional JSONL diagnostics path for benchmark and index lifecycle events. Use 'true' for .repolens/diagnostics.jsonl.")
       }
     },
-    async ({ root, dbPath, maxFileBytes, maxFiles, bootstrapPackage, noBootstrap, label, secretScan, secretScanLimit }) =>
+    async ({ root, dbPath, maxFileBytes, maxFiles, bootstrapPackage, noBootstrap, label, secretScan, secretScanLimit, diagnosticsPath }) =>
       text(
         await benchmarkRepository({
           root: root ?? process.cwd(),
@@ -113,7 +125,8 @@ export async function startMcpServer(): Promise<void> {
           bootstrapPackage: noBootstrap ? false : bootstrapPackage,
           runLabel: label,
           secretScan,
-          secretScanLimit
+          secretScanLimit,
+          diagnosticsPath
         })
       )
   );
@@ -658,7 +671,8 @@ export async function maybeAutoIndexOnStartup(env: NodeJS.ProcessEnv = process.e
     maxFileBytes: parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_MAX_FILE_BYTES, config.maxFileBytes), "REPOLENS_MAX_FILE_BYTES"),
     maxFiles: parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_MAX_FILES, config.maxFiles), "REPOLENS_MAX_FILES"),
     runLabel: env.REPOLENS_AUTO_INDEX_LABEL ?? config.autoIndexLabel ?? "mcp-startup",
-    bootstrapPackage: bootstrapPackageFromConfig(env.REPOLENS_BOOTSTRAP_PACKAGE, config.bootstrapPackage)
+    bootstrapPackage: bootstrapPackageFromConfig(env.REPOLENS_BOOTSTRAP_PACKAGE, config.bootstrapPackage),
+    diagnosticsPath: diagnosticsSettingFromEnvOrConfig(env.REPOLENS_DIAGNOSTICS, config.diagnosticsPath)
   });
   process.stderr.write(
     `RepoLens auto-index: ${result.mode} ${result.filesIndexed}/${result.filesDiscovered} files, ${result.symbols} symbols, ${result.edges} edges\n`
@@ -690,6 +704,7 @@ export function maybeStartAutoSyncOnStartup(env: NodeJS.ProcessEnv = process.env
     maxFiles: parsePositiveIntEnv(configValueFromEnvOrConfig(env.REPOLENS_MAX_FILES, config.maxFiles), "REPOLENS_MAX_FILES"),
     runLabel: env.REPOLENS_AUTO_INDEX_LABEL ?? config.autoIndexLabel ?? "mcp-auto-sync",
     bootstrapPackage: bootstrapPackageFromConfig(env.REPOLENS_BOOTSTRAP_PACKAGE, config.bootstrapPackage),
+    diagnosticsPath: diagnosticsSettingFromEnvOrConfig(env.REPOLENS_DIAGNOSTICS, config.diagnosticsPath),
     intervalMs,
     maxRuns,
     maxPolls,

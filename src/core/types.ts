@@ -39,6 +39,7 @@ export interface IndexOptions {
   runLabel?: string;
   bootstrapPackage?: string | false;
   writePackage?: string | false;
+  diagnosticsPath?: string | false;
 }
 
 export interface IndexedFile {

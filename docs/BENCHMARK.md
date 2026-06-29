@@ -14,9 +14,9 @@ npm run test:skip-gate
 Latest result:
 
 - TypeScript build passed.
-- Node test suite passed: 80 tests, 79 passing, 0 failures, 1 sandbox-only dashboard socket skip.
+- Node test suite passed: 84 tests, 83 passing, 0 failures, 1 sandbox-only dashboard socket skip.
 - Test skip gate passed with explicit policies for the dashboard sandbox socket skip and git-unavailable skips.
-- Coverage includes indexing with byte and file-count budgets, project-specific `.repolens.json` language overrides, broad practical language extraction, namespace/file-like import edge resolution, incremental refresh, bounded git-history hotspot collection, git-aware watch refresh, MCP startup auto-index and auto-sync wiring, MCP agent setup write guardrails, project catalog and fleet summaries, graph package import/export, interactive graph report/export controls, code search, symbol/reference lookup, semantic and vector search, context packs, graph queries, dependency cycles, git-history hotspots, change impact, secret scanning, agent setup, Codex config safeguards, package bootstrap, installer metadata, and MCP JSON-RPC robustness.
+- Coverage includes indexing with byte and file-count budgets, project-specific `.repolens.json` language overrides, config-key/dependency/file-reference `CONFIGURES` links, opt-in JSONL diagnostics for index and watch lifecycles, broad practical language extraction, namespace/file-like import edge resolution, incremental refresh, bounded git-history hotspot collection, git-aware watch refresh, MCP startup auto-index and auto-sync wiring, MCP agent setup write guardrails, project catalog and fleet summaries, shareable fleet graph artifacts, graph package import/export, interactive graph report/export controls, code search, symbol/reference lookup, semantic and vector search, context packs, graph queries, dependency cycles, git-history hotspots, change impact, secret scanning, agent setup, Codex config safeguards, package bootstrap, installer metadata, and MCP JSON-RPC robustness.
 
 ## Package And Release Checks
 
@@ -36,7 +36,7 @@ Current package hygiene:
 - Package contents are limited to runtime `dist/src`, public docs, README, license/security/contributing files, `llms.txt`, scripts, server manifest, and installers.
 - Compiled tests, TypeScript source, fixture data, stale compiled files without matching source, local graph memory, SQLite databases, graph packages, private validation output, and workstation paths are blocked from npm packages.
 - Installer audit checks shipped shell and PowerShell installers, exercises dry-run Codex/agent setup with hook files under temporary home and target directories, and fails if dry runs write unexpected files.
-- The release workflow verifies build/tests/audit/package gates, generates a CycloneDX SBOM and SHA-256 checksums, creates build provenance attestations, uploads GitHub release assets, and publishes to npm with provenance.
+- The release workflow verifies build/tests, explicit skip governance, installer audit, production audit, and package gates, generates a CycloneDX SBOM and SHA-256 checksums, creates build provenance attestations, uploads GitHub release assets, and publishes to npm with provenance.
 - The release security gate checks actionable GitHub Security alerts across CodeQL, Dependabot, and secret scanning before publication and fails closed when required alert endpoints are unavailable.
 
 ## Large Workspace Benchmark

@@ -26,6 +26,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+      - run: npm run test:skip-gate
+      - run: npm run installer:audit
       - run: npm run audit:prod
       - name: Fail release on actionable GitHub security alerts
         env:

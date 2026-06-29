@@ -76,7 +76,8 @@ async function main(): Promise<void> {
         maxFiles: numberFlag(args, "max-files"),
         runLabel: stringFlag(args, "label"),
         bootstrapPackage: booleanFlag(args, "no-bootstrap") ? false : stringFlag(args, "bootstrap-package"),
-        writePackage: writePackageFlag(args)
+        writePackage: writePackageFlag(args),
+        diagnosticsPath: diagnosticsFlag(args)
       });
       print(result);
       break;
@@ -103,6 +104,7 @@ async function main(): Promise<void> {
         maxFileBytes: numberFlag(args, "max-file-bytes"),
         maxFiles: numberFlag(args, "max-files"),
         runLabel: stringFlag(args, "label"),
+        diagnosticsPath: diagnosticsFlag(args),
         signal: controller.signal,
         onResult: (result) => process.stderr.write(`${jsonBlock({ event: "indexed", ...result })}\n`),
         onSkip: (event) => process.stderr.write(`${jsonBlock({ event: "skipped", ...event })}\n`)
@@ -121,7 +123,8 @@ async function main(): Promise<void> {
           runLabel: stringFlag(args, "label"),
           bootstrapPackage: booleanFlag(args, "no-bootstrap") ? false : stringFlag(args, "bootstrap-package"),
           secretScan: booleanFlag(args, "no-secret-scan") ? false : undefined,
-          secretScanLimit: numberFlag(args, "secret-limit")
+          secretScanLimit: numberFlag(args, "secret-limit"),
+          diagnosticsPath: diagnosticsFlag(args)
         })
       );
       break;
@@ -143,13 +146,26 @@ async function main(): Promise<void> {
       break;
     case "fleet-graph":
     case "cross-repo":
-      print(
-        await fleetGraph({
+      {
+        const graph = await fleetGraph({
           limit: numberFlag(args, "limit"),
           maxNodes: numberFlag(args, "max-nodes"),
           maxEdges: numberFlag(args, "max-edges")
-        })
-      );
+        });
+        const out = stringFlag(args, "out");
+        if (!out) {
+          print(graph);
+          break;
+        }
+        const outPath = path.resolve(out);
+        await fs.mkdir(path.dirname(outPath), { recursive: true });
+        if (outPath.endsWith(".html")) {
+          await fs.writeFile(outPath, staticGraphHtml(graph, "RepoLens Fleet Graph", "catalog-wide artifact"));
+        } else {
+          await fs.writeFile(outPath, JSON.stringify(graph, null, 2));
+        }
+        print({ out: outPath, nodes: graph.nodes.length, edges: graph.edges.length, crossRepoEdges: graph.totals.crossRepoEdges });
+      }
       break;
     case "config":
       print(handleConfigCommand(args));
@@ -312,7 +328,7 @@ async function main(): Promise<void> {
       };
       await fs.mkdir(path.dirname(out), { recursive: true });
       if (out.endsWith(".html")) {
-        await fs.writeFile(out, staticGraphHtml(graph));
+        await fs.writeFile(out, staticGraphHtml(graph, "RepoLens Graph", "self-contained artifact"));
       } else {
         await fs.writeFile(out, JSON.stringify(graph, null, 2));
       }
@@ -512,6 +528,24 @@ function writePackageFlag(args: ParsedArgs): string | undefined {
     return ".repolens/graph.rlgz";
   }
   return typeof value === "string" ? value : undefined;
+}
+
+function diagnosticsFlag(args: ParsedArgs): string | false | undefined {
+  const value = args.flags.get("diagnostics");
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === true) {
+    return "true";
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["0", "false", "off", "no"].includes(normalized)) {
+    return false;
+  }
+  return value;
 }
 
 function commaListFlag(args: ParsedArgs, name: string): string[] | undefined {
@@ -720,15 +754,15 @@ function help(): string {
   return `repolens-mcp
 
 Usage:
-  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--max-files n] [--incremental] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--write-package [graph.rlgz]]
+  repolens-mcp index [repo] [--db path] [--max-file-bytes n] [--max-files n] [--incremental] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--write-package [graph.rlgz]] [--diagnostics [path|true|off]]
   repolens-mcp version [--check] [--registry url] [--timeout-ms n]
   repolens-mcp update-check [--registry url] [--timeout-ms n]
-  repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--max-files n] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--no-secret-scan] [--secret-limit n]
+  repolens-mcp benchmark [repo] [--db path] [--max-file-bytes n] [--max-files n] [--label name] [--bootstrap-package graph.rlgz] [--no-bootstrap] [--no-secret-scan] [--secret-limit n] [--diagnostics [path|true|off]]
   repolens-mcp list-projects [--limit n]
   repolens-mcp project-status [root-or-db-or-label]
   repolens-mcp delete-project <root-or-db-or-label> [--delete-db]
   repolens-mcp fleet-summary [--limit n]
-  repolens-mcp fleet-graph [--limit n] [--max-nodes n] [--max-edges n]
+  repolens-mcp fleet-graph [--limit n] [--max-nodes n] [--max-edges n] [--out fleet.html|fleet.json]
   repolens-mcp config list|get|set|reset|path [key] [value] [--config path]
   repolens-mcp architecture [--db path]
   repolens-mcp search <query> [--db path] [--limit n]
@@ -740,7 +774,7 @@ Usage:
   repolens-mcp impact <path-or-symbol...> [--db path]
   repolens-mcp schema [--db path]
   repolens-mcp communities [--db path] [--limit n] [--min-size n]
-  repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--polls n] [--git-aware] [--max-file-bytes n] [--max-files n] [--label name]
+  repolens-mcp watch [repo] [--db path] [--interval-ms n] [--runs n] [--polls n] [--git-aware] [--max-file-bytes n] [--max-files n] [--label name] [--diagnostics [path|true|off]]
   repolens-mcp search-graph [query] [--kind function] [--relationship CALLS] [--name-pattern wildcard] [--file-pattern src/] [--min-degree n] [--db path]
   repolens-mcp semantic "meaningful concept query" [--db path] [--limit n]
   repolens-mcp vector "meaningful concept query" [--db path] [--limit n]
@@ -772,14 +806,20 @@ Usage:
 `;
 }
 
-function staticGraphHtml(graph: { nodes: Array<{ id: string; label: string; group: string }>; edges: Array<{ source: string; target: string; type: string; weight?: number }> }): string {
+function staticGraphHtml(
+  graph: { nodes: Array<{ id: string; label: string; group: string }>; edges: Array<{ source: string; target: string; type: string; weight?: number }> },
+  title: string,
+  subtitle: string
+): string {
   const payload = JSON.stringify(graph).replace(/</g, "\\u003c");
+  const safeTitle = escapeHtmlText(title);
+  const safeSubtitle = escapeHtmlText(subtitle);
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RepoLens Graph</title>
+  <title>${safeTitle}</title>
   <style>
     :root { color-scheme: light; --bg:#f7f9fc; --ink:#172033; --muted:#667085; --line:#d5dce8; --panel:#fff; }
     * { box-sizing:border-box; }
@@ -807,10 +847,10 @@ function staticGraphHtml(graph: { nodes: Array<{ id: string; label: string; grou
 <body>
   <header>
     <div>
-      <h1>RepoLens Graph</h1>
+      <h1>${safeTitle}</h1>
       <div class="sub" id="counts"></div>
     </div>
-    <div class="sub">self-contained artifact</div>
+    <div class="sub">${safeSubtitle}</div>
   </header>
   <main>
     <canvas id="graph"></canvas>
@@ -1002,6 +1042,10 @@ function staticGraphHtml(graph: { nodes: Array<{ id: string; label: string; grou
   </script>
 </body>
 </html>`;
+}
+
+function escapeHtmlText(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 }
 
 main().catch((error) => {
