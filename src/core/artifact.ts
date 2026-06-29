@@ -1,15 +1,17 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { gzip, gunzip } from "node:zlib";
+import { gzip, createGunzip } from "node:zlib";
 import { promisify } from "node:util";
 import { sha256 } from "./hash.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
 import type { GraphPackageExportResult, GraphPackageImportResult } from "./types.js";
 
 const gzipAsync = promisify(gzip);
-const gunzipAsync = promisify(gunzip);
 const MAGIC = "REPOLENS_GRAPH_PACKAGE_V1";
+const MAX_GRAPH_PACKAGE_BYTES = 128 * 1024 * 1024;
+const MAX_GRAPH_HEADER_BYTES = 16 * 1024;
+const MAX_GRAPH_SQLITE_BYTES = 512 * 1024 * 1024;
 
 interface GraphPackageHeader {
   magic: typeof MAGIC;
@@ -65,16 +67,29 @@ export async function exportGraphPackage(options: { dbPath?: string; outPath: st
 export async function importGraphPackage(options: { packagePath: string; dbPath?: string; overwrite?: boolean }): Promise<GraphPackageImportResult> {
   const packagePath = path.resolve(options.packagePath);
   const dbPath = resolveDbPath(options.dbPath);
+  const packageStats = await fs.stat(packagePath).catch(() => null);
+  if (!packageStats?.isFile()) {
+    throw new Error(`No graph package found at ${packagePath}`);
+  }
+  if (packageStats.size > MAX_GRAPH_PACKAGE_BYTES) {
+    throw new Error(`RepoLens graph package is ${packageStats.size} bytes, which exceeds the ${MAX_GRAPH_PACKAGE_BYTES} byte package limit.`);
+  }
   const payload = await fs.readFile(packagePath);
   const newline = payload.indexOf(10);
   if (newline < 0) {
     throw new Error("Invalid RepoLens graph package: missing header");
   }
-  const header = JSON.parse(payload.subarray(0, newline).toString("utf8")) as GraphPackageHeader;
+  if (newline > MAX_GRAPH_HEADER_BYTES) {
+    throw new Error(`Invalid RepoLens graph package: header exceeds ${MAX_GRAPH_HEADER_BYTES} bytes.`);
+  }
+  const header = parseGraphPackageHeader(payload.subarray(0, newline).toString("utf8"));
   if (header.magic !== MAGIC) {
     throw new Error("Invalid RepoLens graph package: unsupported format");
   }
-  const sqlite = await gunzipAsync(payload.subarray(newline + 1));
+  if (!Number.isSafeInteger(header.sqliteBytes) || header.sqliteBytes <= 0 || header.sqliteBytes > MAX_GRAPH_SQLITE_BYTES) {
+    throw new Error(`Invalid RepoLens graph package: sqliteBytes must be between 1 and ${MAX_GRAPH_SQLITE_BYTES}.`);
+  }
+  const sqlite = await gunzipBounded(payload.subarray(newline + 1), header.sqliteBytes);
   const actualHash = sha256(sqlite);
   if (actualHash !== header.sha256) {
     throw new Error(`Invalid RepoLens graph package: checksum mismatch ${actualHash} != ${header.sha256}`);
@@ -86,14 +101,21 @@ export async function importGraphPackage(options: { packagePath: string; dbPath?
     throw new Error(`Database already exists at ${dbPath}. Pass overwrite to replace it.`);
   }
   await fs.mkdir(path.dirname(dbPath), { recursive: true });
-  if (options.overwrite) {
-    await removeSqliteFiles(dbPath);
-  }
-  await fs.writeFile(dbPath, sqlite);
-
-  const store = new MemoryStore(dbPath);
+  const tmpDbPath = path.join(path.dirname(dbPath), `.repolens-import-${process.pid}-${Date.now()}.db`);
   try {
-    const schema = store.graphSchema();
+    await fs.writeFile(tmpDbPath, sqlite, { flag: "wx" });
+    const store = new MemoryStore(tmpDbPath);
+    let totals: GraphPackageImportResult["totals"];
+    try {
+      const schema = store.graphSchema();
+      totals = schema.totals;
+    } finally {
+      store.close();
+    }
+    if (options.overwrite) {
+      await removeSqliteFiles(dbPath);
+    }
+    await fs.rename(tmpDbPath, dbPath);
     return {
       packagePath,
       dbPath,
@@ -101,11 +123,65 @@ export async function importGraphPackage(options: { packagePath: string; dbPath?
       createdAt: header.createdAt,
       sqliteBytes: sqlite.byteLength,
       sha256: header.sha256,
-      totals: schema.totals
+      totals
     };
   } finally {
-    store.close();
+    await removeSqliteFiles(tmpDbPath);
   }
+}
+
+function parseGraphPackageHeader(raw: string): GraphPackageHeader {
+  const parsed = JSON.parse(raw) as Partial<GraphPackageHeader>;
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid RepoLens graph package: header must be a JSON object.");
+  }
+  if (parsed.magic !== MAGIC) {
+    throw new Error("Invalid RepoLens graph package: unsupported format");
+  }
+  if (typeof parsed.createdAt !== "string" || typeof parsed.sourceDbPath !== "string") {
+    throw new Error("Invalid RepoLens graph package: missing source metadata.");
+  }
+  if (parsed.label !== undefined && typeof parsed.label !== "string") {
+    throw new Error("Invalid RepoLens graph package: label must be a string.");
+  }
+  if (typeof parsed.sqliteBytes !== "number") {
+    throw new Error("Invalid RepoLens graph package: sqliteBytes must be a number.");
+  }
+  if (typeof parsed.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(parsed.sha256)) {
+    throw new Error("Invalid RepoLens graph package: sha256 must be a hex digest.");
+  }
+  return parsed as GraphPackageHeader;
+}
+
+async function gunzipBounded(payload: Buffer, maxOutputBytes: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const gunzip = createGunzip();
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      gunzip.destroy();
+      reject(error);
+    };
+
+    gunzip.on("data", (chunk: Buffer) => {
+      total += chunk.byteLength;
+      if (total > maxOutputBytes) {
+        fail(new Error(`Invalid RepoLens graph package: decompressed sqlite exceeds declared size ${maxOutputBytes}.`));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    gunzip.on("error", (error) => fail(error));
+    gunzip.on("end", () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks, total));
+    });
+    gunzip.end(payload);
+  });
 }
 
 function resolveDbPath(dbPath: string | undefined): string {

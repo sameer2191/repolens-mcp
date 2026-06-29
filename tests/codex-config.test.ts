@@ -20,6 +20,18 @@ test("renders a Codex MCP config block for RepoLens", () => {
   assert.match(block, /REPOLENS_DB = "\.repolens\/memory\.db"/);
 });
 
+test("rejects unsafe Codex MCP server names", async () => {
+  assert.throws(
+    () => codexManagedBlock({ serverName: "repo.lens", command: "node", cliPath: "/repo/cli.js", dbPath: ".repolens/memory.db" }),
+    /Server name/
+  );
+  await assert.rejects(
+    () => installCodexConfig({ serverName: "repolens\nbad", command: "node", cliPath: "/repo/cli.js", dryRun: true }),
+    /Server name/
+  );
+  await assert.rejects(() => uninstallCodexConfig({ serverName: "bad.name", dryRun: true }), /Server name/);
+});
+
 test("upserts a single managed RepoLens block", () => {
   const first = codexManagedBlock({ serverName: "repolens", command: "node", cliPath: "/one.js", dbPath: "one.db" });
   const second = codexManagedBlock({ serverName: "repolens", command: "node", cliPath: "/two.js", dbPath: "two.db" });

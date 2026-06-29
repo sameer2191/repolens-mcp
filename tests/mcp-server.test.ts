@@ -7,7 +7,14 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import fc from "fast-check";
-import { maybeAutoIndexOnStartup, maybeStartAutoSyncOnStartup, validateMcpAgentSetupWriteRequest } from "../src/mcp/server.js";
+import {
+  maybeAutoIndexOnStartup,
+  maybeStartAutoSyncOnStartup,
+  resolveMcpConfigPath,
+  resolveMcpPath,
+  resolveMcpRoot,
+  validateMcpAgentSetupWriteRequest
+} from "../src/mcp/server.js";
 
 const fixture = path.join(process.cwd(), "tests", "fixtures", "sample-repo");
 const cliPath = path.join(process.cwd(), "dist", "src", "cli.js");
@@ -262,6 +269,29 @@ test("MCP agent_setup executable hook writes require explicit opt-in", async () 
   assert.equal(
     validateMcpAgentSetupWriteRequest({ targetDir: ".", write: true, withHooks: true }, tmp, { REPOLENS_ALLOW_MCP_HOOK_WRITES: "1" }),
     tmp
+  );
+});
+
+test("MCP path policy confines model-supplied filesystem paths", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-mcp-path-policy-"));
+  const repo = path.join(tmp, "repo");
+  await fs.mkdir(repo, { recursive: true });
+
+  assert.equal(resolveMcpRoot("repo", tmp), repo);
+  assert.equal(resolveMcpPath("repo/.repolens/memory.db", "dbPath", tmp), path.join(repo, ".repolens", "memory.db"));
+  assert.throws(() => resolveMcpRoot("..", repo), /inside the MCP server working directory/);
+  assert.throws(() => resolveMcpPath(path.join(tmp, "outside.db"), "dbPath", repo), /Use the CLI/);
+});
+
+test("MCP manage_config alternate config paths require server-owner opt-in", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-mcp-config-policy-"));
+
+  assert.equal(resolveMcpConfigPath(undefined, tmp, {}), undefined);
+  assert.throws(() => resolveMcpConfigPath("config.json", tmp, {}), /REPOLENS_ALLOW_MCP_CONFIG_PATHS=1/);
+  assert.equal(resolveMcpConfigPath("config.json", tmp, { REPOLENS_ALLOW_MCP_CONFIG_PATHS: "1" }), path.join(tmp, "config.json"));
+  assert.throws(
+    () => resolveMcpConfigPath(path.join(path.dirname(tmp), "outside.json"), tmp, { REPOLENS_ALLOW_MCP_CONFIG_PATHS: "1" }),
+    /Use the CLI/
   );
 });
 

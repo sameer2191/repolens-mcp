@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import fc from "fast-check";
+import { unpackGraph } from "../src/core/api.js";
 import { dashboardErrorBody } from "../src/dashboard/server.js";
 import { buildResolvedImportEdges } from "../src/core/import-resolver.js";
 import { MemoryStore } from "../src/core/store.js";
@@ -230,6 +231,69 @@ test("graph search name patterns are bounded wildcards, not raw regexes", async 
   } finally {
     store.close();
   }
+});
+
+test("code snippets only read indexed files inside the latest repository root", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-snippet-boundary-"));
+  const repo = path.join(tmp, "repo");
+  const outside = path.join(tmp, "outside-secret.txt");
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.writeFile(path.join(repo, "src", "index.ts"), "export const safe = true;\n");
+  await fs.writeFile(outside, "outside secret\n");
+
+  const store = new MemoryStore(path.join(tmp, "memory.db"));
+  try {
+    store.recordRun(repo, null, new Date().toISOString());
+    store.insertFile({
+      path: "src/index.ts",
+      language: "typescript",
+      bytes: 26,
+      lines: 1,
+      sha256: "safe",
+      skipped: false
+    });
+    store.insertCodeLines("src/index.ts", ["export const safe = true;"]);
+
+    assert.equal(store.getCodeSnippet(`${outside}:1`), null);
+    assert.equal(store.getCodeSnippet("../outside-secret.txt:1"), null);
+    assert.equal(store.getCodeSnippet("src/index.ts:1")?.lines[0]?.text, "export const safe = true;");
+  } finally {
+    store.close();
+  }
+});
+
+test("GitHub security summary validates response-controlled pagination URLs", async () => {
+  const script = await fs.readFile(path.join(process.cwd(), "scripts", "github-security-summary.mjs"), "utf8");
+
+  assert.ok(script.includes('response.headers.get("link")'));
+  assert.ok(script.includes("paginationParametersFromLink"));
+  assert.ok(script.includes("nextUrl.origin !== expected.origin"));
+  assert.ok(script.includes("nextUrl.pathname !== expected.pathname"));
+  assert.ok(script.includes('for (const key of ["after", "before", "page"])'));
+  assert.ok(!script.includes("url = new URL(next)"));
+});
+
+test("MCP server manifest pins npx package resolution", async () => {
+  const manifest = JSON.parse(await fs.readFile(path.join(process.cwd(), "server.json"), "utf8")) as { command?: string; args?: string[] };
+
+  assert.equal(manifest.command, "npx");
+  assert.ok(manifest.args?.some((arg) => /^repolens-mcp@\d+\.\d+\.\d+$/.test(arg)));
+  assert.ok(!manifest.args?.includes("repolens-mcp"));
+});
+
+test("graph package import rejects oversized sqlite payload declarations before decompression", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-package-boundary-"));
+  const packagePath = path.join(tmp, "huge.rlgz");
+  const header = {
+    magic: "REPOLENS_GRAPH_PACKAGE_V1",
+    createdAt: new Date().toISOString(),
+    sourceDbPath: "/tmp/source.db",
+    sqliteBytes: 512 * 1024 * 1024 + 1,
+    sha256: "0".repeat(64)
+  };
+  await fs.writeFile(packagePath, `${JSON.stringify(header)}\nnot-a-gzip-payload`);
+
+  await assert.rejects(() => unpackGraph(packagePath, path.join(tmp, "out.db")), /sqliteBytes/);
 });
 
 function fileSymbol(filePath: string): SymbolNode {

@@ -62,9 +62,24 @@ const byExtension = new Map<string, Language>([
 export type LanguageOverrides = ReadonlyMap<string, Language>;
 
 const supportedOverrideLanguages = new Set<Language>(byExtension.values());
+const MAX_REPOLENS_CONFIG_BYTES = 64 * 1024;
+const MAX_LANGUAGE_OVERRIDES = 500;
 
 export async function loadLanguageOverrides(root: string): Promise<LanguageOverrides> {
   const configPath = path.join(root, ".repolens.json");
+  const stats = await fs.stat(configPath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!stats) {
+    return new Map();
+  }
+  if (!stats.isFile()) {
+    return new Map();
+  }
+  if (stats.size > MAX_REPOLENS_CONFIG_BYTES) {
+    throw new Error(`${configPath} is ${stats.size} bytes, which exceeds the ${MAX_REPOLENS_CONFIG_BYTES} byte limit.`);
+  }
   const raw = await fs.readFile(configPath, "utf8").catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT") return null;
     throw error;
@@ -94,7 +109,11 @@ export function parseLanguageOverrides(value: unknown, source = ".repolens.json"
     throw new Error(`${source} languages must be an object mapping file suffixes or basenames to supported languages.`);
   }
 
-  const entries = Object.entries(config.languages as Record<string, unknown>).map(([rawPattern, rawLanguage]) => {
+  const rawEntries = Object.entries(config.languages as Record<string, unknown>);
+  if (rawEntries.length > MAX_LANGUAGE_OVERRIDES) {
+    throw new Error(`${source} has ${rawEntries.length} language overrides, which exceeds the ${MAX_LANGUAGE_OVERRIDES} override limit.`);
+  }
+  const entries = rawEntries.map(([rawPattern, rawLanguage]) => {
     const pattern = normalizeOverridePattern(rawPattern, source);
     const language = normalizeOverrideLanguage(rawLanguage, source, rawPattern);
     return [pattern, language] as const;

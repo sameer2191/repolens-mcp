@@ -363,6 +363,13 @@ test("indexes project-specific language extension overrides", async () => {
   assert.equal(detectLanguage("src/components/Profile.view", overrides), "typescript");
   assert.equal(detectLanguage("resources/views/order.blade.php", overrides), "php");
   assert.throws(() => parseLanguageOverrides({ languages: { "../escape": "typescript" } }), /language override pattern/);
+  assert.throws(
+    () =>
+      parseLanguageOverrides({
+        languages: Object.fromEntries(Array.from({ length: 501 }, (_, index) => [`.x${index}`, "typescript"]))
+      }),
+    /override limit/
+  );
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "memory-language-overrides-"));
   const repo = path.join(tmp, "repo");
@@ -1008,16 +1015,37 @@ test("bootstraps a missing database from a default graph package", async () => {
   const seedDbPath = path.join(tmp, "seed.db");
   await indexRepository({ root: repo, dbPath: seedDbPath });
 
+  const seedStore = new MemoryStore(seedDbPath);
+  try {
+    seedStore.insertSymbol({
+      filePath: "src/orders.ts",
+      language: "typescript",
+      kind: "function",
+      name: "poisonedBootstrapSymbol",
+      qualifiedName: "src/orders.ts:poisonedBootstrapSymbol",
+      startLine: 1,
+      endLine: 1
+    });
+  } finally {
+    seedStore.close();
+  }
+
   const packagePath = path.join(repo, ".repolens", "graph.rlgz");
   await packGraph(packagePath, seedDbPath, "bootstrap-fixture");
 
   const bootDbPath = path.join(tmp, "bootstrapped.db");
   const result = await indexRepository({ root: repo, dbPath: bootDbPath });
-  assert.equal(result.mode, "incremental");
+  assert.equal(result.mode, "full");
   assert.equal(result.bootstrapPackage?.label, "bootstrap-fixture");
   assert.equal(result.bootstrapPackage?.dbPath, bootDbPath);
-  assert.ok(result.filesUnchanged > 0);
+  assert.equal(result.filesUnchanged, 0);
   assert.ok(result.symbols >= 14);
+  const bootStore = new MemoryStore(bootDbPath);
+  try {
+    assert.equal(bootStore.searchSymbols("poisonedBootstrapSymbol").length, 0);
+  } finally {
+    bootStore.close();
+  }
 
   const noBootstrapDbPath = path.join(tmp, "no-bootstrap.db");
   const noBootstrap = await indexRepository({ root: repo, dbPath: noBootstrapDbPath, bootstrapPackage: false });

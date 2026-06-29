@@ -53,7 +53,12 @@ export function resolveDiagnosticsPath(setting: DiagnosticsPathSetting, root: st
     return undefined;
   }
   const configuredPath = TRUE_VALUES.has(normalized) ? DEFAULT_DIAGNOSTICS_FILE : trimmed;
-  return path.resolve(root, configuredPath);
+  const resolvedRoot = path.resolve(root);
+  const resolvedPath = path.resolve(resolvedRoot, configuredPath);
+  if (!isPathInside(resolvedRoot, resolvedPath)) {
+    throw new Error("RepoLens diagnosticsPath must resolve inside the repository root.");
+  }
+  return resolvedPath;
 }
 
 export function normalizeDiagnosticsSetting(value: string | false | undefined): DiagnosticsPathSetting {
@@ -117,6 +122,11 @@ function sanitizeRecord(record: Record<string, unknown>): Record<string, unknown
     }
   }
   return sanitized;
+}
+
+function isPathInside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function sanitizeValue(value: unknown, depth: number): unknown {

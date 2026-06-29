@@ -2,7 +2,7 @@
   "name": "repolens-mcp",
   "description": "Local-first MCP server that incrementally indexes repositories into SQLite and exposes persistent config, graph package bootstrap, optional startup auto-indexing, git-aware auto-sync, architecture reports, graph search, cross-repo graphing, graph communities, semantic search, local vector search, reference lookup, typed relationship and data-flow edges, redacted secret scanning, import-resolved file graphs, manifest and lockfile dependency graphs, git-history hotspots, route-call links, read-only graph queries, source snippets, dependency-cycle checks, recommendations, change impact, dead-code candidates, graph snapshots, graph package exchange, and ADR memory tools.",
   "command": "npx",
-  "args": ["-y", "repolens-mcp", "mcp"],
+  "args": ["-y", "repolens-mcp@1.0.0", "mcp"],
   "env": {
     "REPOLENS_DB": ".repolens/memory.db"
   }
