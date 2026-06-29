@@ -100,35 +100,35 @@ const patterns: Partial<Record<Language, Pattern[]>> = {
   c: [
     { kind: "struct", regex: /^\s*(?:typedef\s+)?struct\s+([A-Za-z_]\w*)/gm },
     { kind: "enum", regex: /^\s*(?:typedef\s+)?enum\s+([A-Za-z_]\w*)/gm },
-    { kind: "function", regex: /^\s*(?:static\s+|inline\s+|extern\s+|__attribute__\s*\(\([^)]*\)\)\s*)*(?:[A-Za-z_][\w\s*]+\s+)+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm }
+    { kind: "function", regex: /^\s*(?:(?:static|inline|extern)\s+)*(?:[A-Za-z_]\w*[&*]?\s+){1,8}([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm }
   ],
   cpp: [
     { kind: "namespace", regex: /^\s*namespace\s+([A-Za-z_]\w*)\s*\{/gm },
     { kind: "class", regex: /^\s*(?:template\s*<[^>]+>\s*)?(?:class)\s+([A-Za-z_]\w*)/gm },
     { kind: "struct", regex: /^\s*(?:template\s*<[^>]+>\s*)?(?:struct)\s+([A-Za-z_]\w*)/gm },
     { kind: "enum", regex: /^\s*(?:enum\s+(?:class\s+)?)\s*([A-Za-z_]\w*)/gm },
-    { kind: "function", regex: /^\s*(?:template\s*<[^>]+>\s*)?(?:[\w:<>,~*&\s]+\s+)+(?:(?:[A-Za-z_]\w*)::)?(~?[A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?(?:final\s*)?\{/gm }
+    { kind: "function", regex: /^\s*(?:template\s*<[^>\n]+>\s*)?(?:(?:static|inline|virtual|constexpr|extern|friend|const)\s+)*(?:[A-Za-z_~][\w:<>]*[&*]?\s+){1,8}(?:(?:[A-Za-z_]\w*)::)?(~?[A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?(?:final\s*)?\{/gm }
   ],
   csharp: [
-    { kind: "class", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|abstract|sealed|static|partial|\s)*class\s+([A-Za-z_]\w*)/gm },
-    { kind: "interface", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|partial|\s)*interface\s+([A-Za-z_]\w*)/gm },
-    { kind: "struct", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|readonly|partial|\s)*struct\s+([A-Za-z_]\w*)/gm },
-    { kind: "enum", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|\s)*enum\s+([A-Za-z_]\w*)/gm },
-    { kind: "record", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|sealed|abstract|partial|\s)*record(?:\s+class|\s+struct)?\s+([A-Za-z_]\w*)/gm },
-    { kind: "method", regex: /^\s*(?:\[[^\]]+\]\s*)*(?:public|private|protected|internal|static|async|virtual|override|sealed|partial|extern|unsafe|\s)+[\w<>\[\],?]+\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:where\s+[^{]+)?\{/gm }
+    { kind: "class", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal|abstract|sealed|static|partial)\s+)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal|partial)\s+)*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "struct", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal|readonly|partial)\s+)*struct\s+([A-Za-z_]\w*)/gm },
+    { kind: "enum", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal)\s+)*enum\s+([A-Za-z_]\w*)/gm },
+    { kind: "record", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal|sealed|abstract|partial)\s+)*record(?:\s+class|\s+struct)?\s+([A-Za-z_]\w*)/gm },
+    { kind: "method", regex: /^\s*(?:\[[^\]\n]+\]\s*)*(?:(?:public|private|protected|internal|static|async|virtual|override|sealed|partial|extern|unsafe)\s+)+[\w<>\[\],?]+\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:where\s+[^{]+)?\{/gm }
   ],
   kotlin: [
     { kind: "class", regex: /^\s*(?:(?:data|sealed|open|abstract|inner|value)\s+)*class\s+([A-Za-z_]\w*)/gm },
     { kind: "interface", regex: /^\s*(?:fun\s+)?interface\s+([A-Za-z_]\w*)/gm },
     { kind: "object", regex: /^\s*(?:data\s+)?object\s+([A-Za-z_]\w*)/gm },
     { kind: "enum", regex: /^\s*enum\s+class\s+([A-Za-z_]\w*)/gm },
-    { kind: "function", regex: /^\s*(?:public|private|protected|internal|suspend|inline|tailrec|operator|override|open|\s)*fun(?:\s+<[^>]+>)?\s+([A-Za-z_]\w*)/gm }
+    { kind: "function", regex: /^\s*(?:(?:public|private|protected|internal|suspend|inline|tailrec|operator|override|open)\s+)*fun(?:\s+<[^>]+>)?\s+([A-Za-z_]\w*)/gm }
   ],
   php: [
     { kind: "class", regex: /^\s*(?:abstract\s+|final\s+)?class\s+([A-Za-z_]\w*)/gm },
     { kind: "interface", regex: /^\s*interface\s+([A-Za-z_]\w*)/gm },
     { kind: "trait", regex: /^\s*trait\s+([A-Za-z_]\w*)/gm },
-    { kind: "method", regex: /^\s*(?:public|private|protected|static|abstract|final|\s)+function\s+([A-Za-z_]\w*)/gm },
+    { kind: "method", regex: /^\s*(?:(?:public|private|protected|static|abstract|final)\s+)+function\s+([A-Za-z_]\w*)/gm },
     { kind: "function", regex: /^\s*function\s+([A-Za-z_]\w*)/gm }
   ],
   dart: [
@@ -155,10 +155,10 @@ const patterns: Partial<Record<Language, Pattern[]>> = {
     { kind: "function", regex: /^\s*function\s+([A-Za-z_]\w*)/gm }
   ],
   apex: [
-    { kind: "class", regex: /^\s*(?:public|private|global|virtual|abstract|with\s+sharing|without\s+sharing|inherited\s+sharing|\s)*class\s+([A-Za-z_]\w*)/gm },
-    { kind: "interface", regex: /^\s*(?:public|private|global|\s)*interface\s+([A-Za-z_]\w*)/gm },
+    { kind: "class", regex: /^\s*(?:(?:public|private|global|virtual|abstract|with\s+sharing|without\s+sharing|inherited\s+sharing)\s+)*class\s+([A-Za-z_]\w*)/gm },
+    { kind: "interface", regex: /^\s*(?:(?:public|private|global)\s+)*interface\s+([A-Za-z_]\w*)/gm },
     { kind: "trigger", regex: /^\s*trigger\s+([A-Za-z_]\w*)\s+on\s+([A-Za-z_]\w*)/gm },
-    { kind: "method", regex: /^\s*(?:public|private|protected|global|static|override|virtual|abstract|testMethod|\s)+[\w<>\[\],]+\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm }
+    { kind: "method", regex: /^\s*(?:(?:public|private|protected|global|static|override|virtual|abstract|testMethod)\s+)+[\w<>\[\],]+\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{/gm }
   ]
 };
 
