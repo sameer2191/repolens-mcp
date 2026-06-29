@@ -806,6 +806,8 @@ test("indexes a TypeScript repo with symbols, routes, search, and architecture",
     const htmlReport = architectureReport({ format: "html", graphLimit: 50 }, dbPath);
     assert.match(htmlReport, /<!doctype html>/);
     assert.match(htmlReport, /RepoLens Architecture Report/);
+    assert.match(htmlReport, /Graph Explorer/);
+    assert.match(htmlReport, /id="graph-filter"/);
     assert.match(htmlReport, /CheckoutViewModel/);
   } finally {
     store.close();

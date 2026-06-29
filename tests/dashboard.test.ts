@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import type http from "node:http";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -13,6 +14,14 @@ test("dashboard serves graph, query, search, and report endpoints", async (t) =>
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-dashboard-"));
   const dbPath = path.join(tmp, "memory.db");
   await indexRepository({ root: fixture, dbPath });
+  const graphOut = path.join(tmp, "graph.html");
+  const exportResult = spawnSync(process.execPath, ["--experimental-sqlite", path.join(process.cwd(), "dist", "src", "cli.js"), "export-graph", "--db", dbPath, "--out", graphOut, "--limit", "25"], {
+    encoding: "utf8"
+  });
+  assert.equal(exportResult.status, 0, exportResult.stderr || exportResult.stdout);
+  const graphArtifact = await fs.readFile(graphOut, "utf8");
+  assert.match(graphArtifact, /id="detail"/);
+  assert.match(graphArtifact, /id="legend"/);
 
   let server: http.Server;
   try {
@@ -29,6 +38,9 @@ test("dashboard serves graph, query, search, and report endpoints", async (t) =>
     const baseUrl = dashboardUrl(server);
     const page = await fetchText(`${baseUrl}/`);
     assert.match(page, /RepoLens MCP/);
+    assert.match(page, /Graph Explorer/);
+    assert.match(page, /id="graph-filter"/);
+    assert.match(page, /id="graph-selected"/);
 
     const schema = await fetchJson<{ totals: { files: number; symbols: number; edges: number } }>(`${baseUrl}/api/schema`);
     assert.equal(schema.totals.files, 22);
@@ -49,6 +61,10 @@ test("dashboard serves graph, query, search, and report endpoints", async (t) =>
 
     const report = await fetchText(`${baseUrl}/api/report?format=markdown&graphLimit=25`);
     assert.match(report, /# RepoLens Architecture Report/);
+
+    const htmlReport = await fetchText(`${baseUrl}/api/report?format=html&graphLimit=25`);
+    assert.match(htmlReport, /Graph Explorer/);
+    assert.match(htmlReport, /id="graph-filter"/);
   } finally {
     await closeServer(server);
   }

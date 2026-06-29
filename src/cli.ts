@@ -791,6 +791,13 @@ function staticGraphHtml(graph: { nodes: Array<{ id: string; label: string; grou
     canvas { width:100%; height:calc(100vh - 72px); display:block; background:#fbfcff; }
     aside { border-left:1px solid var(--line); background:var(--panel); padding:16px; overflow:auto; }
     input { width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-size:14px; }
+    button { min-height:34px; padding:7px 11px; border:1px solid var(--line); border-radius:7px; background:#fff; color:#263447; font-size:13px; cursor:pointer; }
+    button:hover { border-color:#9aa8bb; }
+    .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+    .legend { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+    .legend-item { display:inline-flex; align-items:center; gap:6px; padding:4px 7px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:#344054; background:#fff; }
+    .swatch { width:9px; height:9px; border-radius:50%; display:inline-block; }
+    .detail { min-height:88px; border:1px solid var(--line); border-radius:8px; padding:10px; background:#fbfcfe; margin:10px 0; }
     .row { border-bottom:1px solid var(--line); padding:10px 0; }
     .label { font-weight:700; font-size:13px; overflow-wrap:anywhere; }
     .meta { color:var(--muted); font-size:12px; margin-top:3px; overflow-wrap:anywhere; }
@@ -809,6 +816,12 @@ function staticGraphHtml(graph: { nodes: Array<{ id: string; label: string; grou
     <canvas id="graph"></canvas>
     <aside>
       <input id="filter" placeholder="Filter nodes">
+      <div class="toolbar">
+        <button id="pause" type="button">Pause</button>
+        <button id="fit" type="button">Fit</button>
+      </div>
+      <div class="detail" id="detail"><div class="meta">Hover or click a node to inspect it.</div></div>
+      <div class="legend" id="legend"></div>
       <div id="list"></div>
     </aside>
   </main>
@@ -819,15 +832,78 @@ function staticGraphHtml(graph: { nodes: Array<{ id: string; label: string; grou
     const filter = document.querySelector('#filter');
     const list = document.querySelector('#list');
     const counts = document.querySelector('#counts');
+    const legend = document.querySelector('#legend');
+    const detail = document.querySelector('#detail');
+    const pause = document.querySelector('#pause');
+    const fit = document.querySelector('#fit');
     const colors = ['#0f766e', '#7c3aed', '#2563eb', '#b45309', '#be123c', '#047857', '#475569', '#9333ea'];
     const groupColor = new Map();
-    const nodes = graph.nodes.map((node, index) => ({ ...node, x: 120 + (index % 32) * 22, y: 100 + Math.floor(index / 32) * 22, vx: 0, vy: 0 }));
+    const nodes = graph.nodes.map((node, index) => ({ ...node, x: 120 + (index % 32) * 22, y: 100 + Math.floor(index / 32) * 22, vx: 0, vy: 0, degree: 0, visible: true }));
     const byId = new Map(nodes.map(node => [node.id, node]));
     const edges = graph.edges.map(edge => ({ ...edge, sourceNode: byId.get(edge.source), targetNode: byId.get(edge.target) })).filter(edge => edge.sourceNode && edge.targetNode);
+    for (const edge of edges) {
+      edge.sourceNode.degree += 1;
+      edge.targetNode.degree += 1;
+    }
+    let paused = false;
+    let hovered = null;
+    let selected = null;
     counts.textContent = nodes.length.toLocaleString() + ' nodes, ' + edges.length.toLocaleString() + ' edges';
     function color(group) {
       if (!groupColor.has(group)) groupColor.set(group, colors[groupColor.size % colors.length]);
       return groupColor.get(group);
+    }
+    function renderLegend() {
+      const groupCounts = new Map();
+      for (const node of nodes) groupCounts.set(node.group, (groupCounts.get(node.group) || 0) + 1);
+      legend.innerHTML = [...groupCounts.entries()].sort((a, b) => b[1] - a[1]).map(([group, count]) => '<span class="legend-item"><span class="swatch" style="background:' + color(group) + '"></span>' + escapeHtml(group) + ' ' + count.toLocaleString() + '</span>').join('');
+    }
+    function renderDetail(node) {
+      if (!node) {
+        detail.innerHTML = '<div class="meta">Hover or click a node to inspect it.</div>';
+        return;
+      }
+      detail.innerHTML = '<div class="label">' + escapeHtml(node.label) + '</div><div class="meta">' + escapeHtml(node.group) + ' - degree ' + node.degree.toLocaleString() + '</div><div class="meta">' + escapeHtml(node.id) + '</div>';
+    }
+    function applyFilter() {
+      const q = filter.value.trim().toLowerCase();
+      for (const node of nodes) node.visible = !q || node.label.toLowerCase().includes(q) || node.id.toLowerCase().includes(q) || String(node.group).toLowerCase().includes(q);
+      if (selected && !selected.visible) selected = null;
+      renderDetail(selected || hovered);
+      renderList();
+    }
+    function nearestNode(event) {
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      let best = null;
+      let bestDistance = 16;
+      for (const node of nodes) {
+        if (!node.visible) continue;
+        const distance = Math.hypot(node.x - x, node.y - y);
+        if (distance < bestDistance) {
+          best = node;
+          bestDistance = distance;
+        }
+      }
+      return best;
+    }
+    function fitVisible() {
+      const visible = nodes.filter(node => node.visible);
+      if (!visible.length) return;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      const minX = Math.min(...visible.map(node => node.x));
+      const maxX = Math.max(...visible.map(node => node.x));
+      const minY = Math.min(...visible.map(node => node.y));
+      const maxY = Math.max(...visible.map(node => node.y));
+      const scale = Math.min((w - 40) / Math.max(1, maxX - minX), (h - 40) / Math.max(1, maxY - minY), 1.8);
+      for (const node of visible) {
+        node.x = 20 + (node.x - minX) * scale;
+        node.y = 20 + (node.y - minY) * scale;
+        node.vx = 0;
+        node.vy = 0;
+      }
     }
     function resize() {
       const rect = canvas.getBoundingClientRect();
@@ -839,6 +915,7 @@ function staticGraphHtml(graph: { nodes: Array<{ id: string; label: string; grou
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       for (const edge of edges) {
+        if (!edge.sourceNode.visible || !edge.targetNode.visible) continue;
         const dx = edge.targetNode.x - edge.sourceNode.x;
         const dy = edge.targetNode.y - edge.sourceNode.y;
         const dist = Math.max(1, Math.hypot(dx, dy));
@@ -851,6 +928,7 @@ function staticGraphHtml(graph: { nodes: Array<{ id: string; label: string; grou
       for (let i = 0; i < nodes.length; i += 1) {
         for (let j = i + 1; j < Math.min(nodes.length, i + 90); j += 1) {
           const a = nodes[i], b = nodes[j];
+          if (!a.visible || !b.visible) continue;
           const dx = b.x - a.x, dy = b.y - a.y;
           const dist = Math.max(8, Math.hypot(dx, dy));
           const force = 18 / (dist * dist);
@@ -859,6 +937,7 @@ function staticGraphHtml(graph: { nodes: Array<{ id: string; label: string; grou
         }
       }
       for (const node of nodes) {
+        if (!node.visible) continue;
         node.vx += (w / 2 - node.x) * 0.0008;
         node.vy += (h / 2 - node.y) * 0.0008;
         node.x = Math.min(w - 16, Math.max(16, node.x + node.vx));
@@ -870,36 +949,54 @@ function staticGraphHtml(graph: { nodes: Array<{ id: string; label: string; grou
     function draw() {
       ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
       ctx.lineWidth = 0.75;
-      ctx.strokeStyle = 'rgba(71, 85, 105, 0.16)';
       for (const edge of edges) {
+        if (!edge.sourceNode.visible || !edge.targetNode.visible) continue;
+        const active = edge.sourceNode === hovered || edge.targetNode === hovered || edge.sourceNode === selected || edge.targetNode === selected;
+        ctx.strokeStyle = active ? 'rgba(15,118,110,.55)' : 'rgba(71, 85, 105, 0.16)';
+        ctx.lineWidth = active ? 1.6 : 0.75;
         ctx.beginPath();
         ctx.moveTo(edge.sourceNode.x, edge.sourceNode.y);
         ctx.lineTo(edge.targetNode.x, edge.targetNode.y);
         ctx.stroke();
       }
       for (const node of nodes) {
+        if (!node.visible) continue;
+        const active = node === hovered || node === selected;
         ctx.fillStyle = color(node.group);
         ctx.beginPath();
-        ctx.arc(node.x, node.y, node.group === 'file' ? 3.2 : 4.8, 0, Math.PI * 2);
+        ctx.arc(node.x, node.y, (node.group === 'file' ? 3.2 : 4.8) + Math.min(4, node.degree / 35) + (active ? 2 : 0), 0, Math.PI * 2);
         ctx.fill();
+        if (active) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#111827';
+          ctx.stroke();
+          ctx.fillStyle = '#111827';
+          ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
+          ctx.fillText(node.label.slice(0, 42), node.x + 8, node.y - 8);
+        }
       }
     }
     function frame() {
-      for (let i = 0; i < 2; i += 1) tick();
+      if (!paused) for (let i = 0; i < 2; i += 1) tick();
       draw();
       requestAnimationFrame(frame);
     }
     function renderList() {
-      const q = filter.value.trim().toLowerCase();
-      const visible = nodes.filter(node => !q || node.label.toLowerCase().includes(q) || node.id.toLowerCase().includes(q)).slice(0, 80);
-      list.innerHTML = visible.map(node => '<div class="row"><div class="label">' + escapeHtml(node.label) + '</div><div class="meta">' + escapeHtml(node.group + ' - ' + node.id) + '</div></div>').join('');
+      const visible = nodes.filter(node => node.visible).sort((a, b) => b.degree - a.degree).slice(0, 80);
+      list.innerHTML = visible.map(node => '<div class="row"><div class="label">' + escapeHtml(node.label) + '</div><div class="meta">' + escapeHtml(node.group + ' - degree ' + node.degree + ' - ' + node.id) + '</div></div>').join('');
     }
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     }
     addEventListener('resize', () => { resize(); draw(); });
-    filter.addEventListener('input', renderList);
+    filter.addEventListener('input', applyFilter);
+    pause.addEventListener('click', () => { paused = !paused; pause.textContent = paused ? 'Resume' : 'Pause'; });
+    fit.addEventListener('click', fitVisible);
+    canvas.addEventListener('mousemove', event => { hovered = nearestNode(event); if (!selected) renderDetail(hovered); });
+    canvas.addEventListener('mouseleave', () => { hovered = null; if (!selected) renderDetail(null); });
+    canvas.addEventListener('click', event => { selected = nearestNode(event); renderDetail(selected); });
     resize();
+    renderLegend();
     renderList();
     frame();
   </script>

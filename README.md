@@ -19,8 +19,8 @@ RepoLens MCP is an original TypeScript implementation built around fast local ve
 - **Incremental refreshes**: skip unchanged files, prune removed files, preserve the existing graph when a repo has not changed, optionally refresh on MCP startup with `REPOLENS_AUTO_INDEX`, and keep long-running MCP sessions fresh with git-aware `REPOLENS_AUTO_SYNC`.
 - **Persistent local config**: `config set auto-index incremental` and `config set auto-sync true` store defaults for MCP startup indexing, live-session syncing, root, database path, max file size, max file count, labels, and graph-package bootstrap without requiring shell env vars.
 - **Watch mode**: keep an indexed graph fresh during active coding with polling-based incremental refreshes, optionally skipping unchanged git polls with `--git-aware`.
-- **Portable graph and report artifacts**: export self-contained HTML graph snapshots, architecture reports, and compressed `.rlgz` graph packages from the CLI; first index can bootstrap a missing database from `.repolens/graph.rlgz`.
-- **Operational dashboard**: browse graph previews, structural filters, references, semantic/vector search, schema counts, relationship patterns, label property hints, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
+- **Portable graph and report artifacts**: export self-contained interactive HTML graph explorers, architecture reports, and compressed `.rlgz` graph packages from the CLI; first index can bootstrap a missing database from `.repolens/graph.rlgz`.
+- **Operational dashboard**: browse an interactive graph explorer with filtering, hover/click node inspection, legend, pause, and fit controls, plus structural filters, references, semantic/vector search, schema counts, relationship patterns, label property hints, fleet service links, dead-code candidates, review signals, and report links without a frontend build.
 - **Graph communities**: detects functional modules from weighted relationships, not just folder names.
 - **Code-aware search ranking**: uses SQLite FTS5 BM25 ranking with indexed camelCase and snake_case term expansion, so `create order` can find `createOrder` without scanning files.
 - **Reference lookup**: finds exact indexed identifier references and labels definition lines for language-server-style navigation without requiring an external LSP process.
@@ -62,7 +62,7 @@ node --experimental-sqlite dist/src/cli.js serve
 
 Then open `http://127.0.0.1:9749`.
 
-The dashboard includes code search, reference lookup, semantic/vector search, graph search, graph schema tables with relationship patterns and label property hints, fleet service links, hotspot and boundary summaries, git-history signals, dead-code candidates, and one-click Markdown/HTML architecture reports.
+The dashboard includes an interactive graph explorer, code search, reference lookup, semantic/vector search, graph search, graph schema tables with relationship patterns and label property hints, fleet service links, hotspot and boundary summaries, git-history signals, dead-code candidates, and one-click Markdown/HTML architecture reports.
 
 From a local clone, the installer runs the same build and Codex checks:
 

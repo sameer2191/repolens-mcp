@@ -159,7 +159,14 @@ function dashboardHtml(): string {
     .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     pre { white-space:pre-wrap; overflow-wrap:anywhere; margin:0; font-size:12px; }
     canvas { width:100%; height:430px; display:block; border:1px solid var(--line); border-radius:8px; background:#fbfcff; }
-    @media (max-width: 980px) { main { grid-template-columns:1fr; padding:16px; } header { padding:18px 16px 12px; align-items:flex-start; flex-direction:column; } .grid, .wide-grid { grid-template-columns:1fr; } }
+    .graph-shell { display:grid; grid-template-columns:minmax(0, 1fr) 260px; gap:12px; align-items:stretch; }
+    .graph-canvas-wrap { position:relative; min-width:0; }
+    .graph-status { position:absolute; left:10px; bottom:10px; max-width:calc(100% - 20px); padding:5px 8px; border:1px solid rgba(215,221,231,.9); border-radius:7px; background:rgba(255,255,255,.92); color:var(--muted); font-size:12px; pointer-events:none; }
+    .legend { display:flex; flex-wrap:wrap; gap:6px; }
+    .legend-item { display:inline-flex; align-items:center; gap:6px; padding:4px 7px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:#344054; background:#fff; }
+    .swatch { width:9px; height:9px; border-radius:50%; display:inline-block; }
+    .node-detail { min-height:96px; border:1px solid var(--line); border-radius:8px; padding:10px; background:var(--soft); }
+    @media (max-width: 980px) { main { grid-template-columns:1fr; padding:16px; } header { padding:18px 16px 12px; align-items:flex-start; flex-direction:column; } .grid, .wide-grid, .graph-shell { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -236,8 +243,22 @@ function dashboardHtml(): string {
     </aside>
     <div class="stack">
       <section>
-        <h2>Graph Preview</h2>
-        <canvas id="graph-canvas"></canvas>
+        <h2>Graph Explorer</h2>
+        <div class="graph-shell">
+          <div class="graph-canvas-wrap">
+            <canvas id="graph-canvas"></canvas>
+            <div class="graph-status" id="graph-status">loading graph</div>
+          </div>
+          <div class="stack">
+            <input id="graph-filter" placeholder="Filter visible nodes">
+            <div class="toolbar">
+              <button id="graph-pause" type="button">Pause</button>
+              <button id="graph-fit" type="button">Fit</button>
+            </div>
+            <div class="node-detail" id="graph-selected"><div class="sub">Hover or click a node to inspect it.</div></div>
+            <div class="legend" id="graph-legend"></div>
+          </div>
+        </div>
       </section>
       <div class="wide-grid">
         <section>
@@ -307,7 +328,16 @@ function dashboardHtml(): string {
     const cypherQuery = document.querySelector('#cypher-query');
     const canvas = document.querySelector('#graph-canvas');
     const ctx = canvas.getContext('2d');
+    const graphFilter = document.querySelector('#graph-filter');
+    const graphLegend = document.querySelector('#graph-legend');
+    const graphSelected = document.querySelector('#graph-selected');
+    const graphStatus = document.querySelector('#graph-status');
+    const graphPause = document.querySelector('#graph-pause');
+    const graphFit = document.querySelector('#graph-fit');
     let graphState = { nodes: [], edges: [] };
+    let hoveredNode = null;
+    let selectedNode = null;
+    let graphPaused = false;
 
     function metric(label, value) { return '<div class="metric"><b>' + fmt.format(value) + '</b><span>' + label + '</span></div>'; }
     function item(text, cls='') { return '<div class="' + cls + '">' + text + '</div>'; }
@@ -345,6 +375,8 @@ function dashboardHtml(): string {
       cycles.innerHTML = arch.dependencyCycles.length ? arch.dependencyCycles.map(c => item('<b>' + escapeHtml(c.clusters.join(' -> ')) + '</b><div class="sub">' + fmt.format(c.edges) + ' internal cycle edges</div><div class="path">' + escapeHtml(c.recommendation) + '</div>')).join('') : item('No cross-cluster dependency cycles found.');
       communities.innerHTML = communityRows.length ? communityRows.map(c => item('<b>' + escapeHtml(c.label) + '</b><div class="sub">' + fmt.format(c.members) + ' members - cohesion ' + c.cohesion.toFixed(2) + ' - ' + fmt.format(c.internalEdges) + ' internal edges</div><div class="path">' + escapeHtml(c.files.slice(0, 4).join(' | ')) + '</div><div class="sub">' + escapeHtml(c.representativeSymbols.slice(0, 4).map(s => s.name).join(', ')) + '</div>')).join('') : item('No graph communities found.');
       graphState = prepareGraph(graph);
+      applyGraphFilter();
+      renderGraphLegend();
       resizeGraph();
       drawGraph();
     }
@@ -387,9 +419,83 @@ function dashboardHtml(): string {
       results.innerHTML = data.rows.map(row => item(data.columns.map(column => '<div><b>' + escapeHtml(column) + '</b>: <span class="path">' + escapeHtml(row[column]) + '</span></div>').join(''))).join('');
     }
     function prepareGraph(graph) {
-      const nodes = graph.nodes.map((node, index) => ({ ...node, x: 40 + (index % 36) * 20, y: 46 + Math.floor(index / 36) * 20, vx: 0, vy: 0 }));
+      const groups = [...new Set(graph.nodes.map(node => node.group || 'unknown'))].sort();
+      const nodes = graph.nodes.map((node, index) => {
+        const groupIndex = groups.indexOf(node.group || 'unknown');
+        const angle = (index / Math.max(1, graph.nodes.length)) * Math.PI * 2;
+        const ring = 90 + (groupIndex % 6) * 36;
+        return { ...node, x: 260 + Math.cos(angle) * ring, y: 210 + Math.sin(angle) * ring, vx: 0, vy: 0, visible: true, degree: 0 };
+      });
       const byId = new Map(nodes.map(node => [node.id, node]));
-      return { nodes, edges: graph.edges.map(edge => ({ ...edge, sourceNode: byId.get(edge.source), targetNode: byId.get(edge.target) })).filter(edge => edge.sourceNode && edge.targetNode) };
+      const edges = graph.edges.map(edge => ({ ...edge, sourceNode: byId.get(edge.source), targetNode: byId.get(edge.target) })).filter(edge => edge.sourceNode && edge.targetNode);
+      for (const edge of edges) {
+        edge.sourceNode.degree += 1;
+        edge.targetNode.degree += 1;
+      }
+      return { nodes, edges };
+    }
+    function graphPalette(group) {
+      const palette = { file:'#475569', function:'#0f766e', class:'#6d28d9', struct:'#2563eb', heading:'#b45309', route:'#be123c', http_call:'#0891b2', package:'#7c2d12', dependency:'#64748b', resource:'#047857', module:'#4338ca' };
+      return palette[group] || '#64748b';
+    }
+    function applyGraphFilter() {
+      const q = graphFilter.value.trim().toLowerCase();
+      for (const node of graphState.nodes) {
+        node.visible = !q || node.label.toLowerCase().includes(q) || node.id.toLowerCase().includes(q) || String(node.group).toLowerCase().includes(q);
+      }
+      const visible = graphState.nodes.filter(node => node.visible).length;
+      const connected = graphState.edges.filter(edge => edge.sourceNode.visible && edge.targetNode.visible).length;
+      graphStatus.textContent = fmt.format(visible) + ' visible nodes, ' + fmt.format(connected) + ' visible edges';
+      if (selectedNode && !selectedNode.visible) selectedNode = null;
+      renderNodeDetail(selectedNode || hoveredNode);
+    }
+    function renderGraphLegend() {
+      const counts = new Map();
+      for (const node of graphState.nodes) counts.set(node.group, (counts.get(node.group) || 0) + 1);
+      graphLegend.innerHTML = [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([group, count]) => '<span class="legend-item"><span class="swatch" style="background:' + graphPalette(group) + '"></span>' + escapeHtml(group) + ' ' + fmt.format(count) + '</span>')
+        .join('');
+    }
+    function renderNodeDetail(node) {
+      if (!node) {
+        graphSelected.innerHTML = '<div class="sub">Hover or click a node to inspect it.</div>';
+        return;
+      }
+      graphSelected.innerHTML = '<b>' + escapeHtml(node.label) + '</b><div class="sub">' + escapeHtml(node.group) + ' - degree ' + fmt.format(node.degree) + '</div><div class="path">' + escapeHtml(node.id) + '</div>';
+    }
+    function fitGraph() {
+      const visible = graphState.nodes.filter(node => node.visible);
+      if (!visible.length) return;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const minX = Math.min(...visible.map(node => node.x));
+      const maxX = Math.max(...visible.map(node => node.x));
+      const minY = Math.min(...visible.map(node => node.y));
+      const maxY = Math.max(...visible.map(node => node.y));
+      const scale = Math.min((w - 40) / Math.max(1, maxX - minX), (h - 40) / Math.max(1, maxY - minY), 1.8);
+      for (const node of visible) {
+        node.x = 20 + (node.x - minX) * scale;
+        node.y = 20 + (node.y - minY) * scale;
+        node.vx = 0;
+        node.vy = 0;
+      }
+    }
+    function nearestNode(event) {
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      let best = null;
+      let bestDistance = 16;
+      for (const node of graphState.nodes) {
+        if (!node.visible) continue;
+        const distance = Math.hypot(node.x - x, node.y - y);
+        if (distance < bestDistance) {
+          best = node;
+          bestDistance = distance;
+        }
+      }
+      return best;
     }
     function resizeGraph() {
       const rect = canvas.getBoundingClientRect();
@@ -399,8 +505,9 @@ function dashboardHtml(): string {
     }
     function drawGraph() {
       const w = canvas.clientWidth, h = canvas.clientHeight;
-      for (let step = 0; step < 2; step += 1) {
+      if (!graphPaused) for (let step = 0; step < 2; step += 1) {
         for (const edge of graphState.edges) {
+          if (!edge.sourceNode.visible || !edge.targetNode.visible) continue;
           const dx = edge.targetNode.x - edge.sourceNode.x, dy = edge.targetNode.y - edge.sourceNode.y;
           const dist = Math.max(1, Math.hypot(dx, dy));
           const force = (dist - 82) * 0.0006;
@@ -408,6 +515,7 @@ function dashboardHtml(): string {
           edge.targetNode.vx -= dx * force; edge.targetNode.vy -= dy * force;
         }
         for (const node of graphState.nodes) {
+          if (!node.visible) continue;
           node.vx += (w / 2 - node.x) * 0.0008;
           node.vy += (h / 2 - node.y) * 0.0008;
           node.x = Math.min(w - 10, Math.max(10, node.x + node.vx));
@@ -416,12 +524,26 @@ function dashboardHtml(): string {
         }
       }
       ctx.clearRect(0, 0, w, h);
-      ctx.strokeStyle = 'rgba(71,85,105,.16)';
-      for (const edge of graphState.edges) { ctx.beginPath(); ctx.moveTo(edge.sourceNode.x, edge.sourceNode.y); ctx.lineTo(edge.targetNode.x, edge.targetNode.y); ctx.stroke(); }
-      const palette = { file:'#475569', function:'#0f766e', class:'#6d28d9', struct:'#2563eb', heading:'#b45309', route:'#be123c', http_call:'#0891b2' };
+      for (const edge of graphState.edges) {
+        if (!edge.sourceNode.visible || !edge.targetNode.visible) continue;
+        const emphasized = edge.sourceNode === selectedNode || edge.targetNode === selectedNode || edge.sourceNode === hoveredNode || edge.targetNode === hoveredNode;
+        ctx.strokeStyle = emphasized ? 'rgba(15,118,110,.55)' : 'rgba(71,85,105,.16)';
+        ctx.lineWidth = emphasized ? 1.6 : 0.8;
+        ctx.beginPath(); ctx.moveTo(edge.sourceNode.x, edge.sourceNode.y); ctx.lineTo(edge.targetNode.x, edge.targetNode.y); ctx.stroke();
+      }
       for (const node of graphState.nodes) {
-        ctx.fillStyle = palette[node.group] || '#64748b';
-        ctx.beginPath(); ctx.arc(node.x, node.y, node.group === 'file' ? 3 : 4.4, 0, Math.PI * 2); ctx.fill();
+        if (!node.visible) continue;
+        const active = node === selectedNode || node === hoveredNode;
+        ctx.fillStyle = graphPalette(node.group);
+        ctx.beginPath(); ctx.arc(node.x, node.y, (node.group === 'file' ? 3 : 4.4) + Math.min(4, node.degree / 35) + (active ? 2 : 0), 0, Math.PI * 2); ctx.fill();
+        if (active) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#111827';
+          ctx.stroke();
+          ctx.fillStyle = '#111827';
+          ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
+          ctx.fillText(node.label.slice(0, 42), node.x + 8, node.y - 8);
+        }
       }
       requestAnimationFrame(drawGraph);
     }
@@ -431,6 +553,12 @@ function dashboardHtml(): string {
     vectorRun.addEventListener('click', doVectorSearch);
     graphRun.addEventListener('click', doGraphSearch);
     cypherRun.addEventListener('click', doCypherQuery);
+    graphFilter.addEventListener('input', applyGraphFilter);
+    graphPause.addEventListener('click', () => { graphPaused = !graphPaused; graphPause.textContent = graphPaused ? 'Resume' : 'Pause'; });
+    graphFit.addEventListener('click', fitGraph);
+    canvas.addEventListener('mousemove', (event) => { hoveredNode = nearestNode(event); if (!selectedNode) renderNodeDetail(hoveredNode); });
+    canvas.addEventListener('mouseleave', () => { hoveredNode = null; if (!selectedNode) renderNodeDetail(null); });
+    canvas.addEventListener('click', (event) => { selectedNode = nearestNode(event); renderNodeDetail(selectedNode); });
     window.addEventListener('resize', resizeGraph);
     load().catch(err => { document.body.innerHTML = '<pre>' + escapeHtml(err.stack || err) + '</pre>'; });
   </script>

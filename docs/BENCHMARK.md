@@ -16,7 +16,7 @@ Latest result:
 - TypeScript build passed.
 - Node test suite passed: 79 tests, 78 passing, 0 failures, 1 sandbox-only dashboard socket skip.
 - Test skip gate passed with explicit policies for the dashboard sandbox socket skip and git-unavailable skips.
-- Coverage includes indexing with byte and file-count budgets, broad practical language extraction, namespace/file-like import edge resolution, incremental refresh, bounded git-history hotspot collection, git-aware watch refresh, MCP startup auto-index and auto-sync wiring, MCP agent setup write guardrails, project catalog and fleet summaries, graph package import/export, code search, symbol/reference lookup, semantic and vector search, context packs, graph queries, dependency cycles, git-history hotspots, change impact, secret scanning, agent setup, Codex config safeguards, package bootstrap, installer metadata, and MCP JSON-RPC robustness.
+- Coverage includes indexing with byte and file-count budgets, broad practical language extraction, namespace/file-like import edge resolution, incremental refresh, bounded git-history hotspot collection, git-aware watch refresh, MCP startup auto-index and auto-sync wiring, MCP agent setup write guardrails, project catalog and fleet summaries, graph package import/export, interactive graph report/export controls, code search, symbol/reference lookup, semantic and vector search, context packs, graph queries, dependency cycles, git-history hotspots, change impact, secret scanning, agent setup, Codex config safeguards, package bootstrap, installer metadata, and MCP JSON-RPC robustness.
 
 ## Package And Release Checks
 
@@ -68,11 +68,11 @@ Latest large-workspace result:
 - Symbols: 5,826
 - Edges: 38,995
 - Lines: 100,100
-- Full index elapsed: 153,883 ms
-- No-op incremental elapsed: 249 ms
+- Full index elapsed: 33,531 ms
+- No-op incremental elapsed: 208 ms
 - No-op incremental unchanged files: 853
-- Full throughput: 5.32 files/s and 37.86 symbols/s
-- No-op incremental throughput: 3,425.70 discovered files/s
+- Full throughput: 24.40 files/s and 173.75 symbols/s
+- No-op incremental throughput: 4,100.96 discovered files/s
 - Redacted secret scan: 0 high-confidence and 0 medium-confidence findings across 61,746 indexed non-test lines.
-- Graph export: 1,500 nodes and 1,500 edges.
+- Interactive graph export: 1,500 nodes and 1,500 edges.
 - Graph package import check restored 818 indexed files, 5,826 symbols, and 38,995 edges from the compressed graph snapshot.
