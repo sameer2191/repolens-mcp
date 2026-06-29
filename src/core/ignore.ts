@@ -37,6 +37,10 @@ const ignoredFiles = new Set([
   "tsconfig.tsbuildinfo"
 ]);
 
+const MAX_REPOLENSIGNORE_BYTES = 64 * 1024;
+const MAX_REPOLENSIGNORE_RULES = 2000;
+const MAX_REPOLENSIGNORE_RULE_LENGTH = 500;
+
 interface IgnoreRule {
   pattern: string;
   regex: RegExp;
@@ -50,16 +54,40 @@ export interface RepoIgnoreMatcher {
 
 export async function loadRepoIgnoreMatcher(root: string): Promise<RepoIgnoreMatcher> {
   const ignorePath = path.join(root, ".repolensignore");
-  const content = await fs.readFile(ignorePath, "utf8").catch(() => "");
+  const stats = await fs.stat(ignorePath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!stats) {
+    return createRepoIgnoreMatcher("");
+  }
+  if (!stats.isFile()) {
+    return createRepoIgnoreMatcher("");
+  }
+  if (stats.size > MAX_REPOLENSIGNORE_BYTES) {
+    throw new Error(`${ignorePath} is ${stats.size} bytes, which exceeds the ${MAX_REPOLENSIGNORE_BYTES} byte limit.`);
+  }
+  const content = await fs.readFile(ignorePath, "utf8");
   return createRepoIgnoreMatcher(content);
 }
 
 export function createRepoIgnoreMatcher(content: string): RepoIgnoreMatcher {
-  const rules = content
+  if (Buffer.byteLength(content, "utf8") > MAX_REPOLENSIGNORE_BYTES) {
+    throw new Error(`.repolensignore exceeds the ${MAX_REPOLENSIGNORE_BYTES} byte limit.`);
+  }
+  const patterns = content
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#"))
-    .map(compileIgnoreRule);
+    .filter((line) => line && !line.startsWith("#"));
+  if (patterns.length > MAX_REPOLENSIGNORE_RULES) {
+    throw new Error(`.repolensignore has ${patterns.length} rules, which exceeds the ${MAX_REPOLENSIGNORE_RULES} rule limit.`);
+  }
+  const rules = patterns.map((line) => {
+    if (line.length > MAX_REPOLENSIGNORE_RULE_LENGTH) {
+      throw new Error(`.repolensignore rule exceeds the ${MAX_REPOLENSIGNORE_RULE_LENGTH} character limit.`);
+    }
+    return compileIgnoreRule(line);
+  });
   return {
     patterns: rules.map((rule) => rule.pattern),
     shouldIgnore(relativePath: string, isDirectory = false): boolean {

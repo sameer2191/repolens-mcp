@@ -606,10 +606,16 @@ export class MemoryStore {
 
   private snippetForLocation(filePath: string, startLine: number, endLine: number, context: number, symbol?: SymbolNode): CodeSnippet | null {
     const file = this.db.prepare("SELECT * FROM files WHERE path = ? LIMIT 1").get(filePath) as FileRow | undefined;
+    if (!file) {
+      return null;
+    }
     const from = Math.max(1, startLine - context);
     const to = Math.max(from, endLine + context);
     const root = this.latestRoot();
-    const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(root, filePath);
+    const absolutePath = resolveIndexedFilePath(root, file.path);
+    if (!absolutePath) {
+      return null;
+    }
 
     let lines: Array<{ line: number; text: string; highlight: boolean }> = [];
     try {
@@ -639,7 +645,7 @@ export class MemoryStore {
 
     return {
       filePath,
-      language: symbol?.language ?? file?.language ?? "unknown",
+      language: symbol?.language ?? file.language ?? "unknown",
       startLine: from,
       endLine: lines[lines.length - 1].line,
       symbol,
@@ -2126,6 +2132,16 @@ export class MemoryStore {
 
 export function defaultDbPath(root: string): string {
   return path.join(root, ".repolens", "memory.db");
+}
+
+function resolveIndexedFilePath(root: string, filePath: string): string | null {
+  const rootPath = path.resolve(root);
+  const absolutePath = path.resolve(rootPath, filePath);
+  const relative = path.relative(rootPath, absolutePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return null;
+  }
+  return absolutePath;
 }
 
 function inferTraceType(trace: RuntimeTrace): "http" | "event" | "edge" {

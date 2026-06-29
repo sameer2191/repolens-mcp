@@ -53,6 +53,7 @@ export interface CodexUninstallResult {
 export async function installCodexConfig(options: CodexInstallOptions): Promise<CodexInstallResult> {
   const configPath = path.resolve(options.configPath ?? defaultCodexConfigPath());
   const serverName = options.serverName ?? "repolens";
+  assertSafeServerName(serverName);
   const block = codexManagedBlock({
     serverName,
     command: options.command,
@@ -101,6 +102,7 @@ export async function installCodexConfig(options: CodexInstallOptions): Promise<
 }
 
 export async function codexDoctor(cliPath: string, command: string, configPath = defaultCodexConfigPath(), serverName = "repolens"): Promise<CodexDoctorResult> {
+  assertSafeServerName(serverName);
   const resolvedConfigPath = path.resolve(configPath);
   const existing = await fs.readFile(resolvedConfigPath, "utf8").catch(() => "");
   return {
@@ -117,6 +119,7 @@ export async function codexDoctor(cliPath: string, command: string, configPath =
 export async function uninstallCodexConfig(options: CodexUninstallOptions = {}): Promise<CodexUninstallResult> {
   const configPath = path.resolve(options.configPath ?? defaultCodexConfigPath());
   const serverName = options.serverName ?? "repolens";
+  assertSafeServerName(serverName);
   const existing = await fs.readFile(configPath, "utf8").catch(() => "");
   const managedBlockPresent = hasManagedBlock(existing);
   if (!managedBlockPresent) {
@@ -143,6 +146,7 @@ export async function uninstallCodexConfig(options: CodexUninstallOptions = {}):
 }
 
 export function codexManagedBlock(options: { serverName: string; command: string; cliPath: string; dbPath: string }): string {
+  assertSafeServerName(options.serverName);
   const args = ["--experimental-sqlite", options.cliPath, "mcp"];
   return `${MANAGED_START}
 [mcp_servers.${options.serverName}]
@@ -193,6 +197,7 @@ function removeMcpServerSections(config: string, serverName: string): string {
 }
 
 export function hasMcpServer(config: string, serverName: string): boolean {
+  assertSafeServerName(serverName);
   return new RegExp(`^\\s*\\[mcp_servers\\.${escapeRegExp(serverName)}\\]\\s*$`, "m").test(config);
 }
 
@@ -202,6 +207,12 @@ export function hasManagedBlock(config: string): boolean {
 
 function defaultCodexConfigPath(): string {
   return path.join(os.homedir(), ".codex", "config.toml");
+}
+
+function assertSafeServerName(serverName: string): void {
+  if (!/^[A-Za-z0-9_-]+$/.test(serverName)) {
+    throw new Error("Server name for generated Codex config must contain only letters, numbers, underscores, or hyphens.");
+  }
 }
 
 function tomlArray(values: string[]): string {

@@ -22,6 +22,11 @@ src/skip-*.ts
   assert.equal(matcher.shouldIgnore("src/keep.ts"), false);
 });
 
+test("bounds .repolensignore rule volume", () => {
+  assert.throws(() => createRepoIgnoreMatcher(Array.from({ length: 2001 }, (_, index) => `generated-${index}/`).join("\n")), /rule limit/);
+  assert.throws(() => createRepoIgnoreMatcher(`${"a".repeat(501)}\n`), /character limit/);
+});
+
 test("honors .repolensignore while indexing repositories", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "repolens-ignore-"));
   const repo = path.join(tmp, "repo");

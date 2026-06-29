@@ -76,11 +76,14 @@ function getArgValue(name) {
 
 async function listAlerts(path, label) {
   const all = [];
-  let url = new URL(`${apiUrl}/repos/${repository}${path}`);
-  url.searchParams.set("state", "open");
-  url.searchParams.set("per_page", "100");
+  let pagination = {};
   for (;;) {
+    const url = new URL(`${apiUrl}/repos/${repository}${path}`);
     url.searchParams.set("state", "open");
+    url.searchParams.set("per_page", "100");
+    for (const [key, value] of Object.entries(pagination)) {
+      url.searchParams.set(key, value);
+    }
     const response = await fetch(url, {
       headers: {
         accept: "application/vnd.github+json",
@@ -107,23 +110,36 @@ async function listAlerts(path, label) {
       fail(`GitHub returned an unexpected ${label} alerts response.`);
     }
     all.push(...pageAlerts);
-    const next = getNextLink(response.headers.get("link"));
+    const next = paginationParametersFromLink(response.headers.get("link"), path);
     if (!next) {
       return { items: all };
     }
-    url = new URL(next);
+    pagination = next;
   }
 }
 
-function getNextLink(linkHeader) {
+function paginationParametersFromLink(linkHeader, path) {
   if (!linkHeader) {
     return undefined;
   }
   for (const part of linkHeader.split(",")) {
     const match = /<([^>]+)>;\s*rel="next"/.exec(part.trim());
-    if (match) {
-      return match[1];
+    if (!match) {
+      continue;
     }
+    const nextUrl = new URL(match[1]);
+    const expected = new URL(`${apiUrl}/repos/${repository}${path}`);
+    if (nextUrl.origin !== expected.origin || nextUrl.pathname !== expected.pathname) {
+      fail(`Unexpected GitHub pagination URL for ${path}.`);
+    }
+    const pagination = {};
+    for (const key of ["after", "before", "page"]) {
+      const value = nextUrl.searchParams.get(key);
+      if (value) {
+        pagination[key] = value;
+      }
+    }
+    return Object.keys(pagination).length > 0 ? pagination : undefined;
   }
   return undefined;
 }

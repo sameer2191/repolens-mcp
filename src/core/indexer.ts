@@ -13,6 +13,8 @@ import { defaultDbPath, MemoryStore } from "./store.js";
 import type { GraphPackageImportResult, IndexedFile, IndexOptions, IndexResult, SymbolNode } from "./types.js";
 
 const DEFAULT_MAX_FILE_BYTES = 750_000;
+const DEFAULT_MAX_FILES = 20_000;
+const DEFAULT_MAX_GRAPH_SYMBOLS = 100_000;
 
 interface WalkedFile {
   absolutePath: string;
@@ -26,8 +28,9 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
   const dbPath = path.resolve(options.dbPath ?? process.env.REPOLENS_DB ?? defaultDbPath(root));
   const diagnostics = createDiagnosticsSink({ root, diagnosticsPath: options.diagnosticsPath });
   const bootstrapPackage = await bootstrapGraphPackage(root, dbPath, options.bootstrapPackage);
-  const incremental = options.incremental ?? Boolean(bootstrapPackage);
+  const incremental = options.incremental ?? false;
   const maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
+  const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
   const indexedAt = new Date().toISOString();
   const store = new MemoryStore(dbPath);
   const fileContents = new Map<string, string>();
@@ -40,7 +43,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
     dbPath,
     mode: incremental ? "incremental" : "full",
     maxFileBytes,
-    maxFiles: options.maxFiles,
+    maxFiles,
     bootstrapPackage: Boolean(bootstrapPackage),
     writePackage: options.writePackage
   });
@@ -50,11 +53,8 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
     lockAcquired = true;
     const repoIgnore = await loadRepoIgnoreMatcher(root);
     const languageOverrides = await loadLanguageOverrides(root);
-    const walked = await walk(root, root, options.includeHidden ?? false, repoIgnore);
+    const walked = await walk(root, root, options.includeHidden ?? false, repoIgnore, maxFiles);
     diagnostics.emit("index.walk", { root, dbPath, filesDiscovered: walked.length });
-    if (options.maxFiles !== undefined && walked.length > options.maxFiles) {
-      throw new Error(`Index discovered ${walked.length} files, which exceeds maxFiles ${options.maxFiles}. Increase the limit or narrow the repository root.`);
-    }
     const walkedPaths = new Set(walked.map((file) => file.relativePath));
     const previousFiles = incremental ? new Map(store.listFiles().map((file) => [file.path, file])) : new Map<string, IndexedFile>();
     let filesRemoved = 0;
@@ -167,6 +167,7 @@ export async function indexRepository(options: IndexOptions): Promise<IndexResul
     }
 
     if (graphNeedsRebuild) {
+      assertGraphInputBudget(allSymbols.length);
       const callEdges = addCallEdges(allSymbols, fileContents);
       const dataFlowEdges = addDataFlowEdges(allSymbols, fileContents, callEdges);
       const httpEdges = addHttpEdges(allSymbols, fileContents);
@@ -285,9 +286,8 @@ function isSameSkippedFile(previous: IndexedFile | undefined, next: IndexedFile)
   );
 }
 
-async function walk(root: string, current: string, includeHidden: boolean, repoIgnore: RepoIgnoreMatcher): Promise<WalkedFile[]> {
+async function walk(root: string, current: string, includeHidden: boolean, repoIgnore: RepoIgnoreMatcher, maxFiles: number, files: WalkedFile[] = []): Promise<WalkedFile[]> {
   const entries = await fs.readdir(current, { withFileTypes: true });
-  const files: WalkedFile[] = [];
   for (const entry of entries) {
     const absolutePath = path.join(current, entry.name);
     const relativePath = normalizeSlashes(path.relative(root, absolutePath));
@@ -295,7 +295,7 @@ async function walk(root: string, current: string, includeHidden: boolean, repoI
       if (shouldIgnoreDirectory(entry.name, includeHidden) || repoIgnore.shouldIgnore(relativePath, true)) {
         continue;
       }
-      files.push(...(await walk(root, absolutePath, includeHidden, repoIgnore)));
+      await walk(root, absolutePath, includeHidden, repoIgnore, maxFiles, files);
       continue;
     }
     if (!entry.isFile() || shouldIgnoreFile(entry.name) || repoIgnore.shouldIgnore(relativePath)) {
@@ -307,6 +307,15 @@ async function walk(root: string, current: string, includeHidden: boolean, repoI
       relativePath,
       bytes: stats.size
     });
+    if (files.length > maxFiles) {
+      throw new Error(`Index discovered more than maxFiles ${maxFiles} files, which exceeds maxFiles ${maxFiles}. Increase the limit or narrow the repository root.`);
+    }
   }
   return files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+}
+
+function assertGraphInputBudget(symbols: number): void {
+  if (symbols > DEFAULT_MAX_GRAPH_SYMBOLS) {
+    throw new Error(`Index extracted ${symbols} symbols, which exceeds the graph rebuild budget ${DEFAULT_MAX_GRAPH_SYMBOLS}. Narrow the repository root or exclude generated files.`);
+  }
 }

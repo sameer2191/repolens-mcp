@@ -76,26 +76,28 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional().describe("Optional SQLite database path."),
         incremental: z.boolean().optional().describe("Skip unchanged files and prune removed files using existing SQLite metadata."),
         maxFileBytes: z.number().int().positive().optional().describe("Skip files larger than this size."),
-        maxFiles: z.number().int().positive().optional().describe("Refuse indexing when repository discovery exceeds this file count."),
+        maxFiles: z.number().int().positive().max(50_000).optional().describe("Refuse indexing when repository discovery exceeds this file count."),
         bootstrapPackage: z.string().optional().describe("Optional .rlgz graph package to import when the target database is missing."),
         noBootstrap: z.boolean().optional().describe("Disable default .repolens/graph.rlgz bootstrap when true."),
         writePackage: z.string().optional().describe("Optional .rlgz graph package path to write after a successful index."),
         diagnosticsPath: z.string().optional().describe("Optional JSONL diagnostics path for index lifecycle events. Use 'true' for .repolens/diagnostics.jsonl.")
       }
     },
-    async ({ root, dbPath, incremental, maxFileBytes, maxFiles, bootstrapPackage, noBootstrap, writePackage, diagnosticsPath }) =>
-      text(
+    async ({ root, dbPath, incremental, maxFileBytes, maxFiles, bootstrapPackage, noBootstrap, writePackage, diagnosticsPath }) => {
+      const safeRoot = resolveMcpRoot(root);
+      return text(
         await runIndex({
-          root: root ?? process.cwd(),
-          dbPath,
+          root: safeRoot,
+          dbPath: resolveMcpPath(dbPath, "dbPath", safeRoot),
           incremental,
           maxFileBytes,
-          maxFiles,
-          bootstrapPackage: noBootstrap ? false : bootstrapPackage,
-          writePackage,
-          diagnosticsPath
+          maxFiles: maxFiles ?? 20_000,
+          bootstrapPackage: noBootstrap ? false : resolveMcpPath(bootstrapPackage, "bootstrapPackage", safeRoot),
+          writePackage: resolveMcpPath(writePackage, "writePackage", safeRoot),
+          diagnosticsPath: resolveMcpDiagnosticsPath(diagnosticsPath, safeRoot)
         })
-      )
+      );
+    }
   );
 
   server.registerTool(
@@ -106,7 +108,7 @@ export async function startMcpServer(): Promise<void> {
         root: z.string().optional().describe("Repository root. Defaults to current working directory."),
         dbPath: z.string().optional().describe("Optional SQLite database path. Defaults to the repository .repolens path."),
         maxFileBytes: z.number().int().positive().optional().describe("Skip files larger than this size."),
-        maxFiles: z.number().int().positive().optional().describe("Refuse benchmarking when repository discovery exceeds this file count."),
+        maxFiles: z.number().int().positive().max(50_000).optional().describe("Refuse benchmarking when repository discovery exceeds this file count."),
         bootstrapPackage: z.string().optional().describe("Optional .rlgz graph package to import when the target database is missing."),
         noBootstrap: z.boolean().optional().describe("Disable default .repolens/graph.rlgz bootstrap when true."),
         label: z.string().optional().describe("Optional project catalog label for the benchmark run."),
@@ -115,20 +117,22 @@ export async function startMcpServer(): Promise<void> {
         diagnosticsPath: z.string().optional().describe("Optional JSONL diagnostics path for benchmark and index lifecycle events. Use 'true' for .repolens/diagnostics.jsonl.")
       }
     },
-    async ({ root, dbPath, maxFileBytes, maxFiles, bootstrapPackage, noBootstrap, label, secretScan, secretScanLimit, diagnosticsPath }) =>
-      text(
+    async ({ root, dbPath, maxFileBytes, maxFiles, bootstrapPackage, noBootstrap, label, secretScan, secretScanLimit, diagnosticsPath }) => {
+      const safeRoot = resolveMcpRoot(root);
+      return text(
         await benchmarkRepository({
-          root: root ?? process.cwd(),
-          dbPath,
+          root: safeRoot,
+          dbPath: resolveMcpPath(dbPath, "dbPath", safeRoot),
           maxFileBytes,
-          maxFiles,
-          bootstrapPackage: noBootstrap ? false : bootstrapPackage,
+          maxFiles: maxFiles ?? 20_000,
+          bootstrapPackage: noBootstrap ? false : resolveMcpPath(bootstrapPackage, "bootstrapPackage", safeRoot),
           runLabel: label,
           secretScan,
           secretScanLimit,
-          diagnosticsPath
+          diagnosticsPath: resolveMcpDiagnosticsPath(diagnosticsPath, safeRoot)
         })
-      )
+      );
+    }
   );
 
   server.registerTool(
@@ -141,7 +145,7 @@ export async function startMcpServer(): Promise<void> {
         label: z.string().optional()
       }
     },
-    async ({ outPath, dbPath, label }) => text(await packGraph(outPath, dbPath, label))
+    async ({ outPath, dbPath, label }) => text(await packGraph(requiredMcpPath(outPath, "outPath"), resolveMcpPath(dbPath, "dbPath"), label))
   );
 
   server.registerTool(
@@ -154,7 +158,8 @@ export async function startMcpServer(): Promise<void> {
         overwrite: z.boolean().optional()
       }
     },
-    async ({ packagePath, dbPath, overwrite }) => text(await unpackGraph(packagePath, dbPath, overwrite))
+    async ({ packagePath, dbPath, overwrite }) =>
+      text(await unpackGraph(requiredMcpPath(packagePath, "packagePath"), resolveMcpPath(dbPath, "dbPath"), overwrite))
   );
 
   server.registerTool(
@@ -187,14 +192,15 @@ export async function startMcpServer(): Promise<void> {
         action: z.enum(["list", "get", "set", "reset"]).default("list"),
         key: z.string().optional().describe("Config key, such as autoIndex, root, dbPath, maxFileBytes, autoIndexLabel, or bootstrapPackage."),
         value: z.string().optional().describe("Value for set actions."),
-        configPath: z.string().optional().describe("Optional alternate config file path.")
+        configPath: z.string().optional().describe("Optional alternate config file path. Disabled by default for MCP; use the CLI for arbitrary config paths.")
       }
     },
     async ({ action, key, value, configPath }) => {
-      if (action === "list") return text(configList(configPath));
-      if (action === "get") return text(configGet(requiredToolString(key, "key"), configPath));
-      if (action === "set") return text(configSet(requiredToolString(key, "key"), requiredToolString(value, "value"), configPath));
-      return text(configReset(key, configPath));
+      const safeConfigPath = resolveMcpConfigPath(configPath);
+      if (action === "list") return text(configList(safeConfigPath));
+      if (action === "get") return text(configGet(requiredToolString(key, "key"), safeConfigPath));
+      if (action === "set") return text(configSet(requiredToolString(key, "key"), requiredToolString(value, "value"), safeConfigPath));
+      return text(configReset(key, safeConfigPath));
     }
   );
 
@@ -286,7 +292,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ query, limit, dbPath }) => text(searchCode(query, limit, dbPath))
+    async ({ query, limit, dbPath }) => text(searchCode(query, limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -300,7 +306,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ limit, includeTests, minConfidence, dbPath }) => text(scanSecrets({ limit, includeTests, minConfidence }, dbPath))
+    async ({ limit, includeTests, minConfidence, dbPath }) => text(scanSecrets({ limit, includeTests, minConfidence }, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -314,7 +320,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ query, kind, limit, dbPath }) => text(searchSymbols(query, kind, limit, dbPath))
+    async ({ query, kind, limit, dbPath }) => text(searchSymbols(query, kind, limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -327,7 +333,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ identifier, context, dbPath }) => text(getCodeSnippet(identifier, context, dbPath))
+    async ({ identifier, context, dbPath }) => text(getCodeSnippet(identifier, context, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -340,7 +346,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ identifier, limit, dbPath }) => text(findReferences(identifier, limit, dbPath))
+    async ({ identifier, limit, dbPath }) => text(findReferences(identifier, limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -351,7 +357,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ dbPath }) => text(getArchitecture(dbPath))
+    async ({ dbPath }) => text(getArchitecture(resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -370,7 +376,7 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ name, direction, depth, mode, edgeTypes, includeTests, parameterName, dbPath }) =>
-      text(traceSymbol(name, direction, depth, dbPath, { mode, edgeTypes, includeTests, parameterName }))
+      text(traceSymbol(name, direction, depth, resolveMcpPath(dbPath, "dbPath"), { mode, edgeTypes, includeTests, parameterName }))
   );
 
   server.registerTool(
@@ -389,7 +395,7 @@ export async function startMcpServer(): Promise<void> {
       }
     },
     async ({ name, direction, depth, mode, edgeTypes, includeTests, parameterName, dbPath }) =>
-      text(traceSymbol(name, direction, depth, dbPath, { mode, edgeTypes, includeTests, parameterName }))
+      text(traceSymbol(name, direction, depth, resolveMcpPath(dbPath, "dbPath"), { mode, edgeTypes, includeTests, parameterName }))
   );
 
   server.registerTool(
@@ -402,7 +408,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ items, limit, dbPath }) => text(impactAnalysis(items, limit, dbPath))
+    async ({ items, limit, dbPath }) => text(impactAnalysis(items, limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -413,7 +419,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ dbPath }) => text(getGraphSchema(dbPath))
+    async ({ dbPath }) => text(getGraphSchema(resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -426,7 +432,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ limit, minMembers, dbPath }) => text(findCommunities(limit, minMembers, dbPath))
+    async ({ limit, minMembers, dbPath }) => text(findCommunities(limit, minMembers, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -445,7 +451,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ dbPath, ...options }) => text(searchGraph(options, dbPath))
+    async ({ dbPath, ...options }) => text(searchGraph(options, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -458,7 +464,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ query, limit, dbPath }) => text(semanticSearch(query, limit, dbPath))
+    async ({ query, limit, dbPath }) => text(semanticSearch(query, limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -471,7 +477,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ query, limit, dbPath }) => text(vectorSearch(query, limit, dbPath))
+    async ({ query, limit, dbPath }) => text(vectorSearch(query, limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -485,7 +491,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ query, limit, context, dbPath }) => text(contextPack(query, limit, context, dbPath))
+    async ({ query, limit, context, dbPath }) => text(contextPack(query, limit, context, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -498,7 +504,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ query, limit, dbPath }) => text(queryGraph(query, limit, dbPath))
+    async ({ query, limit, dbPath }) => text(queryGraph(query, limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -510,7 +516,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ limit, dbPath }) => text(findDeadCode(limit, dbPath))
+    async ({ limit, dbPath }) => text(findDeadCode(limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -522,7 +528,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ limit, dbPath }) => text(findDependencyCycles(limit, dbPath))
+    async ({ limit, dbPath }) => text(findDependencyCycles(limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -550,7 +556,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ traces, dbPath }) => text(ingestTraces(traces, dbPath))
+    async ({ traces, dbPath }) => text(ingestTraces(traces, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -563,7 +569,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ root, limit, dbPath }) => text(detectChanges(root, limit, dbPath))
+    async ({ root, limit, dbPath }) => text(detectChanges(root ? resolveMcpRoot(root) : undefined, limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -578,7 +584,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ title, status, body, tags, dbPath }) => text(rememberDecision({ title, status, body, tags }, dbPath))
+    async ({ title, status, body, tags, dbPath }) => text(rememberDecision({ title, status, body, tags }, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -590,7 +596,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ limit, dbPath }) => text(listDecisions(limit, dbPath))
+    async ({ limit, dbPath }) => text(listDecisions(limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -611,7 +617,7 @@ export async function startMcpServer(): Promise<void> {
       if (title === undefined && status === undefined && body === undefined && tags === undefined) {
         throw new Error("At least one of title, status, body, or tags is required.");
       }
-      return text(updateDecision(id, patch, dbPath));
+      return text(updateDecision(id, patch, resolveMcpPath(dbPath, "dbPath")));
     }
   );
 
@@ -624,7 +630,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ id, dbPath }) => text(deleteDecision(id, dbPath))
+    async ({ id, dbPath }) => text(deleteDecision(id, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -636,7 +642,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ limit, dbPath }) => text(graphSnapshot(limit, dbPath))
+    async ({ limit, dbPath }) => text(graphSnapshot(limit, resolveMcpPath(dbPath, "dbPath")))
   );
 
   server.registerTool(
@@ -650,7 +656,7 @@ export async function startMcpServer(): Promise<void> {
         dbPath: z.string().optional()
       }
     },
-    async ({ format, graphLimit, title, dbPath }) => text(architectureReport({ format, graphLimit, title }, dbPath))
+    async ({ format, graphLimit, title, dbPath }) => text(architectureReport({ format, graphLimit, title }, resolveMcpPath(dbPath, "dbPath")))
   );
 
   const transport = new StdioServerTransport();
@@ -738,14 +744,64 @@ export function validateMcpAgentSetupWriteRequest(
     return targetDir;
   }
 
-  const relative = path.relative(baseDir, targetDir);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (!isPathInside(baseDir, targetDir)) {
     throw new Error("MCP agent_setup writes must stay inside the MCP server working directory. Use the CLI installer for another target directory.");
   }
   if (options.withHooks && !isTruthy(env.REPOLENS_ALLOW_MCP_HOOK_WRITES)) {
     throw new Error("MCP agent_setup writes with executable hooks require REPOLENS_ALLOW_MCP_HOOK_WRITES=1. Use install-agents --with-hooks for interactive setup.");
   }
   return targetDir;
+}
+
+export function resolveMcpRoot(root: string | undefined, cwd = process.cwd()): string {
+  const baseDir = path.resolve(cwd);
+  const resolved = path.resolve(baseDir, root ?? ".");
+  if (!isPathInside(baseDir, resolved)) {
+    throw new Error("MCP repository roots must resolve inside the MCP server working directory. Use the CLI for indexing another local repository.");
+  }
+  return resolved;
+}
+
+export function resolveMcpPath(value: string | undefined, label: string, base = process.cwd()): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return requiredMcpPath(value, label, base);
+}
+
+export function requiredMcpPath(value: string, label: string, base = process.cwd()): string {
+  const baseDir = path.resolve(base);
+  const resolved = path.resolve(baseDir, value);
+  if (!isPathInside(baseDir, resolved)) {
+    throw new Error(`MCP ${label} must resolve inside ${baseDir}. Use the CLI for arbitrary filesystem paths.`);
+  }
+  return resolved;
+}
+
+function resolveMcpDiagnosticsPath(value: string | undefined, root: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["0", "false", "off", "no", "none", "disabled", "1", "true", "on", "yes"].includes(normalized)) {
+    return value;
+  }
+  return requiredMcpPath(value, "diagnosticsPath", root);
+}
+
+export function resolveMcpConfigPath(configPath: string | undefined, cwd = process.cwd(), env: NodeJS.ProcessEnv = process.env): string | undefined {
+  if (configPath === undefined) {
+    return undefined;
+  }
+  if (!isTruthy(env.REPOLENS_ALLOW_MCP_CONFIG_PATHS)) {
+    throw new Error("MCP manage_config alternate configPath requires REPOLENS_ALLOW_MCP_CONFIG_PATHS=1. Use the CLI for arbitrary config files.");
+  }
+  return requiredMcpPath(configPath, "configPath", cwd);
+}
+
+function isPathInside(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function parseAutoIndexMode(value: string | undefined): { incremental: boolean } | undefined {
