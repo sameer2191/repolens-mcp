@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 import test from "node:test";
 import { architectureReport, benchmarkRepository, contextPack, packGraph, unpackGraph } from "../src/core/api.js";
 import { addCallEdges, addDataFlowEdges, addTypeRelationEdges, extractFromFile } from "../src/core/extractor.js";
@@ -91,6 +92,16 @@ paths:
 `
   );
   assert.ok(openapi.symbols.some((symbol) => symbol.kind === "route" && symbol.name === "GET /orders/:id" && symbol.metadata?.protocol === "openapi"));
+});
+
+test("tRPC extraction stays bounded on long word runs", { timeout: 4000 }, () => {
+  const content = "a".repeat(75_000);
+  const started = performance.now();
+  const extracted = extractFromFile("src/generated.ts", "typescript", content);
+  const elapsedMs = performance.now() - started;
+
+  assert.equal(extracted.symbols.some((symbol) => symbol.kind === "trpc_procedure"), false);
+  assert.ok(elapsedMs < 1500, `expected bounded tRPC extraction, took ${elapsedMs.toFixed(1)} ms`);
 });
 
 test("captures host metadata for absolute HTTP call literals", () => {
@@ -1167,6 +1178,7 @@ test("scans indexed lines for redacted secret findings", async () => {
   const awsKey = "AKIA1234567890ABCDEF";
   const githubToken = "ghp_abcdefghijklmnopqrstuvwxyzABCDEFGH1234";
   const password = "correct-horse-battery-staple";
+  const shortSecret = "n1neChars";
   const openAiKey = "sk-proj-abcdefghijklmnopqrstuvwxyz1234567890";
   await fs.writeFile(
     path.join(repo, "src", "config.ts"),
@@ -1174,6 +1186,7 @@ test("scans indexed lines for redacted secret findings", async () => {
       `export const awsAccessKey = "${awsKey}";`,
       `export const gh = "${githubToken}";`,
       `export const databasePassword = "${password}";`,
+      `export const miniSecret = "${shortSecret}";`,
       `export const placeholder = "your_api_key_here";`,
       "export const apiKey = process.env.API_KEY;"
     ].join("\n")
@@ -1189,12 +1202,16 @@ test("scans indexed lines for redacted secret findings", async () => {
     assert.ok(scan.findings.some((finding) => finding.kind === "aws_access_key"));
     assert.ok(scan.findings.some((finding) => finding.kind === "github_token"));
     assert.ok(scan.findings.some((finding) => finding.kind === "sensitive_assignment" && finding.label === "databasePassword"));
+    assert.ok(scan.findings.some((finding) => finding.kind === "sensitive_assignment" && finding.label === "miniSecret" && finding.redacted === "[redacted]"));
     assert.ok(scan.findings.some((finding) => finding.kind === "sensitive_reference" && finding.confidence === "low"));
     assert.ok(scan.findings.every((finding) => !finding.filePath.startsWith("tests/")));
     assert.ok(scan.risks.some((risk) => risk.includes("high-severity secret patterns")));
     assert.equal(serialized.includes(awsKey), false);
     assert.equal(serialized.includes(githubToken), false);
     assert.equal(serialized.includes(password), false);
+    assert.equal(serialized.includes(shortSecret), false);
+    assert.equal(serialized.includes("n1ne"), false);
+    assert.equal(serialized.includes("hars"), false);
     assert.equal(serialized.includes("your_api_key_here"), false);
 
     const mediumOnly = store.scanSecrets({ minConfidence: "medium", limit: 20 });

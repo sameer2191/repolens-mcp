@@ -1273,16 +1273,13 @@ function extractProto(filePath: string, content: string): SymbolNode[] {
 
 function extractTrpc(filePath: string, language: Language, content: string): SymbolNode[] {
   const symbols: SymbolNode[] = [];
-  const declarationRegex = /([A-Za-z_$][\w$]*)\s*:\s*(?:publicProcedure|protectedProcedure|procedure|adminProcedure)[\s\S]{0,240}?\.(query|mutation|subscription)\s*\(/g;
-  for (const match of content.matchAll(declarationRegex)) {
-    const name = match[1];
-    const procedureType = match[2].toLowerCase();
-    const line = offsetToLine(content, match.index ?? 0);
+  for (const declaration of findTrpcProcedureDeclarations(content)) {
+    const line = offsetToLine(content, declaration.nameOffset);
     symbols.push(
-      makeSymbol(filePath, language, "trpc_procedure", `${procedureType} ${name}`, line, line, undefined, true, {
+      makeSymbol(filePath, language, "trpc_procedure", `${declaration.procedureType} ${declaration.name}`, line, line, undefined, true, {
         protocol: "trpc",
-        procedure: name,
-        procedureType
+        procedure: declaration.name,
+        procedureType: declaration.procedureType
       })
     );
   }
@@ -1302,6 +1299,51 @@ function extractTrpc(filePath: string, language: Language, content: string): Sym
   }
 
   return symbols;
+}
+
+const TRPC_PROCEDURE_BUILDERS = ["publicProcedure", "protectedProcedure", "adminProcedure", "procedure"] as const;
+const TRPC_DECLARATION_PREFIX_WINDOW = 160;
+const TRPC_DECLARATION_CHAIN_WINDOW = 240;
+
+function findTrpcProcedureDeclarations(content: string): Array<{ name: string; nameOffset: number; procedureType: string }> {
+  const declarations: Array<{ builderOffset: number; builder: string }> = [];
+  for (const builder of TRPC_PROCEDURE_BUILDERS) {
+    let offset = content.indexOf(builder);
+    while (offset !== -1) {
+      const before = offset === 0 ? "" : content[offset - 1] ?? "";
+      const after = content[offset + builder.length] ?? "";
+      if (!isIdentifierPart(before) && !isIdentifierPart(after)) {
+        declarations.push({ builderOffset: offset, builder });
+      }
+      offset = content.indexOf(builder, offset + builder.length);
+    }
+  }
+
+  declarations.sort((left, right) => left.builderOffset - right.builderOffset);
+  return declarations.flatMap(({ builderOffset, builder }) => {
+    const prefixStart = Math.max(0, builderOffset - TRPC_DECLARATION_PREFIX_WINDOW);
+    const prefix = content.slice(prefixStart, builderOffset);
+    const nameMatch = /([A-Za-z_$][\w$]*)\s*:\s*$/.exec(prefix);
+    if (!nameMatch) {
+      return [];
+    }
+    const chain = content.slice(builderOffset + builder.length, builderOffset + builder.length + TRPC_DECLARATION_CHAIN_WINDOW);
+    const typeMatch = /^[\s\S]{0,240}?\.(query|mutation|subscription)\s*\(/.exec(chain);
+    if (!typeMatch) {
+      return [];
+    }
+    return [
+      {
+        name: nameMatch[1],
+        nameOffset: prefixStart + nameMatch.index,
+        procedureType: typeMatch[1].toLowerCase()
+      }
+    ];
+  });
+}
+
+function isIdentifierPart(char: string): boolean {
+  return char.length === 1 && /[A-Za-z0-9_$]/.test(char);
 }
 
 function extractSwiftChannelOccurrences(content: string): ChannelOccurrence[] {

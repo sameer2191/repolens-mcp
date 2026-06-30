@@ -1,5 +1,5 @@
 import http from "node:http";
-import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, findReferences, fleetSummary, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols, vectorSearch } from "../core/api.js";
+import { architectureReport, findCommunities, findDeadCode, findDependencyCycles, findReferences, fleetSummary, getArchitecture, getCodeSnippet, getGraphSchema, graphSnapshot, GraphQueryValidationError, queryGraph, searchCode, searchGraph, semanticSearch, searchSymbols, vectorSearch } from "../core/api.js";
 
 export interface DashboardOptions {
   dbPath?: string;
@@ -38,7 +38,18 @@ export async function serveDashboard(options: DashboardOptions): Promise<http.Se
         );
       } else if (url.pathname === "/api/query-graph") {
         const query = url.searchParams.get("q") ?? "";
-        sendJson(response, query ? queryGraph(query, numberParam(url, "limit"), options.dbPath) : { query, columns: [], rows: [], limit: 0 });
+        if (!query) {
+          sendJson(response, { query, columns: [], rows: [], limit: 0 });
+        } else {
+          try {
+            sendJson(response, queryGraph(query, numberParam(url, "limit"), options.dbPath));
+          } catch (error) {
+            if (!(error instanceof GraphQueryValidationError)) {
+              throw error;
+            }
+            send(response, 400, "application/json; charset=utf-8", dashboardQueryErrorBody(error));
+          }
+        }
       } else if (url.pathname === "/api/semantic") {
         const query = url.searchParams.get("q") ?? "";
         sendJson(response, query ? semanticSearch(query, numberParam(url, "limit") ?? 25, options.dbPath) : []);
@@ -125,6 +136,14 @@ function sendJson(response: http.ServerResponse, body: unknown): void {
 
 export function dashboardErrorBody(): string {
   return JSON.stringify({ error: "Internal server error" });
+}
+
+export function dashboardQueryErrorBody(error: unknown): string {
+  if (!(error instanceof GraphQueryValidationError)) {
+    return dashboardErrorBody();
+  }
+  const message = error.message;
+  return JSON.stringify({ error: message });
 }
 
 function send(response: http.ServerResponse, status: number, contentType: string, body: string): void {

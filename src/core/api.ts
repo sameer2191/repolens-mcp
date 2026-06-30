@@ -13,6 +13,7 @@ import { buildFleetGraph, type FleetGraphOptions } from "./fleet-graph.js";
 import { indexRepository } from "./indexer.js";
 import { buildArchitectureReport } from "./report.js";
 import { defaultDbPath, MemoryStore } from "./store.js";
+export { GraphQueryValidationError } from "./store.js";
 import { getVersionStatus as readVersionStatus, type VersionStatusOptions } from "./version.js";
 import { watchRepository } from "./watcher.js";
 import type { ArchitectureReportOptions } from "./report.js";
