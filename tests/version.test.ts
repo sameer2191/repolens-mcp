@@ -12,10 +12,10 @@ test("compares semantic versions for update checks", () => {
 test("reports local package version without remote registry access", async () => {
   const status = await getVersionStatus();
 
-  assert.equal(status.packageName, "repolens-mcp");
+  assert.equal(status.packageName, "@sameermir/repolens-mcp");
   assert.match(status.installedVersion, /^\d+\.\d+\.\d+/);
   assert.equal(status.registry.checked, false);
-  assert.equal(status.updateCommand, "npm install -g repolens-mcp@latest");
+  assert.equal(status.updateCommand, "npm install -g @sameermir/repolens-mcp@latest");
 });
 
 test("rejects non-http registry URLs", async () => {
@@ -33,7 +33,7 @@ test("encodes every slash in scoped package names for registry URLs", () => {
 test("checks an npm-compatible registry for the latest release", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
-    assert.equal(String(input), "https://registry.example.test/repolens-mcp");
+    assert.equal(String(input), "https://registry.example.test/@sameermir%2frepolens-mcp");
     return new Response(JSON.stringify({ "dist-tags": { latest: "9.9.9" } }), {
       status: 200,
       headers: { "content-type": "application/json" }
