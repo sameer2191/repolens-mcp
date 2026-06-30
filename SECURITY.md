@@ -48,6 +48,14 @@ Use `-- --format json` for automation or `-- --fail-on-actionable` to exit non-z
 
 For local runs, use a token with repository security-alert visibility, such as a fine-grained token that can read code scanning, Dependabot alerts, and secret scanning alerts. The release workflow uses the GitHub Actions token with `security-events: read`; a normal `gh auth token` may return `404` for alert endpoints when the account or token lacks those permissions.
 
+## OpenSSF Scorecard Maintenance
+
+The Scorecard workflow publishes SARIF to GitHub code scanning and is expected to separate actionable code/security alerts from governance signals. Keep `main` protected with required pull request review, code owner review, required `verify` and CodeQL `Analyze` checks, linear history, conversation resolution, blocked force pushes, blocked branch deletion, and admin enforcement.
+
+Classic branch-protection rules may require a fine-grained `SCORECARD_TOKEN` repository secret so the Scorecard action can read protection details. Create a fine-grained token for this repository with read access to metadata, contents, actions, checks, pull requests, and administration, then add it as the `SCORECARD_TOKEN` Actions secret. Without that token, Scorecard can report an internal branch-protection read error even when GitHub protection is configured correctly.
+
+The `CII-Best-Practices` check requires a project entry in the OpenSSF Best Practices program. Create the badge record for `https://github.com/sameer2191/repolens-mcp`, complete the passing checklist, then add the resulting badge to `README.md` when the project reaches a public badge state.
+
 ## Reporting A Vulnerability
 
 Use GitHub's private vulnerability reporting for this repository when available:
