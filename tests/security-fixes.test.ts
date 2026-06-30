@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import fc from "fast-check";
-import { unpackGraph } from "../src/core/api.js";
-import { dashboardErrorBody } from "../src/dashboard/server.js";
+import { GraphQueryValidationError, unpackGraph } from "../src/core/api.js";
+import { dashboardErrorBody, dashboardQueryErrorBody } from "../src/dashboard/server.js";
 import { buildResolvedImportEdges } from "../src/core/import-resolver.js";
 import { MemoryStore } from "../src/core/store.js";
 import type { SymbolNode } from "../src/core/types.js";
@@ -16,6 +16,21 @@ test("dashboard API errors return a generic message", () => {
   assert.equal(body, JSON.stringify({ error: "Internal server error" }));
   assert.ok(!body.includes("query_graph"));
   assert.ok(!body.includes("Error:"));
+});
+
+test("dashboard query graph validation errors keep parser guidance", () => {
+  const body = dashboardQueryErrorBody(new GraphQueryValidationError("query_graph is read-only; mutation keywords are not supported"));
+
+  assert.equal(body, JSON.stringify({ error: "query_graph is read-only; mutation keywords are not supported" }));
+  assert.ok(!body.includes("Error:"));
+  assert.ok(!body.includes("at "));
+});
+
+test("dashboard query graph internal errors stay generic", () => {
+  const body = dashboardQueryErrorBody(new Error("SQLITE_CORRUPT: database disk image is malformed"));
+
+  assert.equal(body, JSON.stringify({ error: "Internal server error" }));
+  assert.ok(!body.includes("SQLITE_CORRUPT"));
 });
 
 test("tsconfig JSON comments do not corrupt comment markers inside strings", () => {

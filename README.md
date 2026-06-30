@@ -10,9 +10,11 @@ Local-first repository intelligence for AI coding agents. Index a repo into SQLi
 
 RepoLens MCP is an original TypeScript implementation built around fast local verification, readable internals, and reviewable engineering evidence. It focuses on the workflows engineers actually need during AI-assisted development: finding code, tracing symbols, checking impact, and preserving architecture decisions.
 
-## Why It Stands Out
+## Core Capabilities
 
-- **MCP-native**: exposes 38 tools for indexing, version/update status, repeatable benchmarking, persistent config, project inventory/status, fleet summaries, cross-repo graphing, multi-agent setup, optional startup auto-indexing and git-aware auto-sync, JSONL operational diagnostics, BM25 code search, redacted secret scanning, symbol search, reference lookup, semantic search, vector search, context packs, source snippets, graph schema with relationship patterns and label properties, structural graph search, graph community detection, read-only Cypher-like graph queries, route-call links, runtime trace ingestion, channel/event edges, typed inheritance/implementation/use edges, receiver-aware method call edges, conservative data-flow edges, config-key/dependency `CONFIGURES` edges, import-resolved file graphs, multi-ecosystem package manifests, lockfile resolved-dependency graphs, Docker/Kubernetes infrastructure nodes, dependency-cycle detection, architecture reports, architecture summaries, git-history hotspots, tracing, git-change impact, dead-code candidates, maintainable ADR memory, graph snapshots, and graph package exchange.
+- **MCP-native workflow**: 38 tools grouped around indexing, code search, graph search, tracing, impact analysis, project inventory, fleet views, report generation, and ADR memory.
+- **Code graph extraction**: captures symbols, routes, imports, package manifests, lockfiles, infrastructure files, protocol surfaces, event channels, typed relationships, conservative data flow, runtime traces, and HTTP route-call links.
+- **Local verification loop**: repeatable full/incremental benchmarks, package-boundary checks, release gates, graph packages, dashboard/report artifacts, and security-summary commands keep validation inspectable.
 - **Agent-ready setup**: `doctor` inspects the local Codex MCP configuration, `install-codex` can add a managed MCP block with dry-run and force safeguards, `uninstall-codex` removes only managed RepoLens config, `agent-hook` provides executable non-blocking broad-search reminders, and `agent-setup`/`install-agents` generate reviewable guidance plus opt-in hook/reminder files for Codex, Claude, Gemini, Zed, OpenCode, Antigravity, Aider, KiloCode, VS Code, OpenClaw, and Kiro, including a managed local Claude PreToolUse hook config.
 - **Local-first SQLite memory**: all indexed data stays in `.repolens/memory.db`.
 - **Project catalog and cross-repo graphing**: `list-projects`, `project-status`, `fleet-summary`, `fleet-graph`, and `delete-project` track indexed repositories, aggregate languages/routes/HTTP calls/dependencies, and produce a catalog-wide graph with shared dependencies, route overlaps, inferred consumer/provider service links, and shareable HTML/JSON artifacts through `fleet-graph --out`.
@@ -220,6 +222,16 @@ The extractor is intentionally compact and extensible:
 ### Repository Ignore Rules
 
 Add `.repolensignore` at the repository root to exclude generated code, local scratch folders, vendored samples, or sensitive paths from indexing. Rules are path-relative globs with `!` negation, similar to `.gitignore`; RepoLens still applies its built-in skips for dependency folders, build outputs, binaries, and `.repolens` artifacts.
+
+### Local Graph Artifact Cleanup
+
+`.repolens/` is gitignored and can grow when you run benchmarks, imports, dashboard exports, or large-repo validation locally. Review old artifacts with:
+
+```bash
+find .repolens -maxdepth 1 -type f -size +50M -print
+```
+
+Use `repolens-mcp delete-project <root-or-db-or-label> --delete-db` for catalog-tracked databases, or manually remove reviewed scratch artifacts you no longer need. Do not publish `.repolens/` databases or graph packages without reviewing them for derived source metadata.
 
 ## Query Graph Subset
 

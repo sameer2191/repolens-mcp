@@ -41,6 +41,13 @@ interface CountRow {
   count: number;
 }
 
+export class GraphQueryValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GraphQueryValidationError";
+  }
+}
+
 interface SchemaPropertyAccumulator {
   name: string;
   type: string;
@@ -1076,58 +1083,65 @@ export class MemoryStore {
   }
 
   queryGraph(query: string, limit = 100): GraphQueryResult {
-    const parsed = parseGraphQuery(query, clampPositive(limit, 1, 500));
-    const params: Array<string | number> = [];
-    const where: string[] = [];
-    const aliasMap =
-      parsed.pattern.kind === "node"
-        ? new Map([[parsed.pattern.alias, "s"]])
-        : new Map([
-            [parsed.pattern.leftAlias, "left_symbol"],
-            [parsed.pattern.rightAlias, "right_symbol"],
-            [parsed.pattern.edgeAlias, "edges"],
-            ["e", "edges"]
-          ]);
+    let parsed: ParsedGraphQuery;
+    let params: Array<string | number>;
+    let sql: string;
+    try {
+      parsed = parseGraphQuery(query, clampPositive(limit, 1, 500));
+      params = [];
+      const where: string[] = [];
+      const aliasMap =
+        parsed.pattern.kind === "node"
+          ? new Map([[parsed.pattern.alias, "s"]])
+          : new Map([
+              [parsed.pattern.leftAlias, "left_symbol"],
+              [parsed.pattern.rightAlias, "right_symbol"],
+              [parsed.pattern.edgeAlias, "edges"],
+              ["e", "edges"]
+            ]);
 
-    if (parsed.pattern.kind === "node" && parsed.pattern.label) {
-      where.push("lower(s.kind) = lower(?)");
-      params.push(normalizeGraphLabel(parsed.pattern.label));
-    } else if (parsed.pattern.kind === "edge") {
-      if (parsed.pattern.leftLabel) {
-        where.push("lower(left_symbol.kind) = lower(?)");
-        params.push(normalizeGraphLabel(parsed.pattern.leftLabel));
+      if (parsed.pattern.kind === "node" && parsed.pattern.label) {
+        where.push("lower(s.kind) = lower(?)");
+        params.push(normalizeGraphLabel(parsed.pattern.label));
+      } else if (parsed.pattern.kind === "edge") {
+        if (parsed.pattern.leftLabel) {
+          where.push("lower(left_symbol.kind) = lower(?)");
+          params.push(normalizeGraphLabel(parsed.pattern.leftLabel));
+        }
+        if (parsed.pattern.rightLabel) {
+          where.push("lower(right_symbol.kind) = lower(?)");
+          params.push(normalizeGraphLabel(parsed.pattern.rightLabel));
+        }
+        if (parsed.pattern.edgeType) {
+          where.push("edges.type = ?");
+          params.push(parsed.pattern.edgeType.toUpperCase());
+        }
       }
-      if (parsed.pattern.rightLabel) {
-        where.push("lower(right_symbol.kind) = lower(?)");
-        params.push(normalizeGraphLabel(parsed.pattern.rightLabel));
+
+      if (parsed.where.length > 0) {
+        where.push(
+          `(${parsed.where
+            .map((clause) => `(${clause.map((condition) => whereSql(condition, aliasMap, params)).join(" AND ")})`)
+            .join(" OR ")})`
+        );
       }
-      if (parsed.pattern.edgeType) {
-        where.push("edges.type = ?");
-        params.push(parsed.pattern.edgeType.toUpperCase());
-      }
+
+      const selectSql = parsed.returns.map((expr, index) => `${returnSql(expr, aliasMap)} AS c${index}`);
+      const fromSql =
+        parsed.pattern.kind === "node"
+          ? "symbols s"
+          : parsed.pattern.direction === "outbound"
+            ? "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.source JOIN symbols right_symbol ON right_symbol.qualified_name = edges.target"
+            : "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.target JOIN symbols right_symbol ON right_symbol.qualified_name = edges.source";
+      const orderSql = parsed.orderBy.map((expr) => `${propertySql(expr.alias, expr.property, aliasMap)} ${expr.direction}`);
+      sql =
+        `SELECT ${parsed.distinct ? "DISTINCT " : ""}${selectSql.join(", ")} FROM ${fromSql}` +
+        `${where.length ? ` WHERE ${where.join(" AND ")}` : ""}` +
+        `${orderSql.length ? ` ORDER BY ${orderSql.join(", ")}` : ""}` +
+        " LIMIT ? OFFSET ?";
+    } catch (error) {
+      throw new GraphQueryValidationError(error instanceof Error ? error.message : "Invalid query_graph request");
     }
-
-    if (parsed.where.length > 0) {
-      where.push(
-        `(${parsed.where
-          .map((clause) => `(${clause.map((condition) => whereSql(condition, aliasMap, params)).join(" AND ")})`)
-          .join(" OR ")})`
-      );
-    }
-
-    const selectSql = parsed.returns.map((expr, index) => `${returnSql(expr, aliasMap)} AS c${index}`);
-    const fromSql =
-      parsed.pattern.kind === "node"
-        ? "symbols s"
-        : parsed.pattern.direction === "outbound"
-          ? "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.source JOIN symbols right_symbol ON right_symbol.qualified_name = edges.target"
-          : "edges JOIN symbols left_symbol ON left_symbol.qualified_name = edges.target JOIN symbols right_symbol ON right_symbol.qualified_name = edges.source";
-    const orderSql = parsed.orderBy.map((expr) => `${propertySql(expr.alias, expr.property, aliasMap)} ${expr.direction}`);
-    const sql =
-      `SELECT ${parsed.distinct ? "DISTINCT " : ""}${selectSql.join(", ")} FROM ${fromSql}` +
-      `${where.length ? ` WHERE ${where.join(" AND ")}` : ""}` +
-      `${orderSql.length ? ` ORDER BY ${orderSql.join(", ")}` : ""}` +
-      " LIMIT ? OFFSET ?";
     const rows = this.db.prepare(sql).all(...params, parsed.limit, parsed.skip) as Array<Record<string, string | number | boolean | null>>;
     return {
       query,
@@ -2683,7 +2697,7 @@ function redactLine(text: string, value: string): string {
 
 function redactSecret(value: string): string {
   const trimmed = value.trim();
-  if (trimmed.length <= 8) {
+  if (trimmed.length <= 16) {
     return "[redacted]";
   }
   const prefix = trimmed.slice(0, Math.min(4, Math.floor(trimmed.length / 3)));
