@@ -32,10 +32,15 @@ jobs:
       - name: Fail release on actionable GitHub security alerts
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          SECURITY_ALERTS_TOKEN: ${{ secrets.SECURITY_ALERTS_TOKEN }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            npm run release:security-gate
+            if [[ -z "${SECURITY_ALERTS_TOKEN:-}" ]]; then
+              echo "SECURITY_ALERTS_TOKEN is required for tag releases so security alert checks stay fail-closed."
+              exit 1
+            fi
+            GITHUB_TOKEN="${SECURITY_ALERTS_TOKEN}" npm run release:security-gate
           else
             npm run release:security-gate -- --allow-unavailable
           fi
