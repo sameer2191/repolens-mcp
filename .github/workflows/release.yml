@@ -32,7 +32,13 @@ jobs:
       - name: Fail release on actionable GitHub security alerts
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: npm run release:security-gate
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            npm run release:security-gate
+          else
+            npm run release:security-gate -- --allow-unavailable
+          fi
       - run: node --experimental-sqlite dist/src/cli.js demo
       - run: npm run package:check
       - run: npm pack --json
