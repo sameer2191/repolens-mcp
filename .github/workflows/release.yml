@@ -69,6 +69,11 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: repolens-release-package
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@sameermir"
       - name: Require npm publish token
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -78,6 +83,7 @@ jobs:
             echo "NPM_TOKEN is required for tag releases so npm provenance is not skipped."
             exit 1
           fi
+          npm whoami --registry https://registry.npmjs.org >/dev/null
       - name: Generate build provenance attestation
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373
         with:
