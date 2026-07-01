@@ -371,7 +371,7 @@ repolens-mcp uninstall-agents --target . --agents codex,claude,gemini --with-hoo
   "mcpServers": {
     "repolens-mcp": {
       "command": "npx",
-      "args": ["-y", "repolens-mcp", "mcp"],
+      "args": ["-y", "@sameermir/repolens-mcp", "mcp"],
       "env": {
         "REPOLENS_DB": ".repolens/memory.db"
       }

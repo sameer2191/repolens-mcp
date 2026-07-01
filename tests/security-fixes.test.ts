@@ -292,7 +292,7 @@ test("MCP server manifest pins npx package resolution", async () => {
   const manifest = JSON.parse(await fs.readFile(path.join(process.cwd(), "server.json"), "utf8")) as { command?: string; args?: string[] };
 
   assert.equal(manifest.command, "npx");
-  assert.ok(manifest.args?.some((arg) => /^repolens-mcp@\d+\.\d+\.\d+$/.test(arg)));
+  assert.ok(manifest.args?.some((arg) => /^@sameermir\/repolens-mcp@\d+\.\d+\.\d+$/.test(arg)));
   assert.ok(!manifest.args?.includes("repolens-mcp"));
 });
 
