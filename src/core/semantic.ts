@@ -56,9 +56,17 @@ export interface LocalVector {
 }
 
 export function buildSemanticEdges(symbols: SymbolNode[], fileContents: Map<string, string>, maxEdges = 6000): Edge[] {
+  const linesByFile = new Map<string, string[]>();
   const features = symbols
     .filter((symbol) => SEMANTIC_KINDS.has(symbol.kind) && symbol.language !== "unknown")
-    .map((symbol) => featureForSymbol(symbol, fileContents.get(symbol.filePath) ?? ""))
+    .map((symbol) => {
+      let lines = linesByFile.get(symbol.filePath);
+      if (!lines) {
+        lines = (fileContents.get(symbol.filePath) ?? "").split(/\r?\n/);
+        linesByFile.set(symbol.filePath, lines);
+      }
+      return featureForSymbol(symbol, lines);
+    })
     .filter((feature) => feature.tokens.size >= 2);
 
   const candidates = candidateScores(features);
@@ -153,16 +161,11 @@ export function cosineSimilarity(query: LocalVector, target: LocalVector): numbe
   return dot / Math.max(0.000001, query.magnitude * target.magnitude);
 }
 
-function featureForSymbol(symbol: SymbolNode, content: string): SymbolFeature {
-  const body = symbolBody(symbol, content);
+function featureForSymbol(symbol: SymbolNode, lines: string[]): SymbolFeature {
+  const body = lines.slice(Math.max(0, symbol.startLine - 1), Math.max(symbol.startLine, symbol.endLine)).join("\n");
   const tokens = semanticTokens([symbol.name, symbol.signature ?? "", symbol.filePath, body].join("\n"));
   const bodyTokens = semanticTokens(body);
   return { symbol, tokens, bodyTokens };
-}
-
-function symbolBody(symbol: SymbolNode, content: string): string {
-  const lines = content.split(/\r?\n/);
-  return lines.slice(Math.max(0, symbol.startLine - 1), Math.max(symbol.startLine, symbol.endLine)).join("\n");
 }
 
 function candidateScores(features: SymbolFeature[]): CandidateScore[] {
