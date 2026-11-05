@@ -28,3 +28,8 @@ updates:
     labels:
       - dependencies
       - automated-maintenance
+
+    groups:
+      codeql-actions:
+        patterns:
+          - github/codeql-action/*
